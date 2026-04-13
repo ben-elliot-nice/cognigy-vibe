@@ -52,9 +52,11 @@ From the `relations[]` array, for the resolved `nodeId`:
 
 Resolve labels and types for prev/next/children by looking them up in the `nodes[]` array.
 
-### 3. Confirm with user
+### 3. Confirm with user (only when ambiguous)
 
-Present the resolved node before returning:
+Only ask for confirmation when the node was **inferred** (matched by label/type search, or chosen from a list). If the user stated the node explicitly by nodeId or unambiguous label, skip confirmation and return immediately.
+
+When confirmation is needed, present:
 
 > "Found: **[label]** (`[type]`)
 > — preceded by **[prev label]** (`[prev type]`)
@@ -62,7 +64,7 @@ Present the resolved node before returning:
 >
 > Is this the right node?"
 
-If confirmed, the resolved context is ready:
+The resolved context:
 ```
 nodeId:   <id>
 label:    <label>
@@ -76,7 +78,7 @@ If declined → return to step 1 and ask the user to clarify.
 
 ## Notes
 
-- Do not proceed past step 3 without explicit user confirmation.
+- Only confirm node identity when it was inferred or ambiguous — not when the user stated it explicitly.
 - If `flowId` is not provided and not in `.env`, ask the user before running anything.
 - The chart endpoint returns all nodes with types and labels. Prefer it over `list nodes` which returns only metadata.
 - For nodes with no predecessor (e.g. Start), `prev` is `null`. For nodes with no successor (e.g. End, terminal code nodes), `next` is `null`.
