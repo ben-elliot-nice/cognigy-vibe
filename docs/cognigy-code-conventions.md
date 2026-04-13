@@ -12,6 +12,7 @@ async function main() { ... }
 async function getVar(path, required) { ... }
 async function setVar(path, value) { ... }
 async function mergeVar(path, value) { ... }
+function log(level, context, message) { ... }
 
 main()
 ```
@@ -134,6 +135,36 @@ async function mergeVar(path, value) {
         : source[k]
     }
     return result
+  }
+}
+```
+
+### log(level, context, message)
+
+Unified logging utility. Prefixes the message with `[context]` when context is provided. Calls the appropriate Cognigy API methods for each level.
+
+Supported levels: `'info'`, `'debug'`, `'error'`
+
+Objects passed as `message` are automatically JSON-stringified.
+
+```js
+// Usage
+log('info',  'main',   'Processing started')        // [main] Processing started
+log('error', 'getVar', e.message)                   // [getVar] Required: 'input.data.userId' is missing
+log('debug', 'main',   { userId, prefs })           // [main] {"userId":"abc","prefs":null}
+log('info',  null,     'no context prefix')         // no context prefix
+
+function log(level, context, message) {
+  const msg = (context ? `[${context}] ` : '') + (typeof message === 'object' ? JSON.stringify(message) : String(message))
+
+  if (level === 'error') {
+    api.log('error', msg)
+    api.logDebugError(msg)
+  } else if (level === 'debug') {
+    api.log('debug', msg)
+    api.logDebugMessage(msg)
+  } else {
+    api.log('info', msg)
   }
 }
 ```
