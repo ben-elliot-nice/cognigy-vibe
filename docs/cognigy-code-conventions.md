@@ -1,0 +1,150 @@
+# Cognigy Code Node — Conventions
+
+Structural conventions for writing maintainable Cognigy Code Nodes. Follow these patterns unless there is a specific reason not to.
+
+## Structure
+
+Every code node follows this layout:
+
+```
+async function main() { ... }
+
+async function getVar(path, required) { ... }
+async function setVar(path, value) { ... }
+async function mergeVar(path, value) { ... }
+
+main()
+```
+
+- `main()` is defined first so the intent of the node is immediately readable
+- Utility functions are defined between `main` and the `main()` call
+- `main()` is called at the end — the node is synchronous at the root level, but `main` itself is async
+
+---
+
+## main()
+
+Contains all business logic. Pattern inside main:
+
+```js
+async function main() {
+  // 1. Get required inputs — catch rejections early
+  let userId, prefs
+  try {
+    userId = await getVar('input.data.userId', true)   // rejects if missing
+    prefs  = await getVar('context.userPrefs', false)  // resolves null if absent
+  } catch (e) {
+    api.log('error', e.message)
+    return
+  }
+
+  // 2. Business logic — all required vars guaranteed present here
+
+  // 3. Write results non-destructively
+  await mergeVar('context.userProfile', { lastSeen: Date.now() })
+  // or replace entirely:
+  await setVar('context.sessionFlag', true)
+}
+```
+
+---
+
+## Utility Functions
+
+Copy these into every code node that uses them. Do not modify them — they are convention, not business logic.
+
+### getVar(path, required)
+
+Reads a value by dot-notation path from `input` or `context`. Rejects the Promise if the value is missing and `required` is true; resolves `null` if missing and `required` is false.
+
+Call with optional chaining on any intermediate path segments that may not exist.
+
+```js
+// Usage
+const userId  = await getVar('input.data.userId', true)   // throws if missing
+const prefs   = await getVar('context.userPrefs', false)  // null if missing
+
+async function getVar(path, required) {
+  const parts = path.split('.')
+  let val = { input, context }[parts.shift()]
+  for (const part of parts) {
+    if (val == null) { val = undefined; break }
+    val = val[part]
+  }
+  if (val == null) {
+    if (required) return Promise.reject(new Error(`Required: '${path}' is missing or null`))
+    return Promise.resolve(null)
+  }
+  return Promise.resolve(val)
+}
+```
+
+### setVar(path, value)
+
+Writes a value by dot-notation path to `input` or `context`, creating intermediate objects as needed. Replaces the target value entirely.
+
+Use when you want a full reset of the target key.
+
+```js
+// Usage
+await setVar('context.sessionFlag', true)
+await setVar('input.data.processedAt', Date.now())
+
+async function setVar(path, value) {
+  const parts = path.split('.')
+  const root = parts.shift()
+  const key = parts.pop()
+  let obj = { input, context }[root]
+  for (const part of parts) {
+    if (obj[part] == null) obj[part] = {}
+    obj = obj[part]
+  }
+  obj[key] = value
+}
+```
+
+### mergeVar(path, value)
+
+Deep-merges a value into the existing object at the given path. Creates intermediate objects if they don't exist. Arrays are replaced, not concatenated.
+
+Use when you want to update some keys without destroying sibling keys.
+
+```js
+// Usage — only updates lastSeen, leaves other userProfile keys intact
+await mergeVar('context.userProfile', { lastSeen: Date.now() })
+
+async function mergeVar(path, value) {
+  const parts = path.split('.')
+  const root = parts.shift()
+  const key = parts.pop()
+  let obj = { input, context }[root]
+  for (const part of parts) {
+    if (obj[part] == null) obj[part] = {}
+    obj = obj[part]
+  }
+  obj[key] = deepMerge(obj[key], value)
+
+  function deepMerge(target, source) {
+    if (source === null || typeof source !== 'object' || Array.isArray(source)) return source
+    const result = Object.assign({}, target)
+    for (const k of Object.keys(source)) {
+      const tgt = target != null ? target[k] : undefined
+      result[k] = (typeof source[k] === 'object' && source[k] !== null && !Array.isArray(source[k]) && typeof tgt === 'object' && !Array.isArray(tgt))
+        ? deepMerge(tgt, source[k])
+        : source[k]
+    }
+    return result
+  }
+}
+```
+
+---
+
+## When to use setVar vs mergeVar
+
+| Scenario | Use |
+|---|---|
+| Writing a primitive (string, number, boolean) | Either — behaviour is identical |
+| Writing an object and you want to keep existing sibling keys | `mergeVar` |
+| Writing an object and you want a clean slate | `setVar` |
+| Writing an array | `setVar` (mergeVar replaces arrays anyway, but intent is clearer) |

@@ -4,9 +4,10 @@ Reference for writing code in Cognigy Code Nodes. Read this before writing any c
 
 ## Execution Model
 
-- **Synchronous** — flow continues after the code node finishes
+- **Flow waits** — the flow continues only after the code node finishes executing
 - **1 second maximum** execution time (non-configurable)
-- **No `async/await`, `import`, or `require`** — sandboxed scope, no module loading
+- **No top-level `await`** — async/await works inside an async function (e.g. `async function main() {}`), but not at the root level of the node
+- **No `import` or `require`** — sandboxed scope, no module loading
 - **No `console.log`** — use `api.log()` instead
 - Uncaught errors halt flow execution
 - Timeout errors write to `input.codeNodeError.message`
@@ -181,7 +182,7 @@ api.setContext('result', processedValue)
 // ❌ Avoid
 var x = ...                  // use const/let
 console.log(...)             // not available
-async function foo() {...}   // no async/await
+await somePromise            // top-level await not supported — wrap in async function
 import _ from 'lodash'       // no imports
 require('something')         // no require
 ```

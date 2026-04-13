@@ -21,6 +21,7 @@ When Claude Code loads this skill, it injects `Base directory for this skill: <p
 **Before writing any code**, read these reference files:
 - `<plugin-root>/docs/cognigy-api-reference.md` — runtime objects (`input`, `context`, `profile`, `analyticsdata`), `api.*` functions, available libraries
 - `<plugin-root>/docs/cognigy-output-formats.md` — channel output structures and code examples
+- `<plugin-root>/docs/cognigy-code-conventions.md` — structural conventions: `main()` pattern, `getVar`, `setVar`, `mergeVar` utilities
 
 The CLI entry point is `<plugin-root>/cli/src/index.ts`.
 
@@ -129,4 +130,4 @@ Atomic skill invocations (`cognigy:get`, `cognigy:create`, `cognigy:update`) han
 - `update node` returns nothing (204 No Content) — always confirm with a follow-up `get node`.
 - `flowId` may come from the user, from `COGNIGY_FLOW_ID` in `.env`, or from a prior step.
 - When escaping code for the `--config` JSON value: replace `\` with `\\`, `"` with `\"`, newlines with `\n`, tabs with `\t`.
-- Do not use `async/await`, `import`, or `require` in generated code — code nodes run synchronously in a sandboxed scope.
+- `async/await` works inside an async function (e.g. `async function main() {}`). Do not use top-level `await`. Do not use `import` or `require`.
