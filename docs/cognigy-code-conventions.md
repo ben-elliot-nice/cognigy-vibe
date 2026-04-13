@@ -30,10 +30,11 @@ Contains all business logic. Pattern inside main:
 ```js
 async function main() {
   // 1. Get all inputs in parallel — surfaces ALL missing vars at once
-  const [userIdResult, prefsResult] = await Promise.allSettled([
-    getVar('input.data.userId', true),   // rejects if missing
-    getVar('context.userPrefs', false)   // resolves null if absent
-  ])
+  // (Promise.allSettled not available in Cognigy's TS target — inline the pattern)
+  const [userIdResult, prefsResult] = await Promise.all([
+    getVar('input.data.userId', true),
+    getVar('context.userPrefs', false)
+  ].map(p => p.then(value => ({ status: 'fulfilled', value })).catch(reason => ({ status: 'rejected', reason }))))
 
   const errors = [userIdResult, prefsResult]
     .filter(r => r.status === 'rejected')
