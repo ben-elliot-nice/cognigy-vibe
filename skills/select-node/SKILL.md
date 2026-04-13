@@ -25,32 +25,25 @@ When Claude Code loads this skill, it injects `Base directory for this skill: <p
 ### 1. Resolve the node
 
 **If a nodeId was provided (24-char hex, no spaces):**
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get node <nodeId> --flowId <flowId>
-```
-- Exit 0 → node confirmed. Proceed to step 2.
-- Exit 1 `requires --flowId` → ask user for flowId, then retry.
-- Exit 1 other error → tell user the node was not found, stop.
+
+Invoke the `cognigy:get` skill: get node `<nodeId>` with `--flowId <flowId>`.
+- Success → node confirmed. Proceed to step 2.
+- Error `requires --flowId` → ask user for flowId, then retry.
+- Other error → tell user the node was not found, stop.
 
 **If a label, type, or nothing was provided:**
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get chart --flowId <flowId>
-```
+
+Invoke the `cognigy:get` skill: get chart with `--flowId <flowId>`.
+
 From the response `nodes[]` array:
 - Filter by label (case-insensitive substring match) or type if a hint was given.
 - If exactly one match → proceed to step 2 with that nodeId.
 - If multiple matches → present the list with label, type, and `_id` for each. Ask: *"Which node did you mean?"* Wait for selection.
 - If no matches → tell user, show all available nodes (label + type), ask them to choose.
 
-**Exit 2 on any CLI call:**
-Output contains `{ "requiresConfirmation": true, "path": "..." }`. Ask: *"I found a .env at `<path>` — OK to use?"* If confirmed, re-run adding `--env-path <path>`.
-
 ### 2. Extract relational context
 
-Get the chart if not already fetched:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get chart --flowId <flowId>
-```
+Get the chart if not already fetched by invoking the `cognigy:get` skill: get chart with `--flowId <flowId>`.
 
 From the `relations[]` array, for the resolved `nodeId`:
 - **successor (`next`)**: find the relation where `relation.node === nodeId` → `relation.next`

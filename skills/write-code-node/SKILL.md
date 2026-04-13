@@ -55,21 +55,11 @@ Determine mode from the user's request before starting:
 
    Do NOT call the CLI until the user confirms.
 
-6. Create the node:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts create node \
-  --flowId <flowId> \
-  --type code \
-  --label "<label>" \
-  --target <refNodeId> \
-  --mode append
-```
-`--target` is the `nodeId` from `select-node`. `--mode append` inserts the new node after target and automatically wires the graph relations.
+6. Create the node by invoking the `cognigy:create` skill: create node with `--flowId <flowId>`, `--type code`, `--label "<label>"`, `--target <refNodeId>`, and `--mode append`.
 
-7. From the response, capture `_id` (the new nodeId). Confirm by fetching and showing `config.code`:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get node <newNodeId> --flowId <flowId>
-```
+   `--target` is the `nodeId` from `select-node`. `--mode append` inserts the new node after target and automatically wires the graph relations.
+
+7. From the response, capture `_id` (the new nodeId). Confirm by invoking the `cognigy:get` skill: get node `<newNodeId>` with `--flowId <flowId>`, then show the returned `config.code`.
 
 ---
 
@@ -88,18 +78,11 @@ npx tsx <plugin-root>/cli/src/index.ts get node <newNodeId> --flowId <flowId>
 
    Do NOT call the CLI until the user confirms.
 
-4. Write the code:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts update node <nodeId> \
-  --flowId <flowId> \
-  --config '{"code":"<escaped code>"}'
-```
-Escape newlines as `\n` and double quotes as `\"` within the JSON string value.
+4. Write the code by invoking the `cognigy:update` skill: update node `<nodeId>` with `--flowId <flowId>` and `--config '{"code":"<escaped code>"}'`.
 
-5. Confirm by fetching and showing `config.code`:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get node <nodeId> --flowId <flowId>
-```
+   Escape newlines as `\n` and double quotes as `\"` within the JSON string value.
+
+5. Confirm by invoking the `cognigy:get` skill: get node `<nodeId>` with `--flowId <flowId>`, then show the returned `config.code`.
 
 ---
 
@@ -107,11 +90,7 @@ npx tsx <plugin-root>/cli/src/index.ts get node <nodeId> --flowId <flowId>
 
 1. Invoke `cognigy:select-node` to confirm the target node.
 
-2. Read the existing code:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get node <nodeId> --flowId <flowId>
-```
-Extract `config.code` from the response and show it to the user.
+2. Read the existing code by invoking the `cognigy:get` skill: get node `<nodeId>` with `--flowId <flowId>`. Extract `config.code` from the response and show it to the user.
 
 3. Read `<plugin-root>/docs/cognigy-api-reference.md` and `<plugin-root>/docs/cognigy-output-formats.md`.
 
@@ -126,30 +105,11 @@ Extract `config.code` from the response and show it to the user.
 
    Do NOT call the CLI until the user confirms.
 
-6. Write the updated code:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts update node <nodeId> \
-  --flowId <flowId> \
-  --config '{"code":"<escaped code>"}'
-```
+6. Write the updated code by invoking the `cognigy:update` skill: update node `<nodeId>` with `--flowId <flowId>` and `--config '{"code":"<escaped code>"}'`.
 
-7. Confirm by fetching and showing `config.code`:
-```bash
-npx tsx <plugin-root>/cli/src/index.ts get node <nodeId> --flowId <flowId>
-```
+7. Confirm by invoking the `cognigy:get` skill: get node `<nodeId>` with `--flowId <flowId>`, then show the returned `config.code`.
 
 ---
-
-## Exit Code Handling
-
-For all CLI calls:
-- **Exit 2** — `.env` found via git root walk. Output contains `{ "requiresConfirmation": true, "path": "..." }`. Ask: *"I found a .env at `<path>` — OK to use?"* If confirmed, re-run adding `--env-path <path>`. If declined, stop.
-- **Exit 1** — Show the `error` field. Common cases:
-  - `No .env file found` → invoke `cognigy:init` to set up the connection, then retry
-  - `requires --flowId` → ask user for the flowId, then retry
-  - `API error 400` on create — likely missing `--type` or `--target`; show error detail
-  - `API error 400` on update — likely malformed `config` JSON; check escaping
-  - `API error 401` → token invalid or expired
 
 ## Notes
 
