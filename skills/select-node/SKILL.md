@@ -1,0 +1,89 @@
+---
+name: select-node
+description: Resolve a Cognigy flow node by ID, label, or type — returns nodeId plus relational context (prev/next nodes in the graph)
+---
+
+# Cognigy Select Node
+
+Resolves a node reference within a Cognigy flow into a confirmed nodeId plus relational context — what comes immediately before and after it in the flow graph.
+
+## When to Use
+
+Use this skill whenever you need to identify a specific node in a flow, whether to read it, update it, or insert before/after it. Any composite skill that targets a flow node should call this skill rather than re-implementing node discovery.
+
+## Finding the CLI
+
+When Claude Code loads this skill, it injects `Base directory for this skill: <path>` into context. That path ends in `skills/select-node`. Go two directories up to get the plugin root. The CLI entry point is `<plugin-root>/cli/src/index.ts`.
+
+## Inputs
+
+- `flowId` — Required. From the user, `.env`, or a calling skill.
+- Node hint — Optional. One of: a nodeId (24-char hex string), a label string, or a node type (`code`, `say`, `if`, `question`, `start`, `end`, etc.).
+
+## Steps
+
+### 1. Resolve the node
+
+**If a nodeId was provided (24-char hex, no spaces):**
+```bash
+npx tsx <plugin-root>/cli/src/index.ts get node <nodeId> --flowId <flowId>
+```
+- Exit 0 → node confirmed. Proceed to step 2.
+- Exit 1 `requires --flowId` → ask user for flowId, then retry.
+- Exit 1 other error → tell user the node was not found, stop.
+
+**If a label, type, or nothing was provided:**
+```bash
+npx tsx <plugin-root>/cli/src/index.ts get chart --flowId <flowId>
+```
+From the response `nodes[]` array:
+- Filter by label (case-insensitive substring match) or type if a hint was given.
+- If exactly one match → proceed to step 2 with that nodeId.
+- If multiple matches → present the list with label, type, and `_id` for each. Ask: *"Which node did you mean?"* Wait for selection.
+- If no matches → tell user, show all available nodes (label + type), ask them to choose.
+
+**Exit 2 on any CLI call:**
+Output contains `{ "requiresConfirmation": true, "path": "..." }`. Ask: *"I found a .env at `<path>` — OK to use?"* If confirmed, re-run adding `--env-path <path>`.
+
+### 2. Extract relational context
+
+Get the chart if not already fetched:
+```bash
+npx tsx <plugin-root>/cli/src/index.ts get chart --flowId <flowId>
+```
+
+From the `relations[]` array, for the resolved `nodeId`:
+- **successor (`next`)**: find the relation where `relation.node === nodeId` → `relation.next`
+- **predecessor (`prev`)**: find any relation where `relation.next === nodeId` → `relation.node`
+- **children**: `relation.children[]` on the node's own relation entry (non-empty for If/Then/Else nodes)
+
+Resolve labels and types for prev/next/children by looking them up in the `nodes[]` array.
+
+### 3. Confirm with user
+
+Present the resolved node before returning:
+
+> "Found: **[label]** (`[type]`)
+> — preceded by **[prev label]** (`[prev type]`)
+> — followed by **[next label]** (`[next type]`)
+>
+> Is this the right node?"
+
+If confirmed, the resolved context is ready:
+```
+nodeId:   <id>
+label:    <label>
+type:     <type>
+prev:     { nodeId, label, type } | null
+next:     { nodeId, label, type } | null
+children: [{ nodeId, label, type }]
+```
+
+If declined → return to step 1 and ask the user to clarify.
+
+## Notes
+
+- Do not proceed past step 3 without explicit user confirmation.
+- If `flowId` is not provided and not in `.env`, ask the user before running anything.
+- The chart endpoint returns all nodes with types and labels. Prefer it over `list nodes` which returns only metadata.
+- For nodes with no predecessor (e.g. Start), `prev` is `null`. For nodes with no successor (e.g. End, terminal code nodes), `next` is `null`.
