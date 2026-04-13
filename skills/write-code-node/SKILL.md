@@ -111,6 +111,18 @@ Determine mode from the user's request before starting:
 
 ---
 
+## Error Handling
+
+Atomic skill invocations (`cognigy:get`, `cognigy:create`, `cognigy:update`) handle Exit 2 `.env` confirmation and `No .env file found` internally. For errors they surface, handle:
+
+| Error | Response |
+|---|---|
+| `requires --flowId` | Ask user for the flowId and retry |
+| `API error 400` on create | Likely missing `--type` or `--target` — check that `select-node` returned a valid nodeId for `--target` |
+| `API error 400` on update | Likely malformed `config` JSON — check that code was correctly escaped (newlines as `\n`, quotes as `\"`) |
+| `API error 401` | Token invalid or expired — ask user to update `COGNIGY_API_TOKEN` in `.env` |
+| User declines code review | Stop. Ask if they want to revise the code before retrying. |
+
 ## Notes
 
 - **The code review gate is non-negotiable.** Never write to the API without user confirmation of the code content.

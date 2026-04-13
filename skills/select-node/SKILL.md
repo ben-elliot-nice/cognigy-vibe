@@ -80,3 +80,4 @@ If declined → return to step 1 and ask the user to clarify.
 - If `flowId` is not provided and not in `.env`, ask the user before running anything.
 - The chart endpoint returns all nodes with types and labels. Prefer it over `list nodes` which returns only metadata.
 - For nodes with no predecessor (e.g. Start), `prev` is `null`. For nodes with no successor (e.g. End, terminal code nodes), `next` is `null`.
+- Exit codes (Exit 2 `.env` confirmation, `No .env file found`, API errors) are handled by the `cognigy:get` skill when it is invoked. You do not need to handle them separately in this skill.
