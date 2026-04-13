@@ -15,15 +15,19 @@ const registry: ResourceRegistry = {
   node: nodes,
 }
 
-function parseFlags(args: string[]): Record<string, string> {
-  const flags: Record<string, string> = {}
+function parseFlags(args: string[]): Record<string, unknown> {
+  const flags: Record<string, unknown> = {}
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg?.startsWith('--')) {
       const key = arg.slice(2)
       const value = args[i + 1]
       if (value && !value.startsWith('--')) {
-        flags[key] = value
+        try {
+          flags[key] = JSON.parse(value)
+        } catch {
+          flags[key] = value
+        }
         i++
       }
     }
@@ -35,7 +39,7 @@ function toEnvVarName(camelKey: string): string {
   return 'COGNIGY_' + camelKey.replace(/([A-Z])/g, '_$1').toUpperCase()
 }
 
-function validateRequires(resource: string, handlers: ResourceHandlers, flags: Record<string, string>, env: Record<string, string | undefined>): void {
+function validateRequires(resource: string, handlers: ResourceHandlers, flags: Record<string, unknown>, env: Record<string, string | undefined>): void {
   for (const key of (handlers.requires ?? [])) {
     if (!flags[key] && !env[key]) {
       fail(`'${resource}' requires --${key} or ${toEnvVarName(key)} to be set`)
@@ -91,7 +95,7 @@ async function main(): Promise<void> {
   }
 
   const flags = parseFlags([thirdArg ?? '', ...rest].filter(Boolean))
-  const explicitEnvPath = flags['env-path']
+  const explicitEnvPath = flags['env-path'] as string | undefined
   delete flags['env-path']  // don't forward meta-flags to resource handlers
 
   // Resolve .env
@@ -159,7 +163,7 @@ async function main(): Promise<void> {
     }
     case 'invoke': {
       if (!id) fail(`invoke requires an ID: cognigy invoke ${resource} <id> --op <operation>`)
-      const op = flags['op']
+      const op = flags['op'] as string | undefined
       if (!op) fail(`invoke requires --op <operation>: cognigy invoke ${resource} <id> --op <operation>`)
       delete flags['op']  // don't forward meta-flag to operation handler
       if (!handlers.operations) fail(`Resource "${resource}" has no operations`)

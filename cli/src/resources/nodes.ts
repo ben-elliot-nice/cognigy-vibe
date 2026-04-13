@@ -2,8 +2,8 @@ import type { CognigyClient, EnvConfig, ResourceHandlers } from '../lib/types.js
 import type { Node, CreateNodeInput, UpdateNodeInput } from './node.types.js'
 export type { Node }
 
-function resolveFlowId(params: Record<string, string>, env: EnvConfig): string {
-  const id = params['flowId'] ?? env.flowId
+function resolveFlowId(params: Record<string, unknown>, env: EnvConfig): string {
+  const id = (params['flowId'] as string | undefined) ?? env.flowId
   if (!id) throw new Error('flowId is required — set COGNIGY_FLOW_ID in .env or pass --flowId')
   return id
 }

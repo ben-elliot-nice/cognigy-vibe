@@ -2,8 +2,8 @@ import type { CognigyClient, EnvConfig, ResourceHandlers } from '../lib/types.js
 import type { Flow, CreateFlowInput, UpdateFlowInput } from './flow.types.js'
 export type { Flow }
 
-function resolveProjectId(params: Record<string, string>, env: EnvConfig): string {
-  const id = params['projectId'] ?? env.projectId
+function resolveProjectId(params: Record<string, unknown>, env: EnvConfig): string {
+  const id = (params['projectId'] as string | undefined) ?? env.projectId
   if (!id) throw new Error('projectId is required — set COGNIGY_PROJECT_ID in .env or pass --projectId')
   return id
 }

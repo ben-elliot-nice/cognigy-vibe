@@ -22,7 +22,7 @@ export const charts: ResourceHandlers = {
   requires: ['flowId'],
 
   async get(_id, client, env, params) {
-    const flowId = params['flowId'] ?? env.flowId
+    const flowId = (params['flowId'] as string | undefined) ?? env.flowId
     if (!flowId) throw new Error('flowId is required — set COGNIGY_FLOW_ID in .env or pass --flowId')
     return client.get<Chart>(`/flows/${flowId}/chart`)
   },
