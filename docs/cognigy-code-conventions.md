@@ -13,6 +13,7 @@ async function getVar(path, required) { ... }
 async function setVar(path, value) { ... }
 async function mergeVar(path, value) { ... }
 function log(level, context, message) { ... }
+function allSettled(promises) { ... }
 
 main()
 ```
@@ -30,11 +31,10 @@ Contains all business logic. Pattern inside main:
 ```js
 async function main() {
   // 1. Get all inputs in parallel — surfaces ALL missing vars at once
-  // (Promise.allSettled not available in Cognigy's TS target — inline the pattern)
-  const [userIdResult, prefsResult] = await Promise.all([
+  const [userIdResult, prefsResult] = await allSettled([
     getVar('input.data.userId', true),
     getVar('context.userPrefs', false)
-  ].map(p => p.then(value => ({ status: 'fulfilled', value })).catch(reason => ({ status: 'rejected', reason }))))
+  ])
 
   const errors = [userIdResult, prefsResult]
     .filter(r => r.status === 'rejected')
@@ -147,6 +147,27 @@ async function mergeVar(path, value) {
   }
 }
 ```
+
+### allSettled(promises)
+
+`Promise.allSettled` polyfill — Cognigy's TypeScript target is too old to include it natively. The `as const` on status strings is required so TypeScript can narrow the union type and allow `r.reason` / `r.value` access after filtering.
+
+```js
+// Usage
+const [userIdResult, prefsResult] = await allSettled([
+  getVar('input.data.userId', true),
+  getVar('context.userPrefs', false)
+])
+
+function allSettled(promises) {
+  return Promise.all(promises.map(p =>
+    p.then(value  => ({ status: 'fulfilled' as const, value }))
+     .catch(reason => ({ status: 'rejected'  as const, reason }))
+  ))
+}
+```
+
+---
 
 ### log(level, context, message)
 
