@@ -27,14 +27,20 @@ function makeClient(overrides: Partial<CognigyClient> = {}): CognigyClient {
 describe('flows.list', () => {
   it('calls GET /flows?projectId with env.projectId', async () => {
     const client = makeClient()
-    await flows.list!(client, env)
+    await flows.list!(client, env, {})
     expect(client.get).toHaveBeenCalledWith('/flows?projectId=proj-123')
   })
 
-  it('throws when projectId is not in env', async () => {
+  it('uses projectId from params over env', async () => {
+    const client = makeClient()
+    await flows.list!(client, env, { projectId: 'proj-override' })
+    expect(client.get).toHaveBeenCalledWith('/flows?projectId=proj-override')
+  })
+
+  it('throws when projectId is missing from both params and env', async () => {
     const client = makeClient()
     const envWithout: EnvConfig = { baseUrl: 'x', apiToken: 'y' }
-    await expect(flows.list!(client, envWithout)).rejects.toThrow('projectId is required')
+    await expect(flows.list!(client, envWithout, {})).rejects.toThrow('projectId is required')
   })
 })
 

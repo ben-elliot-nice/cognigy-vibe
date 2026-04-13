@@ -9,9 +9,9 @@ function resolveProjectId(params: Record<string, string>, env: EnvConfig): strin
 }
 
 export const flows: ResourceHandlers = {
-  async list(client, env) {
-    if (!env.projectId) throw new Error('projectId is required — set COGNIGY_PROJECT_ID in .env')
-    return client.get<Flow[]>(`/flows?projectId=${env.projectId}`)
+  async list(client, env, params) {
+    const projectId = resolveProjectId(params, env)
+    return client.get<Flow[]>(`/flows?projectId=${projectId}`)
   },
 
   async get(id, client) {
