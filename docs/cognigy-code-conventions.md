@@ -29,15 +29,23 @@ Contains all business logic. Pattern inside main:
 
 ```js
 async function main() {
-  // 1. Get required inputs — catch rejections early
-  let userId, prefs
-  try {
-    userId = await getVar('input.data.userId', true)   // rejects if missing
-    prefs  = await getVar('context.userPrefs', false)  // resolves null if absent
-  } catch (e) {
-    api.log('error', e.message)
+  // 1. Get all inputs in parallel — surfaces ALL missing vars at once
+  const [userIdResult, prefsResult] = await Promise.allSettled([
+    getVar('input.data.userId', true),   // rejects if missing
+    getVar('context.userPrefs', false)   // resolves null if absent
+  ])
+
+  const errors = [userIdResult, prefsResult]
+    .filter(r => r.status === 'rejected')
+    .map(r => r.reason.message)
+
+  if (errors.length > 0) {
+    errors.forEach(e => log('error', 'main', e))
     return
   }
+
+  const userId = userIdResult.value
+  const prefs  = prefsResult.value
 
   // 2. Business logic — all required vars guaranteed present here
 
