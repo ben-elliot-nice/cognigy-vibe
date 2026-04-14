@@ -1,9 +1,9 @@
 ---
-name: scaffold-aiagent
+name: add-aiagent-job
 description: Add an AI Agent Job node (and optional tool nodes) to an existing Cognigy flow — resolves the AI Agent and insertion point, then creates all nodes via atomic skills. Use when a flow already exists and you need to add an AI Agent Job with its tools.
 ---
 
-# Scaffold AI Agent Job
+# Add AI Agent Job
 
 Add an AI Agent Job node to an existing Cognigy flow and attach tool nodes to it.
 
