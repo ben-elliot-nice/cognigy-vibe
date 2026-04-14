@@ -1,6 +1,6 @@
 # Cognigy Claude Plugin
 
-Read `docs/architecture.md` before making any changes.
+Read `docs/architecture.md` at the start of every new session.
 
 ## Rules
 
