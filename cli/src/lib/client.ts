@@ -3,6 +3,7 @@ import type { CognigyClient, EnvConfig } from './types.js'
 export function createClient(env: EnvConfig): CognigyClient {
   const baseHeaders: Record<string, string> = {
     'X-API-Key': `${env.apiToken}`,
+    'Accept': 'application/json',
   }
 
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
