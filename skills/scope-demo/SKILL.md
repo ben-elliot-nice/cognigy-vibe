@@ -75,7 +75,7 @@ This is a **collaborative design conversation** — do not generate a complete d
 3. **Scenario design** — Persona, agents involved, key moments, xApp usage, live agent handoff
 4. **Routing intents** — Concierge intent map: what triggers each specialist agent
 
-After all areas are agreed, ask explicitly:
+After all four areas (demo structure, narrative arc, scenario design, routing intents) are agreed, ask explicitly:
 
 > "I have everything I need to write the demo plan. Ready for me to generate it?"
 
