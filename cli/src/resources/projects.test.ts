@@ -27,7 +27,7 @@ function makeClient(overrides: Partial<CognigyClient> = {}): CognigyClient {
 describe('projects.list', () => {
   it('calls GET /projects', async () => {
     const client = makeClient()
-    await projects.list!(client, env)
+    await projects.list!(client, env, {})
     expect(client.get).toHaveBeenCalledWith('/projects')
   })
 })
@@ -35,7 +35,7 @@ describe('projects.list', () => {
 describe('projects.get', () => {
   it('calls GET /projects/:id', async () => {
     const client = makeClient()
-    await projects.get!('proj-abc', client, env)
+    await projects.get!('proj-abc', client, env, {})
     expect(client.get).toHaveBeenCalledWith('/projects/proj-abc')
   })
 })
@@ -65,7 +65,7 @@ describe('projects.update', () => {
 describe('projects.delete', () => {
   it('calls DELETE /projects/:id', async () => {
     const client = makeClient()
-    await projects.delete!('proj-abc', client, env)
+    await projects.delete!('proj-abc', client, env, {})
     expect(client.delete).toHaveBeenCalledWith('/projects/proj-abc')
   })
 })

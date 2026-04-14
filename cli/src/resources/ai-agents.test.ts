@@ -47,7 +47,7 @@ describe('aiAgents.list', () => {
 describe('aiAgents.get', () => {
   it('calls GET /aiagents/:id', async () => {
     const client = makeClient()
-    await aiAgents.get!('agent-abc', client, env)
+    await aiAgents.get!('agent-abc', client, env, {})
     expect(client.get).toHaveBeenCalledWith('/aiagents/agent-abc')
   })
 })
@@ -83,7 +83,7 @@ describe('aiAgents.update', () => {
 describe('aiAgents.delete', () => {
   it('calls DELETE /aiagents/:id', async () => {
     const client = makeClient()
-    await aiAgents.delete!('agent-abc', client, env)
+    await aiAgents.delete!('agent-abc', client, env, {})
     expect(client.delete).toHaveBeenCalledWith('/aiagents/agent-abc')
   })
 })

@@ -47,7 +47,7 @@ describe('flows.list', () => {
 describe('flows.get', () => {
   it('calls GET /flows/:id', async () => {
     const client = makeClient()
-    await flows.get!('flow-abc', client, env)
+    await flows.get!('flow-abc', client, env, {})
     expect(client.get).toHaveBeenCalledWith('/flows/flow-abc')
   })
 })
@@ -83,7 +83,7 @@ describe('flows.update', () => {
 describe('flows.delete', () => {
   it('calls DELETE /flows/:id', async () => {
     const client = makeClient()
-    await flows.delete!('flow-abc', client, env)
+    await flows.delete!('flow-abc', client, env, {})
     expect(client.delete).toHaveBeenCalledWith('/flows/flow-abc')
   })
 })
