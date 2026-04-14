@@ -7,6 +7,7 @@ import { projects } from './resources/projects.js'
 import { charts } from './resources/charts.js'
 import { nodes } from './resources/nodes.js'
 import { aiAgents } from './resources/ai-agents.js'
+import { aiAgentJobs } from './resources/ai-agent-jobs.js'
 
 // Resource registry — add new modules here as they're generated
 const registry: ResourceRegistry = {
@@ -15,6 +16,7 @@ const registry: ResourceRegistry = {
   chart: charts,
   node: nodes,
   'ai-agent': aiAgents,
+  'ai-agent-job': aiAgentJobs,
 }
 
 function parseFlags(args: string[]): Record<string, unknown> {
