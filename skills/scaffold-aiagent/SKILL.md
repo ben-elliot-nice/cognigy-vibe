@@ -31,7 +31,7 @@ Capture: `flowId`
 
 Ask: "Which AI Agent should back this job? You can give a name or ID."
 
-If the user gives a name, invoke `cognigy:list` for `ai-agent` (pass `--projectId <projectId>` if known) to find it.
+If the user gives a name, invoke `cognigy:list` for `ai-agent` to find it. (Project scoping comes from `.env` — there is no `--projectId` flag for list.)
 - If exactly one match → use it.
 - If multiple matches → show them and ask the user to choose.
 - If no match → stop. Tell the user the agent was not found.
@@ -66,7 +66,7 @@ Ask: "Where in the flow should the job node be inserted? (default: after the Sta
 
 Invoke `cognigy:select-node` with:
 - `flowId` from Step 1
-- The user's target hint (default: `start` type if no hint given)
+- If the user provided a node identifier (ID, label, or type), pass it as the node hint. If none was given, pass `start` as the hint — `cognigy:select-node` will match the Start node by type.
 
 Capture: `targetNodeId` (the `nodeId` returned by `cognigy:select-node`)
 
@@ -140,7 +140,7 @@ For tools with `useParameters: true`, use this `--config`:
 }
 ```
 
-Create all tools before moving to Step 7.
+If any tool creation fails, stop immediately and report which tools were successfully created and which failed — do not continue to the next tool.
 
 ---
 
