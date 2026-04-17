@@ -7,8 +7,11 @@ Best practices for writing effective `description` and `instructions` fields on 
 2. [What NOT to Include](#what-not-to-include)
 3. [Writing the Description](#writing-the-description)
 4. [Writing the Instructions](#writing-the-instructions)
-5. [Speaking Style Fields](#speaking-style-fields)
-6. [Generation Principle](#generation-principle)
+5. [Tool Execution — Silent by Default](#tool-execution--silent-by-default)
+6. [Outcome-Based Framing](#outcome-based-framing)
+7. [Tool Descriptions as Compliance Contracts](#tool-descriptions-as-compliance-contracts)
+8. [Speaking Style Fields](#speaking-style-fields)
+9. [Generation Principle](#generation-principle)
 
 ---
 
@@ -91,19 +94,74 @@ NEVER:
 
 ---
 
-## Routing Tool Behavior
+## Tool Execution — Silent by Default
 
-**IMPORTANT:** When using `route_to_*` tools (concierge routing to specialists, or specialists returning to concierge), the LLM should execute them **silently without communicating to the user**.
+**All tools execute silently.** Never describe, announce, or narrate tool calls to the customer. The AI Agent is one unified experience — tool orchestration is internal, not a customer-facing event.
 
-The AI Agent is presented to customers as a singular, unified agent. The routing/orchestration between specialist jobs via tools is an internal implementation detail, not a customer-facing event.
+**ALWAYS rule — include in every agent's instructions:**
 
-**Exception:** `escalate_to_human` IS a genuine handoff event and should be communicated to the customer.
+```
+ALWAYS:
+- Execute tools silently — do not announce, describe, or narrate tool calls
+- Do not say anything before a tool call if the tool produces a customer-facing message — this causes duplicate output
+```
 
-**Example instruction for Concierge:**
-> "When you detect the customer's intent, use the appropriate route_to_* tool. Execute routing tools silently — do not tell the customer you are 'transferring' or 'connecting them' to another specialist."
+This applies to **all tools**: search tools, action tools, routing tools, xApp tools. None of them should be announced.
 
-**Example instruction for Specialists:**
-> "If the query is outside your scope, use the return_to_concierge tool silently. Do not say 'let me transfer you' — just execute the tool."
+**Exception:** `escalate_to_human` IS a customer-facing event — it changes the customer's experience visibly and should be communicated (e.g. "Let me connect you with one of our team members.").
+
+**Routing tools specifically:**
+`route_to_*` and `return_to_concierge` execute silently. Do not tell the customer you are transferring or connecting them — the agent is presented as singular.
+
+---
+
+## Outcome-Based Framing
+
+Write instructions that tell the agent **what to achieve**, not what to avoid. Rule-heavy "CRITICAL: never do X" lists produce worse agent behaviour — the LLM doesn't read harder when you stack more rules.
+
+**Anti-pattern (rule-heavy):**
+```
+CRITICAL: NEVER offer more than one retention deal.
+CRITICAL: NEVER apply pressure if customer declines.
+CRITICAL: NEVER proceed without confirmation.
+```
+
+**Better (outcome-based):**
+```
+Your goal is to help the customer make an informed choice — not to prevent cancellation. If they want to leave, understand why and present one relevant option clearly. If they decline, accept it and ask what they'd like to do next.
+```
+
+**Rule:** If you find yourself writing more than 3 NEVER/CRITICAL lines, reframe as outcomes. Specific compliance obligations belong in **tool descriptions** (where the LLM reads them at decision time), not in standing orders. Standing orders are for universal behavioural rules that apply regardless of which tool is being called.
+
+---
+
+## Tool Descriptions as Compliance Contracts
+
+Tool descriptions aren't just functional summaries — they carry the compliance contract the LLM reads at the moment of decision. Put the rule **where the LLM is reading when it's about to act**.
+
+**Example — compliance embedded in a tool description:**
+
+```
+process_policy_change: Use this tool to cancel, transfer, or downgrade a policy.
+
+ACTION parameter: "cancel" | "transfer" | "downgrade"
+
+COMPLIANCE REQUIREMENTS:
+- ONE retention offer per reason. If the customer declines, proceed immediately — do not offer again.
+- Cancel uses two-pass confirmation: first call returns summary only and does NOT execute. Second call (confirmed=true) executes.
+- Reason routing is MANDATORY before any action.
+```
+
+**Why here, not in agent instructions?**
+
+Agent instructions are read at the start of every turn. Tool descriptions are read at the moment the LLM is selecting a tool. Compliance rules for a specific action have maximum effect at point-of-use.
+
+| What belongs in tool descriptions | What stays in agent instructions |
+|---|---|
+| Rules specific to this tool being called | Universal behavioural rules (tone, auth, silence) |
+| Confirmation requirements before executing | Localisation rules |
+| Obligation limits (one-offer, single-attempt) | Rules that apply regardless of tool |
+| Branching/sequencing requirements | Outcome framing |
 
 ---
 
