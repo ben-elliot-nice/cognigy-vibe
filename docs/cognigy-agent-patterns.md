@@ -118,7 +118,35 @@ Fewer tools returning comprehensive data:
 ### Recommendation
 
 Ask user preference:
-- "Do you prefer granular tools (more precise, more build effort) or consolidated tools (faster build, LLM synthesizes)?"
+- "Do you prefer granular tools (more precise, more build effort), consolidated tools (faster build, LLM synthesizes), or action-parameterized (related actions with shared guards)?"
+
+### Action-Parameterized Approach
+
+One tool handles multiple related actions via an `action` parameter, with shared guards and branching logic inside the code node.
+
+```json
+{
+  "toolId": "process_policy_change",
+  "description": "Use this tool to cancel, transfer, or downgrade a policy. See COMPLIANCE REQUIREMENTS in this description before calling.\n\nACTION: 'cancel' | 'transfer' | 'downgrade'\n\nCOMPLIANCE REQUIREMENTS:\n- ONE retention offer per reason. If declined, proceed immediately.\n- Cancel: two-pass confirmation. First call returns summary, does NOT execute. Second call (confirmed=true) executes.\n- Reason routing MANDATORY before any action.",
+  "useParameters": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": { "type": "string", "enum": ["cancel", "transfer", "downgrade"] },
+      "policyNumber": { "type": "string", "description": "Policy number to modify" },
+      "confirmed": { "type": "boolean", "description": "Set true on second call to execute after customer confirms summary" }
+    },
+    "required": ["action", "policyNumber"],
+    "additionalProperties": false
+  }
+}
+```
+
+The code node branches on `input.aiAgent.toolArgs.action`. Auth guard and policy resolution run once at the top, shared across all branches.
+
+**Pros:** Shared auth guards, shared policy resolution, single tool description to maintain, cleaner LLM decision space.
+**Cons:** Tool description must carry branching rules clearly or the LLM may misuse the `action` parameter.
+**When to use:** Related actions sharing preconditions, policy resolution, and response shape — e.g. all policy modification operations.
 
 ---
 
@@ -193,6 +221,51 @@ context.shortTermMemory.activeAccount = {
   transactions: []
 }
 ```
+
+---
+
+## `context.toolResponse` — Tool Communication Channel
+
+Every tool branch writes its result to `context.toolResponse`. The Resolve Tool Action Node surfaces this to the LLM as the tool's output. This is the architectural backbone of tool-to-LLM communication in Cognigy.
+
+**Pattern — Code Node at end of every tool branch:**
+
+```javascript
+// Success case:
+context.toolResponse = {
+  success: true,
+  summary: "Policy ABC123 cancellation scheduled for 30/04/2026.",
+  data: {
+    policyNumber: "ABC123",
+    effectiveDate: "2026-04-30",
+    refundAmount: 42.50
+  }
+}
+
+// Blocked/refused case:
+context.toolResponse = {
+  success: false,
+  blocked: true,
+  reason: "Retention offer already made for this reason. Proceeding with cancellation."
+}
+```
+
+Resolve Tool Action Node then sends `context.toolResponse` to the LLM.
+
+**Initialise at session start (Set Context Node):**
+
+```javascript
+context.toolResponse = ""
+```
+
+**Four context variable categories:**
+
+| Category | Path | LLM-visible | Lifetime |
+|---|---|---|---|
+| Transient | `input.*` | Yes | Per turn — wiped each turn |
+| Session memory | `context.shortTermMemory.*` | Yes | Full session |
+| Tool result | `context.toolResponse` | Yes (via Resolve Tool Action) | Overwritten each tool call |
+| State / config | `context.<namespace>.*` | No (by default) | Full session |
 
 ---
 
@@ -339,6 +412,47 @@ When specialist detects out-of-scope query:
 - Customer asks about different domain
 - Specialist cannot handle request
 - Re-routing needed
+
+---
+
+## Handover Context Pattern
+
+When escalating to a human agent, design the handover package as a structured artefact — not just a summary string. Identify both consumers and what they need.
+
+**Consumer 1: ACD / routing system** — structured fields for screen pop and routing:
+
+```javascript
+context.handoverContext = {
+  customer: {
+    name: context.shortTermMemory.customerName,
+    policyNumber: context.shortTermMemory.policyNumber,
+    authenticated: context.authVerified
+  },
+  conversation: {
+    intent: context.shortTermMemory.intent,
+    summary: context.shortTermMemory.conversationSummary,
+    retentionAttempted: context.shortTermMemory.retentionOffered ?? false
+  },
+  escalation: {
+    reason: input.aiAgent.toolArgs.reason,
+    timestamp: new Date().toISOString()
+  }
+}
+```
+
+**Consumer 2: Agent Assist / live agent reading** — natural language summary:
+
+```javascript
+context.shortTermMemory.handoverSummary =
+  `Customer ${context.shortTermMemory.customerName} ` +
+  `called about ${context.shortTermMemory.intent}. ` +
+  (context.shortTermMemory.retentionOffered ?
+    "Retention offer was made and declined. " : "") +
+  `Policy: ${context.shortTermMemory.policyNumber}. ` +
+  `Authenticated: ${context.authVerified ? "Yes" : "No"}.`
+```
+
+**Design the package upfront** — identify both consumers, what they need, and which context paths hold that data. The handover context is a designed artefact, not an afterthought.
 
 ---
 
