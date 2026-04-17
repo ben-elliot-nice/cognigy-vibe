@@ -21,7 +21,7 @@ Before starting Phase 1, navigate to `<plugin-root>` (two directories up from `s
 
 ## Phase 1: Fact Gathering
 
-Collect all 11 required facts before proceeding to Phase 2.
+Collect all 12 required facts before proceeding to Phase 2.
 
 **If context has been provided** (emails, briefs, notes): extract facts from it, then identify and ask only about gaps.
 
@@ -40,6 +40,7 @@ Collect all 11 required facts before proceeding to Phase 2.
 9. Integration landscape
 10. Available data (real, sanitised, fabricated)
 11. Reusable components from previous demos
+12. Regulatory/compliance constraints — Any industry-specific obligations that shape what the agent can say or do (e.g. fair dealing requirements, one-offer limits, consent requirements, mandatory disclosures, pressure-tactic prohibitions). These affect agent instructions, tool descriptions, and what constitutes a valid outcome. If none apply, note "no regulated constraints".
 
 **For Fact #11 — Reusable Components:**
 
@@ -54,13 +55,13 @@ Present the results and ask: "Which of these are candidates for reuse in this de
 
 If no `.env` is present, ask the user directly about reusable assets.
 
-Do not proceed to Phase 2 until all 11 facts are collected.
+Do not proceed to Phase 2 until all 12 facts are collected.
 
 ---
 
 ## Phase 2: Facts Summary
 
-Present a structured summary of all 11 facts, one heading per fact.
+Present a structured summary of all 12 facts, one heading per fact.
 
 Wait for explicit confirmation before proceeding. If the user corrects a fact, update it and re-present only the corrected fact. Re-confirm before proceeding.
 
@@ -74,8 +75,11 @@ This is a **collaborative design conversation** — do not generate a complete d
 2. **Narrative arc** — The story, the "aha moment", what this demo must prove
 3. **Scenario design** — Persona, agents involved, key moments, xApp usage, live agent handoff
 4. **Routing intents** — Concierge intent map: what triggers each specialist agent
+5. **Out-of-chat moments** — What happens outside the chat window during this demo? (website UI triggers, xApp scenes, dashboard updates, confirmation screens, SMS/push notifications) This is often the differentiated "wow moment" of the demo.
+6. **Irreversible actions** — Does any scenario involve actions the customer cannot undo? (cancellations, purchases, account changes) If so — how are they staged? What does the customer see before committing?
+7. **Auth architecture** — When does authentication happen? What does it unlock? Does it persist across scenarios or reset per interaction?
 
-After all four areas (demo structure, narrative arc, scenario design, routing intents) are agreed, ask explicitly:
+After all seven areas are agreed, ask explicitly:
 
 > "I have everything I need to write the demo plan. Ready for me to generate it?"
 
@@ -100,3 +104,4 @@ Populate every section. If something is unknown, state the assumption explicitly
 - Never write output before the Phase 3 explicit confirmation
 - `cognigy:list` in Phase 1 is optional — only call it if `.env` is present
 - If context covers most facts, extract what you can and only ask about gaps
+- Tool responses should return structured data objects, not verbatim scripted strings — let the LLM phrase the response naturally from structured data

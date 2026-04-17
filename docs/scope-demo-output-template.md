@@ -92,6 +92,12 @@ Use this structure when generating the demo plan document in Phase 4 of the scop
 - **In scope:** {Yes/No}
 - **Source documents:** {List docs to ingest, or note they need to be fabricated}
 
+### Compliance / Regulatory
+
+- **Regulatory context:** {Industry/market obligations — e.g. CoFI (NZ), FCA (UK), or "none"}
+- **Key constraints:** {Bullet list of obligations affecting agent behaviour — e.g. one-offer limit per reason, mandatory disclosure before cancellation, two-pass confirmation for irreversible actions}
+- **How encoded:** {Where these rules live — agent instructions, tool descriptions, or both}
+
 ---
 
 ## Cognigy Implementation Notes
@@ -135,3 +141,19 @@ Use this structure when generating the demo plan document in Phase 4 of the scop
 | Item | Status | Owner |
 |------|--------|-------|
 | {Question or assumption} | {Open / Assumed} | {Name or TBD} |
+
+---
+
+## Demo Operations
+
+### Repeatability
+
+- **Stateful actions in this demo:** {List any actions that change persistent state — e.g. cancellations, bookings, account updates — or "none (fully stateless)"}
+- **Reset mechanism:** {How to restore demo to initial state before running again — e.g. "POST /reset-demo", "reload seed data", "n/a — all stub responses, no persistent state"}
+- **Reset steps:** {Step-by-step — or "n/a"}
+
+### Seed Data Requirements
+
+| Record | Value | Purpose |
+|--------|-------|---------|
+| {e.g. Customer account} | {e.g. Policy ABC123, 4-year tenure, no recent claims} | {e.g. Enables retention offer scenario} |
