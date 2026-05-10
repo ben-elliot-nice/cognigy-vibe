@@ -78,3 +78,24 @@ def test_auth_header_sent(client):
         )
         client.get("/v2.0/flows")
     assert route.calls[0].request.headers["X-API-Key"] == "test-key"
+
+
+def test_non_json_error_body_raises_api_error(client):
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/flows/bad").mock(
+            return_value=httpx.Response(
+                500,
+                content=b"Internal Server Error",
+                headers={"content-type": "text/plain"},
+            )
+        )
+        with pytest.raises(ApiError) as exc:
+            client.get("/v2.0/flows/bad")
+    assert exc.value.status_code == 500
+    assert "Internal Server Error" in str(exc.value)
+
+
+def test_endpoint_base_url_raises_for_non_matching_url():
+    c = CognigyClient(base_url="https://localhost:8080", api_key="key")
+    with pytest.raises(ValueError, match="cognigy-api-"):
+        _ = c.endpoint_base_url

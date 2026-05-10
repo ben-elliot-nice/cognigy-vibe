@@ -16,15 +16,24 @@ class CognigyClient:
             timeout=30.0,
         )
 
+    def close(self) -> None:
+        self._http.close()
+
     @property
     def endpoint_base_url(self) -> str:
         # cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
+        if "cognigy-api-" not in self._base:
+            raise ValueError(
+                f"Cannot derive endpoint URL from base_url '{self._base}'. "
+                "Expected a URL containing 'cognigy-api-' (e.g. cognigy-api-au1.nicecxone.com)"
+            )
         return self._base.replace("cognigy-api-", "cognigy-endpoint-")
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
         if resp.status_code >= 400:
             try:
-                msg = resp.json().get("error", resp.text)
+                body = resp.json()
+                msg = body.get("error") or body.get("message") or resp.text
             except Exception:
                 msg = resp.text
             raise ApiError(resp.status_code, msg)
