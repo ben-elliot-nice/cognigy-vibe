@@ -52,14 +52,14 @@ def create_server() -> tuple[Server, list[types.Tool]]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-        # Auto-resync check (skip for sync_remote_state itself)
         auto_synced = False
         if name != "sync_remote_state" and state.needs_resync():
             sync_handler = all_handlers["sync_remote_state"]
-            sync_handler({"project_id": project_id})
-            auto_synced = True
-
-        state.touch_interaction()
+            try:
+                sync_handler({"project_id": project_id})
+                auto_synced = True
+            except Exception:
+                pass  # auto-resync failed; continue with stale state
 
         handler = all_handlers.get(name)
         if not handler:
@@ -68,16 +68,17 @@ def create_server() -> tuple[Server, list[types.Tool]]:
                 text=json.dumps({"error": f"Unknown tool: {name}"})
             )]
 
+        state.touch_interaction()
+
         result = handler(arguments or {})
 
         if auto_synced and result:
-            # Inject flag into first response object if it's JSON
             try:
                 first = json.loads(result[0].text)
                 first["auto_synced"] = True
                 result[0] = types.TextContent(type="text", text=json.dumps(first, indent=2))
             except Exception:
-                pass
+                pass  # non-JSON response (e.g. explain) — skip injection
 
         return result
 
