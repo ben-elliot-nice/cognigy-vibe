@@ -46,13 +46,21 @@ class ProjectState:
         self._load()
 
     def _load(self) -> None:
-        seed = json.loads(self._seed_path.read_text()) if self._seed_path.exists() else {}
-        runtime = json.loads(self._state_path.read_text()) if self._state_path.exists() else {}
-        # seed provides defaults; runtime values win
+        try:
+            seed = json.loads(self._seed_path.read_text()) if self._seed_path.exists() else {}
+        except (json.JSONDecodeError, OSError):
+            seed = {}
+        try:
+            runtime = json.loads(self._state_path.read_text()) if self._state_path.exists() else {}
+        except (json.JSONDecodeError, OSError):
+            runtime = {}
         self._state = _deep_merge(seed, runtime)
 
     def save(self) -> None:
-        self._state_path.write_text(json.dumps(self._state, indent=2))
+        payload = json.dumps(self._state, indent=2)
+        tmp = self._state_path.with_suffix(".tmp")
+        tmp.write_text(payload)
+        tmp.replace(self._state_path)
 
     def get(self, *keys: str) -> Any:
         return _deep_get(self._state, *keys)
@@ -64,8 +72,13 @@ class ProjectState:
     def needs_resync(self) -> bool:
         if not self._interaction_path.exists():
             return True
-        last = float(self._interaction_path.read_text())
-        return (time.time() - last) > (self.resync_hours * 3600)
+        try:
+            last = float(self._interaction_path.read_text())
+            return (time.time() - last) > (self.resync_hours * 3600)
+        except (ValueError, OSError):
+            return True
 
     def touch_interaction(self) -> None:
-        self._interaction_path.write_text(str(time.time()))
+        tmp = self._interaction_path.with_suffix(".tmp")
+        tmp.write_text(str(time.time()))
+        tmp.replace(self._interaction_path)

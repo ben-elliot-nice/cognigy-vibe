@@ -60,7 +60,7 @@ def test_set_and_save_and_reload(config_base, monkeypatch):
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", config_base)
     s = ProjectState("proj-123")
     s.set("flows", "My Flow", value={"id": "flow-xyz"})
-    s.save()
+    # set() auto-saves — no explicit save() needed
     s2 = ProjectState("proj-123")
     assert s2.get("flows", "My Flow", "id") == "flow-xyz"
 
@@ -71,3 +71,19 @@ def test_get_missing_key_returns_none(state):
 
 def test_config_dir_property(state, config_base):
     assert state.config_dir == config_base / "proj-123"
+
+
+def test_load_handles_corrupt_state_file(config_base, monkeypatch):
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", config_base)
+    proj_dir = config_base / "proj-123"
+    proj_dir.mkdir(parents=True)
+    (proj_dir / ".state.json").write_text("")  # corrupt — empty JSON
+    s = ProjectState("proj-123")
+    assert s.get("anything") is None  # should not raise
+
+
+def test_needs_resync_handles_corrupt_timestamp(config_base, monkeypatch):
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", config_base)
+    s = ProjectState("proj-123")
+    s._interaction_path.write_text("not-a-float")  # corrupt
+    assert s.needs_resync()  # should return True, not raise
