@@ -1691,7 +1691,11 @@ TOOLS: list[Tool] = [
         description="Send a message to a Cognigy flow via its REST endpoint and return the response. "
                     "Use for testing flows without opening the Cognigy UI. "
                     "Provide endpoint_token (from get_build_state) or flow_id (looks up token from state). "
-                    "Use a new user_id to start a fresh session.",
+                    "IMPORTANT: Use a new user_id to start a completely fresh session — Cognigy caches "
+                    "session state by userId and reusing one will carry stale context silently. "
+                    "IMPORTANT: This tool returns text output only. Tool calls made by the agent are "
+                    "NOT visible in the response — only the agent's spoken text is returned. "
+                    "Pass data={verbose: true} in the request body to surface errors that are otherwise swallowed.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -1978,6 +1982,13 @@ Every AI Agent tool is a branch of three nodes under an aiAgentJob:
   Code node writes: context.toolResponse = {summary: "...", data: {...}}
   aiAgentToolAnswer reads context.toolResponse and surfaces it to the LLM.
   toolResponse.summary = what the LLM reads back to the customer naturally.
+
+### Reading tool arguments in the code node
+Parameters the LLM collected (declared in aiAgentJobTool config.parameters) are available as:
+  const amount = input.aiAgent.toolArgs.amount;
+  const reason = input.aiAgent.toolArgs.reason;
+These are NOT in input.data — they come via input.aiAgent.toolArgs.<paramName>.
+Always read from toolArgs, never assume they appear elsewhere.
 """,
 
     "node-config-update": """
@@ -2002,6 +2013,17 @@ This will GET current config, deep-merge your changes, then PATCH.
 - code nodes: preview, triggers
 - aiAgentJobTool: conditions array when updating toolId only
 - Any node: position.x/y when updating config without including position
+
+### GoTo node: use referenceId (UUID), NOT _id (hex)
+GoTo nodes reference their target flow by UUID referenceId, not the hex _id.
+  // flow._id = "64a3f1c2b9e7d05a8c4f2e91"    ← hex, DO NOT use
+  // flow.referenceId = "550e8400-e29b-..."     ← UUID, USE THIS
+Get referenceId from cognigy_get(resource_type="flows", resource_id=...) → result.referenceId
+
+### Chart endpoint returns metadata only (not node configs)
+GET /v2.0/flows/{id}/chart returns node structure and positions.
+Node config fields (code, conditions, toolId etc.) are NOT included.
+To read a node's config, use cognigy_get(resource_type="node", resource_id=nodeId, flow_id=flowId).
 """,
 
     "flow-chart-reading": """
@@ -2030,7 +2052,12 @@ xApp/Voice types (extension: "cxone-utils"):
 
 ### ifThenElse nodes
 Cannot be created via cognigy_create — only via Cognigy UI.
-Condition is in config.conditions[0].rule: {left, operand, right}.
+Condition is in config.conditions[0].rule — it is an OBJECT, not a string:
+  config.conditions[0].rule = {
+    "left": "{{context.someVar}}",
+    "operand": "equals",   // equals, notEquals, contains, greaterThan, lessThan, etc.
+    "right": "expectedValue"
+  }
 Branches are in childIds[]: index 0 = true branch, index 1 = false/else branch.
 
 ### Reading the hierarchy string
@@ -2147,6 +2174,14 @@ If context resets every turn, check:
   1. Set Context is in main chain (move to OnFirstTime)
   2. Flow is being reset by a goTo with reset=true
   3. Multiple flows calling into each other with shared context
+
+### First-turn signal
+input.execution === 1 is the canonical way to detect the first turn in a code node.
+Do NOT use turn-count variables or session flags for this — input.execution is reliable.
+  if (input.execution === 1) {
+    // first turn setup
+  }
+Use this inside code nodes when you need to run logic once without the Once/OnFirstTime structure.
 """,
 
     "xapp-delivery": """
@@ -2185,8 +2220,21 @@ xApp session URL must be persisted in context — input.apps.url is ephemeral.
   }
 
 ### api.setAppState() limitation
-api.setAppState() in code nodes CANNOT push HTML content.
+api.setAppState() in code nodes CANNOT push HTML content or external URLs.
 Use the setHTMLAppState node instead (type: "setHTMLAppState", extension: "cxone-utils").
+Pattern for conditional xApp push from code:
+  1. Code node: context.xappTrigger = true; (sets flag)
+  2. ifThenElse: condition = context.xappTrigger === true
+  3. setHTMLAppState node (in true branch)
+  4. Code node: context.xappTrigger = false; (clear flag)
+
+### Dual xApp moments
+Some flows need TWO distinct xApp interactions (e.g., form submission then status update).
+Each is a separate initAppSession → setHTMLAppState → postMessage cycle.
+The second xApp session URL is a different URL — store separately:
+  context.xappSessionUrl      // first moment
+  context.xappDocUploadUrl    // second moment (document upload, status dashboard, etc.)
+This pattern is NOT in the Cognigy documentation — it is discovered during build.
 """,
 
     "cognigyScript": """
@@ -2272,6 +2320,19 @@ then reference it from the httpRequest via the context variable.
   // RIGHT:
   async function main() { const data = await fetch(...); }
   main();
+
+### TypeScript syntax: no "as const"
+  // WRONG — Cognigy code nodes don't support TypeScript generics/assertions:
+  const STATUS = {PENDING: 'pending'} as const;
+  // RIGHT:
+  const STATUS = {PENDING: 'pending'};
+
+### httpRequest node response wrapping
+The httpRequest node wraps its response body under a `.result` key.
+  // Code node reading httpRequest output:
+  const body = context.httpResponse.result;   // NOT context.httpResponse directly
+  // httpResponse shape: {result: {...actualBody}, status: 200, headers: {...}}
+Configure the response context key in the httpRequest node config under "storeLocation" / "contextKey".
 """,
 
     "voice-gateway": """
@@ -2304,6 +2365,25 @@ For SSML: api.output({text: "<speak>...</speak>", data: {}})
 ### Session persistence on voice
 context variables persist across turns within a call.
 New call = new session = fresh context.
+
+### VG Entrypoint + Channel Settings — required pairing
+VG Entrypoint and Channel Settings are paired in the Cognigy UI.
+The Channel Settings node holds the TTS/STT config and instructions (NOT the VG Entrypoint).
+Both must exist. Set Session Config node (copy-paste identical across demos):
+  - Place in OnFirstTime branch
+  - Contains: TTS engine, STT engine, barge-in config, silence timeout, atmosphere settings
+
+### VG endpoint routing — undocumented UI configuration
+The Cognigy endpoint for a voice flow must be configured to route DIRECTLY to the main flow.
+It must NOT route through VG Entrypoint (a common mistake that breaks voice).
+This is configured in the Cognigy endpoint settings UI — it is not in any code file.
+After creating a voice endpoint, open it in the Cognigy UI and set the flow target manually.
+
+### SIP header paths (voice context)
+  input.data.payload.from          // ANI — caller's phone number (SIP format: "+61412345678")
+  input.data.payload.to            // DNIS — dialled number
+  input.data.payload.callerEmail   // email from SIP header (if CXone passes it)
+  input.data.payload.headers       // full SIP headers object
 """,
 
     "outbound-trigger": """
