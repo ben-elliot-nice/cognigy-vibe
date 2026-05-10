@@ -48,14 +48,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             flow_id = args.get("flow_id")
             if not flow_id:
                 return _ok({"error": "Provide endpoint_token or flow_id"})
-            # Find endpoint token from state by matching flow reference
             endpoints = state.get("endpoints") or {}
             for ep_name, ep in endpoints.items():
-                if ep.get("flowReferenceId") == flow_id or ep.get("flowId") == flow_id:
+                if ep.get("flowReferenceId") == flow_id:
                     token = ep.get("urlToken")
                     break
             if not token:
-                return _ok({"error": f"No endpoint found for flow_id={flow_id}. Run sync_remote_state or provide endpoint_token."})
+                known = list(endpoints.keys()) if endpoints else []
+                hint = f" Known endpoints: {known}" if known else " No endpoints in state — run sync_remote_state first."
+                return _ok({"error": f"No endpoint found for flow_id={flow_id}.{hint}"})
 
         endpoint_url = f"{client.endpoint_base_url}/{token}"
         payload = {
