@@ -121,3 +121,48 @@ def test_get_flow_chart_returns_hierarchy(mock_client, state, cache):
     assert "hierarchy" in data
     assert "relations" in data
     assert "Start" in data["hierarchy"] or "start" in data["hierarchy"]
+
+
+def test_build_hierarchy_no_cycle_crash(mock_client, state, cache):
+    """Cyclic nextId should produce [CYCLE] marker, not RecursionError."""
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "a", "type": "say", "label": "A", "config": {}},
+            {"_id": "b", "type": "say", "label": "B", "config": {}},
+        ],
+        "relations": [
+            {"nodeId": "a", "nextId": "b", "previousId": None, "parentId": None, "childIds": []},
+            {"nodeId": "b", "nextId": "a", "previousId": "a", "parentId": None, "childIds": []},  # cycle
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert "CYCLE" in data["hierarchy"]
+
+
+def test_cognigy_create_node_missing_flow_id_returns_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({"resource_type": "node", "body": {"type": "say"}})
+    data = json.loads(result[0].text)
+    assert "error" in data
+
+
+def test_cognigy_update_merge_config_is_deep(mock_client, state, cache):
+    """Deep merge should preserve nested keys not in the update body."""
+    mock_client.get.return_value = {
+        "_id": "node-1",
+        "config": {"outer": {"a": 1, "b": 2}, "other": "keep"}
+    }
+    mock_client.patch.return_value = {"_id": "node-1", "config": {"outer": {"a": 1, "b": 99}, "other": "keep"}}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_update"]({
+        "resource_type": "flows",
+        "resource_id": "node-1",
+        "body": {"config": {"outer": {"b": 99}}},
+        "merge_config": True,
+    })
+    call_body = mock_client.patch.call_args[0][1]
+    assert call_body["config"]["outer"]["a"] == 1   # preserved by deep merge
+    assert call_body["config"]["outer"]["b"] == 99  # updated
+    assert call_body["config"]["other"] == "keep"   # preserved by deep merge

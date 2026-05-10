@@ -1,9 +1,9 @@
 from __future__ import annotations
 import json
 from mcp.types import Tool, TextContent
-from cognigy_mcp.api import CognigyClient, ApiError
+from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
-from cognigy_mcp.state import ProjectState
+from cognigy_mcp.state import ProjectState, _deep_merge
 
 TOOLS: list[Tool] = [
     Tool(
@@ -119,7 +119,9 @@ def _ok(data: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
 
-def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict, flow_id: str | None) -> str:
+def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict, flow_id: str | None) -> str | None:
+    if resource_type == "node" and operation == "move" and not flow_id:
+        return None  # caller must check
     mapping = {
         ("node", "move"): f"/v2.0/flows/{flow_id}/chart/nodes/{resource_id}/move",
         ("flow", "clone"): f"/v2.0/flows/{resource_id}/clone",
@@ -142,7 +144,10 @@ def _build_hierarchy(chart: dict) -> str:
     nodes = {n["_id"]: n for n in chart.get("nodes", [])}
     relations = {r["nodeId"]: r for r in chart.get("relations", [])}
 
-    def render(node_id: str, indent: int = 0) -> list[str]:
+    def render(node_id: str, indent: int = 0, visited: frozenset = frozenset()) -> list[str]:
+        if node_id in visited:
+            return [f"{'  ' * indent}[CYCLE → {node_id}]"]
+        visited = visited | {node_id}
         node = nodes.get(node_id, {})
         label = node.get("label") or node.get("type", node_id)
         ntype = node.get("type", "")
@@ -150,10 +155,10 @@ def _build_hierarchy(chart: dict) -> str:
         lines = [f"{prefix}[{ntype}] {label} ({node_id})"]
         rel = relations.get(node_id, {})
         for child_id in rel.get("childIds", []):
-            lines += render(child_id, indent + 1)
+            lines += render(child_id, indent + 1, visited)
         next_id = rel.get("nextId")
         if next_id:
-            lines += render(next_id, indent)
+            lines += render(next_id, indent, visited)
         return lines
 
     # Find root: node with no parent and no previous
@@ -167,6 +172,14 @@ def _build_hierarchy(chart: dict) -> str:
     return "\n".join(lines) if lines else "(empty chart)"
 
 
+def _resource_path(resource_type: str, resource_id: str, flow_id: str | None = None) -> str | None:
+    if resource_type == "node":
+        if not flow_id:
+            return None  # caller must check
+        return f"/v2.0/flows/{flow_id}/chart/nodes/{resource_id}"
+    return f"/v2.0/{resource_type}/{resource_id}"
+
+
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _cognigy_get(args: dict) -> list[TextContent]:
@@ -176,10 +189,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         cached, fresh = cache.get(rtype, rid)
         if fresh and cached:
             return _ok({**cached, "_source": "cache"})
-        if rtype == "node":
-            data = client.get(f"/v2.0/flows/{flow_id}/chart/nodes/{rid}")
-        else:
-            data = client.get(f"/v2.0/{rtype}/{rid}")
+        path = _resource_path(rtype, rid, flow_id)
+        if path is None:
+            return _ok({"error": "flow_id required when resource_type is 'node'"})
+        data = client.get(path)
         cache.set(rtype, rid, data)
         return _ok({**data, "_source": "api"})
 
@@ -203,7 +216,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         flow_id = args.get("flow_id")
         if rtype == "node":
             if not flow_id:
-                raise ValueError("flow_id required to create a node")
+                return _ok({"error": "flow_id required to create a node"})
             path = f"/v2.0/flows/{flow_id}/chart/nodes"
         else:
             path = f"/v2.0/{rtype}"
@@ -221,19 +234,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         body = args["body"]
         merge_config = args.get("merge_config", False)
         flow_id = args.get("flow_id")
-
-        if rtype == "node":
-            path = f"/v2.0/flows/{flow_id}/chart/nodes/{rid}"
-        else:
-            path = f"/v2.0/{rtype}/{rid}"
-
-        # Always fetch fresh state before writing
+        path = _resource_path(rtype, rid, flow_id)
+        if path is None:
+            return _ok({"error": "flow_id required when resource_type is 'node'"})
         current = client.get(path)
-
         if merge_config and "config" in body and "config" in current:
-            merged = {**current["config"], **body["config"]}
+            merged = _deep_merge(current["config"], body["config"])
             body = {**body, "config": merged}
-
         result = client.patch(path, body)
         cache.set(rtype, rid, result)
         return _ok(result)
@@ -242,10 +249,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         rtype = args["resource_type"]
         rid = args["resource_id"]
         flow_id = args.get("flow_id")
-        if rtype == "node":
-            path = f"/v2.0/flows/{flow_id}/chart/nodes/{rid}"
-        else:
-            path = f"/v2.0/{rtype}/{rid}"
+        path = _resource_path(rtype, rid, flow_id)
+        if path is None:
+            return _ok({"error": "flow_id required when resource_type is 'node'"})
         result = client.delete(path)
         cache.invalidate(rtype, rid)
         return _ok({"deleted": True, "resource_id": rid, **result})
@@ -257,6 +263,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         body = args.get("body", {})
         flow_id = args.get("flow_id")
         path = _invoke_path(rtype, rid, operation, body, flow_id)
+        if path is None:
+            return _ok({"error": f"flow_id required for {rtype}/{operation}"})
         result = client.post(path, body)
         return _ok(result)
 
