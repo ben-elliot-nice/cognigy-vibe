@@ -65,7 +65,11 @@ def _diff_summary(old: str, new: str) -> str:
         tofile="remote-current",
         n=3,
     ))
-    return "".join(lines[:50])
+    if len(lines) > 50:
+        truncated = lines[:50]
+        truncated.append(f"\n... ({len(lines) - 50} more lines not shown)\n")
+        return "".join(truncated)
+    return "".join(lines)
 
 
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
@@ -97,10 +101,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "diff": _diff_summary(snapshot, remote_code),
             })
 
-        result = client.patch(
-            f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}",
-            {"config": {"code": local_content}},
-        )
+        try:
+            result = client.patch(
+                f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}",
+                {"config": {"code": local_content}},
+            )
+        except Exception as e:
+            return _ok({"error": f"Failed to push code to node: {e}"})
         cache.set("nodes", node_id, result)
         cache.set_node_snapshot(node_id, local_content)
         return _ok({"success": True, "node_id": node_id, "bytes": len(local_content)})
@@ -114,10 +121,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return _ok({"error": f"File not found: {path}"})
 
         html = path.read_text()
-        result = client.patch(
-            f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}",
-            {"config": {"html": html, "mode": "full"}},
-        )
+        try:
+            result = client.patch(
+                f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}",
+                {"config": {"html": html, "mode": "full"}},
+            )
+        except Exception as e:
+            return _ok({"error": f"Failed to patch node: {e}"})
         cache.set("nodes", node_id, result)
         return _ok({"success": True, "node_id": node_id, "bytes": len(html)})
 
@@ -129,16 +139,23 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if not path.exists():
             return _ok({"error": f"File not found: {path}"})
 
-        body = json.loads(path.read_text())
+        try:
+            body = json.loads(path.read_text())
+        except json.JSONDecodeError as e:
+            return _ok({"error": f"Invalid JSON in {path}: {e}"})
 
-        if tool_id:
-            result = client.patch(f"/v2.0/projects/{project_id}/tools/{tool_id}", body)
-        else:
-            result = client.post(f"/v2.0/projects/{project_id}/tools", body)
+        try:
+            if tool_id:
+                result = client.patch(f"/v2.0/projects/{project_id}/tools/{tool_id}", body)
+            else:
+                result = client.post(f"/v2.0/projects/{project_id}/tools", body)
+        except Exception as e:
+            return _ok({"error": f"Failed to push tool: {e}"})
 
         name = result.get("name")
-        if name:
-            state.set("tools", name, value={"id": result["_id"]})
+        rid = result.get("_id")
+        if name and rid:
+            state.set("tools", name, value={"id": rid})
         return _ok(result)
 
     return {

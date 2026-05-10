@@ -92,3 +92,27 @@ def test_push_tool_from_file_create(mock_client, state, cache, tmp_path):
     })
     data = json.loads(result[0].text)
     assert data["_id"] == "tool-1"
+
+
+def test_push_code_node_patch_failure_returns_error(mock_client, state, cache, tmp_path):
+    script = tmp_path / "payment.js"
+    script.write_text("some code")
+    mock_client.get.return_value = {"_id": "node-1", "config": {"code": "some code"}}
+    mock_client.patch.side_effect = Exception("network error")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_code_node"]({
+        "script_file": str(script), "node_id": "node-1", "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    # Snapshot should NOT be updated on failed push
+    assert cache.get_node_snapshot("node-1") is None
+
+
+def test_push_tool_from_file_invalid_json(mock_client, state, cache, tmp_path):
+    bad_file = tmp_path / "bad.json"
+    bad_file.write_text("not valid json {")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_tool_from_file"]({"file": str(bad_file), "project_id": "proj-1"})
+    data = json.loads(result[0].text)
+    assert "error" in data
