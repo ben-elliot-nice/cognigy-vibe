@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from mcp.types import Tool, TextContent
-from cognigy_mcp.api import CognigyClient, ApiError
+from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 
@@ -54,31 +54,21 @@ def make_handlers(
     def _sync_remote_state(args: dict) -> list[TextContent]:
         project_id = args["project_id"]
         cache.invalidate_all()
+        errors: list[str] = []
 
         # Flows
-        flows_resp = client.get(f"/v2.0/projects/{project_id}/flows", limit=100)
-        flows = flows_resp.get("items", [])
+        try:
+            flows_resp = client.get(f"/v2.0/projects/{project_id}/flows", limit=100)
+            flows = flows_resp.get("items", [])
+        except Exception as exc:
+            errors.append(f"flows: {exc}")
+            flows = []
+
         for flow in flows:
             state.set("flows", flow["name"], value={"id": flow["_id"]})
             cache.set("flows", flow["_id"], flow)
 
-        # Agents
-        agents_resp = client.get(f"/v2.0/projects/{project_id}/aiagents", limit=100)
-        for agent in agents_resp.get("items", []):
-            state.set("agents", agent["name"], value={"id": agent["_id"]})
-            cache.set("aiagents", agent["_id"], agent)
-
-        # Endpoints
-        eps_resp = client.get(f"/v2.0/projects/{project_id}/endpoints", limit=100)
-        for ep in eps_resp.get("items", []):
-            state.set("endpoints", ep["name"], value={
-                "id": ep["_id"],
-                "urlToken": ep.get("urlToken", ""),
-                "flowReferenceId": ep.get("flowReferenceId", ""),
-            })
-            cache.set("endpoints", ep["_id"], ep)
-
-        # Discover aiAgentJobTool nodes within each flow (after bulk lists are done)
+        # Chart-based tool discovery (non-fatal per flow)
         for flow in flows:
             try:
                 chart = client.get(f"/v2.0/flows/{flow['_id']}/chart")
@@ -90,14 +80,39 @@ def make_handlers(
                             "flowId": flow["_id"],
                             "flowName": flow["name"],
                         })
-            except ApiError:
-                pass
+            except Exception:
+                pass  # chart unavailable — skip tool discovery for this flow
+
+        # Agents
+        try:
+            agents_resp = client.get(f"/v2.0/projects/{project_id}/aiagents", limit=100)
+            for agent in agents_resp.get("items", []):
+                state.set("agents", agent["name"], value={"id": agent["_id"]})
+                cache.set("aiagents", agent["_id"], agent)
+        except Exception as exc:
+            errors.append(f"agents: {exc}")
+
+        # Endpoints
+        try:
+            eps_resp = client.get(f"/v2.0/projects/{project_id}/endpoints", limit=100)
+            for ep in eps_resp.get("items", []):
+                state.set("endpoints", ep["name"], value={
+                    "id": ep["_id"],
+                    "urlToken": ep.get("urlToken", ""),
+                    "flowReferenceId": ep.get("flowReferenceId", ""),
+                })
+                cache.set("endpoints", ep["_id"], ep)
+        except Exception as exc:
+            errors.append(f"endpoints: {exc}")
 
         state.touch_interaction()
-        return _ok({"synced": True, "project_id": project_id})
+        result: dict = {"synced": True, "project_id": project_id}
+        if errors:
+            result["errors"] = errors
+        return _ok(result)
 
     def _get_build_state(_args: dict) -> list[TextContent]:
-        return _ok(state._state)
+        return _ok(state.as_dict())
 
     def _resolve_resource(args: dict) -> list[TextContent]:
         name = args["name"]

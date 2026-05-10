@@ -1,4 +1,5 @@
 from __future__ import annotations
+import copy
 import json
 import time
 from pathlib import Path
@@ -82,3 +83,6 @@ class ProjectState:
         tmp = self._interaction_path.with_suffix(".tmp")
         tmp.write_text(str(time.time()))
         tmp.replace(self._interaction_path)
+
+    def as_dict(self) -> dict:
+        return copy.deepcopy(self._state)

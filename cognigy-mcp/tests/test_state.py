@@ -87,3 +87,12 @@ def test_needs_resync_handles_corrupt_timestamp(config_base, monkeypatch):
     s = ProjectState("proj-123")
     s._interaction_path.write_text("not-a-float")  # corrupt
     assert s.needs_resync()  # should return True, not raise
+
+
+def test_as_dict_returns_copy(state):
+    state.set("flows", "Main", value={"id": "flow-1"})
+    d = state.as_dict()
+    assert d["flows"]["Main"]["id"] == "flow-1"
+    # Mutating the returned dict should not affect state
+    d["flows"]["Main"]["id"] = "mutated"
+    assert state.get("flows", "Main", "id") == "flow-1"
