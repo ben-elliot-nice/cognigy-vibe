@@ -1,0 +1,71 @@
+from __future__ import annotations
+import json
+import time
+from pathlib import Path
+from typing import Any
+
+CONFIG_BASE = Path.home() / ".config" / "cognigy-mcp"
+
+
+def _deep_get(d: dict, *keys: str) -> Any:
+    for key in keys:
+        if not isinstance(d, dict):
+            return None
+        d = d.get(key)
+        if d is None:
+            return None
+    return d
+
+
+def _deep_set(d: dict, *keys: str, value: Any) -> None:
+    for key in keys[:-1]:
+        d = d.setdefault(key, {})
+    d[keys[-1]] = value
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    result = dict(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
+class ProjectState:
+    def __init__(self, project_id: str, resync_hours: float = 4.0):
+        self.project_id = project_id
+        self.config_dir = CONFIG_BASE / project_id
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self._state_path = self.config_dir / ".state.json"
+        self._seed_path = self.config_dir / ".state-seed.json"
+        self._interaction_path = self.config_dir / "last-interaction"
+        self.resync_hours = resync_hours
+        self._state: dict = {}
+        self._load()
+
+    def _load(self) -> None:
+        seed = json.loads(self._seed_path.read_text()) if self._seed_path.exists() else {}
+        runtime = json.loads(self._state_path.read_text()) if self._state_path.exists() else {}
+        # seed provides defaults; runtime values win
+        self._state = _deep_merge(seed, runtime)
+
+    def save(self) -> None:
+        self._state_path.write_text(json.dumps(self._state, indent=2))
+
+    def get(self, *keys: str) -> Any:
+        return _deep_get(self._state, *keys)
+
+    def set(self, *keys: str, value: Any) -> None:
+        _deep_set(self._state, *keys, value=value)
+        self.save()
+
+    def needs_resync(self) -> bool:
+        if not self._interaction_path.exists():
+            return True
+        last = float(self._interaction_path.read_text())
+        return (time.time() - last) > (self.resync_hours * 3600)
+
+    def touch_interaction(self) -> None:
+        self._interaction_path.write_text(str(time.time()))
