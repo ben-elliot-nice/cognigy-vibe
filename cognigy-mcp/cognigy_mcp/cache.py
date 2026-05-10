@@ -19,14 +19,20 @@ class Cache:
         path = self._resource_path(resource_type, resource_id)
         if not path.exists():
             return None, False
-        entry = json.loads(path.read_text())
-        fresh = (time.time() - entry["_cached_at"]) < self.ttl
-        return entry["data"], fresh
+        try:
+            entry = json.loads(path.read_text())
+            fresh = (time.time() - entry["_cached_at"]) < self.ttl
+            return entry["data"], fresh
+        except (json.JSONDecodeError, KeyError, OSError):
+            return None, False
 
     def set(self, resource_type: str, resource_id: str, data: dict) -> None:
         path = self._resource_path(resource_type, resource_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"_cached_at": time.time(), "data": data}))
+        payload = json.dumps({"_cached_at": time.time(), "data": data})
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(payload)
+        tmp.replace(path)
 
     def invalidate(self, resource_type: str, resource_id: str) -> None:
         path = self._resource_path(resource_type, resource_id)
@@ -35,9 +41,9 @@ class Cache:
 
     def invalidate_all(self) -> None:
         for f in self.cache_dir.rglob("*.json"):
-            f.unlink()
+            f.unlink(missing_ok=True)
         for f in self.cache_dir.rglob("*.js"):
-            f.unlink()
+            f.unlink(missing_ok=True)
 
     def get_node_snapshot(self, node_id: str) -> str | None:
         path = self._snapshot_path(node_id)
@@ -46,4 +52,6 @@ class Cache:
     def set_node_snapshot(self, node_id: str, content: str) -> None:
         path = self._snapshot_path(node_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(content)
+        tmp.replace(path)

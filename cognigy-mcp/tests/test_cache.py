@@ -24,7 +24,7 @@ def test_set_then_get_fresh(cache):
 
 
 def test_expired_entry_returns_stale(tmp_path):
-    c = Cache(cache_dir=tmp_path / "cache", ttl=0)
+    c = Cache(cache_dir=tmp_path / "cache", ttl=-1)
     c.set("flows", "abc", {"_id": "abc"})
     _, fresh = c.get("flows", "abc")
     assert not fresh
@@ -45,8 +45,10 @@ def test_invalidate_removes_entry(cache):
 def test_invalidate_all_wipes_everything(cache):
     cache.set("flows", "123", {"_id": "123"})
     cache.set("aiagents", "agent-1", {"_id": "agent-1"})
+    cache.set_node_snapshot("node-abc", "const x = 1;")
     cache.invalidate_all()
     assert not any(cache.cache_dir.rglob("*.json"))
+    assert not any(cache.cache_dir.rglob("*.js"))
 
 
 def test_node_snapshot_roundtrip(cache):
@@ -62,3 +64,18 @@ def test_node_snapshot_update(cache):
     cache.set_node_snapshot("node-abc", "old content")
     cache.set_node_snapshot("node-abc", "new content")
     assert cache.get_node_snapshot("node-abc") == "new content"
+
+
+def test_invalidate_missing_entry_no_error(cache):
+    # should not raise
+    cache.invalidate("flows", "nonexistent")
+
+
+def test_get_corrupted_file_returns_miss(cache, tmp_path):
+    # Write a corrupted (empty) cache file
+    path = cache.cache_dir / "flows" / "bad.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("")  # empty = invalid JSON
+    data, fresh = cache.get("flows", "bad")
+    assert data is None
+    assert not fresh
