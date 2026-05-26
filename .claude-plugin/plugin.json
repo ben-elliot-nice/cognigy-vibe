@@ -8,21 +8,12 @@
   },
   "skills": [
     "add-aiagent-job",
-    "create",
-    "delete",
     "design-agent",
     "design-agent-contracts",
     "design-agent-interfaces",
     "design-agent-jobs",
     "design-agent-persona",
-    "get",
-    "init",
     "init-mcp",
-    "invoke",
-    "list",
-    "scope-demo",
-    "select-node",
-    "update",
-    "write-code-node"
+    "scope-demo"
   ]
 }
