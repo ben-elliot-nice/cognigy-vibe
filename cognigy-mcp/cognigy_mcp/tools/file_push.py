@@ -10,44 +10,52 @@ from cognigy_mcp.state import ProjectState
 TOOLS: list[Tool] = [
     Tool(
         name="push_code_node",
-        description="Read a local .js/.ts file and push its content to a Cognigy Code node. "
-                    "Performs conflict detection: if the remote node was edited in the Cognigy UI "
-                    "since the last push, the operation is blocked and a diff is returned.",
+        description="Push a .js/.ts file to a Cognigy Code node. "
+                    "Local mode: provide script_file (absolute path). "
+                    "Remote mode: provide workspace_file (relative path within session workspace). "
+                    "Performs conflict detection against the last-pushed snapshot.",
         inputSchema={
             "type": "object",
             "properties": {
-                "script_file": {"type": "string", "description": "Absolute path to .js or .ts file"},
+                "script_file": {"type": "string", "description": "Absolute path to .js or .ts file (local mode)"},
+                "workspace_file": {"type": "string", "description": "Relative path within session workspace (remote mode)"},
                 "node_id": {"type": "string"},
                 "flow_id": {"type": "string"},
             },
-            "required": ["script_file", "node_id", "flow_id"],
+            "required": ["node_id", "flow_id"],
         },
     ),
     Tool(
         name="push_html_node",
-        description="Read a local .html file and push it to a Cognigy setHTMLAppState node. "
+        description="Push a .html file to a Cognigy setHTMLAppState node. "
+                    "Local mode: provide html_file (absolute path). "
+                    "Remote mode: provide workspace_file (relative path). "
                     "Automatically sets mode='full'.",
         inputSchema={
             "type": "object",
             "properties": {
-                "html_file": {"type": "string", "description": "Absolute path to .html file"},
+                "html_file": {"type": "string", "description": "Absolute path to .html file (local mode)"},
+                "workspace_file": {"type": "string", "description": "Relative path within session workspace (remote mode)"},
                 "node_id": {"type": "string"},
                 "flow_id": {"type": "string"},
             },
-            "required": ["html_file", "node_id", "flow_id"],
+            "required": ["node_id", "flow_id"],
         },
     ),
     Tool(
         name="push_tool_from_file",
-        description="Read a local JSON tool definition and create or update it in Cognigy.",
+        description="Read a local JSON tool definition and create or update it in Cognigy. "
+                    "Local mode: provide file (absolute path). "
+                    "Remote mode: provide workspace_file (relative path).",
         inputSchema={
             "type": "object",
             "properties": {
-                "file": {"type": "string", "description": "Absolute path to JSON tool definition"},
+                "file": {"type": "string", "description": "Absolute path to JSON tool definition (local mode)"},
+                "workspace_file": {"type": "string", "description": "Relative path within session workspace (remote mode)"},
                 "project_id": {"type": "string"},
                 "tool_id": {"type": "string", "description": "If provided, updates existing tool instead of creating"},
             },
-            "required": ["file", "project_id"],
+            "required": ["project_id"],
         },
     ),
 ]
@@ -72,10 +80,40 @@ def _diff_summary(old: str, new: str) -> str:
     return "".join(lines)
 
 
-def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
+def _resolve_path(args: dict, local_key: str, workspace_dir: Path | None) -> tuple[Path | None, list[TextContent] | None]:
+    """Resolve script_file/html_file/file or workspace_file to an absolute Path.
+
+    Returns (path, None) on success, or (None, error_response) on failure.
+    """
+    workspace_file = args.get("workspace_file")
+    local_file = args.get(local_key)
+
+    if workspace_file and local_file:
+        return None, _ok({"error": f"Provide either {local_key} or workspace_file, not both"})
+
+    if workspace_file:
+        if workspace_dir is None:
+            return None, _ok({"error": "workspace_file is only supported in remote (HTTP) server mode"})
+        return workspace_dir / workspace_file, None
+
+    if local_file:
+        return Path(local_file), None
+
+    return None, _ok({"error": f"Either {local_key} or workspace_file is required"})
+
+
+def make_handlers(
+    client: CognigyClient,
+    state: ProjectState,
+    cache: Cache,
+    workspace_dir: Path | None = None,
+) -> dict:
 
     def _push_code_node(args: dict) -> list[TextContent]:
-        path = Path(args["script_file"])
+        path, err = _resolve_path(args, "script_file", workspace_dir)
+        if err:
+            return err
+
         node_id = args["node_id"]
         flow_id = args["flow_id"]
 
@@ -92,7 +130,6 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         remote_code = remote.get("config", {}).get("code", "")
         snapshot = cache.get_node_snapshot(node_id)
 
-        # Conflict: remote has been edited in UI since last push
         if snapshot is not None and remote_code != snapshot:
             return _ok({
                 "conflict": True,
@@ -113,7 +150,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({"success": True, "node_id": node_id, "bytes": len(local_content)})
 
     def _push_html_node(args: dict) -> list[TextContent]:
-        path = Path(args["html_file"])
+        path, err = _resolve_path(args, "html_file", workspace_dir)
+        if err:
+            return err
+
         node_id = args["node_id"]
         flow_id = args["flow_id"]
 
@@ -132,7 +172,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({"success": True, "node_id": node_id, "bytes": len(html)})
 
     def _push_tool_from_file(args: dict) -> list[TextContent]:
-        path = Path(args["file"])
+        path, err = _resolve_path(args, "file", workspace_dir)
+        if err:
+            return err
+
         project_id = args["project_id"]
         tool_id = args.get("tool_id")
 
