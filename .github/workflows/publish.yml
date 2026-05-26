@@ -1,0 +1,58 @@
+name: Publish to PyPI
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version is stable (not pre-release)
+        id: check
+        run: |
+          pip install packaging --quiet
+          python3 << 'PYEOF'
+          import re, sys, os
+          from packaging.version import Version
+
+          text = open("cognigy-mcp/pyproject.toml").read()
+          m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          if not m:
+              print("ERROR: version not found in cognigy-mcp/pyproject.toml")
+              sys.exit(1)
+
+          version = m.group(1)
+          v = Version(version)
+          is_pre = "true" if v.is_prerelease else "false"
+          print(f"Version: {version}  pre-release: {is_pre}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"skip={is_pre}\n")
+              f.write(f"version={version}\n")
+          PYEOF
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.check.outputs.skip == 'false'
+        with:
+          enable-cache: true
+
+      - name: Build package
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd cognigy-mcp
+          uv build
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd cognigy-mcp
+          uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
