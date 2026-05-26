@@ -2,6 +2,7 @@ from __future__ import annotations
 import difflib
 import json
 from pathlib import Path
+from typing import Any
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
@@ -80,7 +81,10 @@ def _diff_summary(old: str, new: str) -> str:
     return "".join(lines)
 
 
-def _resolve_path(args: dict, local_key: str, workspace_dir: Path | None) -> tuple[Path | None, list[TextContent] | None]:
+_PathResult = tuple[Path | None, list[TextContent] | None]
+
+
+def _resolve_path(args: dict, local_key: str, workspace_dir: Path | None) -> _PathResult:
     """Resolve script_file/html_file/file or workspace_file to an absolute Path.
 
     Returns (path, None) on success, or (None, error_response) on failure.
@@ -88,10 +92,12 @@ def _resolve_path(args: dict, local_key: str, workspace_dir: Path | None) -> tup
     workspace_file = args.get("workspace_file")
     local_file = args.get(local_key)
 
-    if workspace_file and local_file:
+    if workspace_file is not None and local_file is not None:
         return None, _ok({"error": f"Provide either {local_key} or workspace_file, not both"})
 
-    if workspace_file:
+    if workspace_file is not None:
+        if not workspace_file:
+            return None, _ok({"error": "workspace_file must not be empty"})
         if workspace_dir is None:
             return None, _ok({"error": "workspace_file is only supported in remote (HTTP) server mode"})
         return workspace_dir / workspace_file, None

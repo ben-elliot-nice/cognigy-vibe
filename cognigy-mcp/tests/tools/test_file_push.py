@@ -69,7 +69,6 @@ def test_push_code_node_file_not_found(mock_client, state, cache):
 def test_push_html_node(mock_client, state, cache, tmp_path):
     html_file = tmp_path / "page.html"
     html_file.write_text("<h1>Hello</h1>")
-    mock_client.get.return_value = {"_id": "node-2", "config": {"html": "", "mode": "url"}}
     mock_client.patch.return_value = {"_id": "node-2", "config": {"html": "<h1>Hello</h1>", "mode": "full"}}
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["push_html_node"]({
@@ -152,6 +151,18 @@ def test_push_code_node_no_path_arg_returns_error(mock_client, state, cache):
     result = handlers["push_code_node"]({"node_id": "node-1", "flow_id": "flow-1"})
     data = json.loads(result[0].text)
     assert "error" in data
+
+
+def test_push_code_node_workspace_file_without_workspace_dir(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)  # no workspace_dir
+    result = handlers["push_code_node"]({
+        "workspace_file": "payment.js",
+        "node_id": "node-1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "remote" in data["error"].lower()
 
 
 def test_push_html_node_workspace_file(mock_client, state, cache, tmp_path):
