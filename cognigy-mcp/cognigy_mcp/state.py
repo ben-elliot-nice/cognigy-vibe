@@ -35,9 +35,9 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 class ProjectState:
-    def __init__(self, project_id: str, resync_hours: float = 4.0):
+    def __init__(self, project_id: str, resync_hours: float = 4.0, config_base: Path | None = None):
         self.project_id = project_id
-        self.config_dir = CONFIG_BASE / project_id
+        self.config_dir = (config_base if config_base is not None else CONFIG_BASE) / project_id
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self._state_path = self.config_dir / ".state.json"
         self._seed_path = self.config_dir / ".state-seed.json"
