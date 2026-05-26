@@ -1,9 +1,45 @@
 from __future__ import annotations
 import json
+import os
+from pathlib import Path
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+
+
+_RESOURCE_TYPE_ALIASES: dict[str, str] = {
+    "project": "projects",
+    "flow": "flows",
+    "endpoint": "endpoints",
+    "agent": "aiagents",
+    "ai-agent": "aiagents",
+    "aiagent": "aiagents",
+    "knowledge-store": "knowledgestores",
+    "knowledgestore": "knowledgestores",
+    "function": "functions",
+    "connection": "connections",
+    "extension": "extensions",
+    "locale": "locales",
+    "lexicon": "lexicons",
+    "snapshot": "snapshots",
+    "playbook": "playbooks",
+}
+
+
+def _normalise_rtype(rtype: str) -> str:
+    return _RESOURCE_TYPE_ALIASES.get(rtype.lower(), rtype)
+
+
+def _write_to_dotenv(key: str, value: str) -> None:
+    """Append key=value to .env in CWD if the key is not already present."""
+    env_path = Path.cwd() / ".env"
+    if not env_path.exists():
+        return  # don't create .env from scratch
+    content = env_path.read_text()
+    if key in content:
+        return
+    env_path.write_text(content.rstrip("\n") + f"\n{key}={value}\n")
 
 TOOLS: list[Tool] = [
     Tool(
@@ -14,16 +50,26 @@ TOOLS: list[Tool] = [
         inputSchema={
             "type": "object",
             "properties": {
-                "project_id": {"type": "string", "description": "Cognigy project ID"},
+                "project_id": {
+                    "type": "string",
+                    "description": "Cognigy project ID. Optional if COGNIGY_PROJECT_ID is set in environment.",
+                },
             },
-            "required": ["project_id"],
         },
     ),
     Tool(
         name="get_build_state",
-        description="Return the current .state.json — all known name→ID mappings for "
-                    "flows, agents, endpoints, tools. Use resolve_resource for single lookups.",
-        inputSchema={"type": "object", "properties": {}},
+        description="Return the current .state.json — all known name→ID mappings. "
+                    "Pass resource_type to scope the response and avoid context overflow on large projects.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "resource_type": {
+                    "type": "string",
+                    "description": "Filter to one resource category: flows, agents, endpoints, tools, nodes, jobs",
+                },
+            },
+        },
     ),
     Tool(
         name="resolve_resource",
@@ -52,7 +98,24 @@ def make_handlers(
     client: CognigyClient, state: ProjectState, cache: Cache
 ) -> dict:
     def _sync_remote_state(args: dict) -> list[TextContent]:
-        project_id = args["project_id"]
+        project_id = args.get("project_id") or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
+
+        if not project_id:
+            # List projects to help the agent pick one
+            try:
+                projects_resp = client.get("/v2.0/projects")
+                projects = [{"id": p["_id"], "name": p["name"]} for p in projects_resp.get("items", [])]
+            except Exception:
+                projects = []
+            return _ok({
+                "error": "project_id is required",
+                "hint": "Pass project_id=<id>, or set COGNIGY_PROJECT_ID=<id> in your .env file",
+                "available_projects": projects,
+            })
+
+        # Write to .env if not already there
+        _write_to_dotenv("COGNIGY_PROJECT_ID", project_id)
+
         cache.invalidate_all()
         errors: list[str] = []
 
@@ -111,8 +174,13 @@ def make_handlers(
             result["errors"] = errors
         return _ok(result)
 
-    def _get_build_state(_args: dict) -> list[TextContent]:
-        return _ok(state.as_dict())
+    def _get_build_state(args: dict) -> list[TextContent]:
+        resource_type = args.get("resource_type")
+        full_state = state.as_dict()
+        if resource_type:
+            filtered = full_state.get(resource_type, {})
+            return _ok({resource_type: filtered, "_filtered": True})
+        return _ok(full_state)
 
     def _resolve_resource(args: dict) -> list[TextContent]:
         name = args["name"]

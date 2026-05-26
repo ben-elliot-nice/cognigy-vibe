@@ -166,3 +166,94 @@ def test_cognigy_update_merge_config_is_deep(mock_client, state, cache):
     assert call_body["config"]["outer"]["a"] == 1   # preserved by deep merge
     assert call_body["config"]["outer"]["b"] == 99  # updated
     assert call_body["config"]["other"] == "keep"   # preserved by deep merge
+
+
+# ---------------------------------------------------------------------------
+# P1 — Say node config normalisation
+# ---------------------------------------------------------------------------
+
+def test_say_node_text_normalised(mock_client, state, cache):
+    """config.text string should be lifted into config.say.text array."""
+    mock_client.post.return_value = {"_id": "say-1", "type": "say", "label": "Welcome"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "say", "mode": "append", "target": "start", "label": "Welcome",
+                 "config": {"text": "Hello world"}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert "say" in call_body["config"]
+    assert call_body["config"]["say"]["text"] == ["Hello world"]
+    assert "text" not in call_body["config"]
+
+
+def test_say_node_text_array_normalised(mock_client, state, cache):
+    """config.text list should become config.say.text array."""
+    mock_client.post.return_value = {"_id": "say-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node", "flow_id": "flow-1",
+        "body": {"type": "say", "mode": "append", "target": "start",
+                 "config": {"text": ["Hello", "Hi there"]}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["config"]["say"]["text"] == ["Hello", "Hi there"]
+
+
+def test_say_node_existing_envelope_unchanged(mock_client, state, cache):
+    """If config.say already present, leave it as-is."""
+    mock_client.post.return_value = {"_id": "say-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node", "flow_id": "flow-1",
+        "body": {"type": "say", "mode": "append", "target": "start",
+                 "config": {"say": {"type": "text", "text": ["Already wrapped"]}}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["config"]["say"]["text"] == ["Already wrapped"]
+
+
+# ---------------------------------------------------------------------------
+# P2 — Extension auto-injection
+# ---------------------------------------------------------------------------
+
+def test_extension_auto_injected(mock_client, state, cache):
+    """setSessionConfig should get @cognigy/voicegateway2 extension automatically."""
+    mock_client.post.return_value = {"_id": "ssc-1", "type": "setSessionConfig"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node", "flow_id": "flow-1",
+        "body": {"type": "setSessionConfig", "mode": "append", "target": "start",
+                 "label": "VG Config", "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "@cognigy/voicegateway2"
+
+
+def test_extension_not_overridden_if_present(mock_client, state, cache):
+    """Explicit extension in body should not be overridden."""
+    mock_client.post.return_value = {"_id": "ssc-1"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node", "flow_id": "flow-1",
+        "body": {"type": "setSessionConfig", "extension": "custom-ext",
+                 "mode": "append", "target": "start", "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "custom-ext"
+
+
+# ---------------------------------------------------------------------------
+# P3 — Plural/singular resource_type normalisation
+# ---------------------------------------------------------------------------
+
+def test_singular_resource_type_normalised(mock_client, state, cache):
+    """'flow' should be normalised to 'flows' for API path construction."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "flow", "resource_id": "flow-1"})
+    data = json.loads(result[0].text)
+    # API should have been called with /v2.0/flows/flow-1, not /v2.0/flow/flow-1
+    call_path = mock_client.get.call_args[0][0]
+    assert "/v2.0/flows/" in call_path

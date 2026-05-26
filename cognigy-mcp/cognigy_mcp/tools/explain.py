@@ -11,7 +11,7 @@ TOPICS = [
     "flow-chart-reading", "tool-conditions", "two-pass-confirm", "turn-structure",
     "xapp-delivery", "cognigyScript", "code-node-patterns", "voice-gateway",
     "outbound-trigger", "knowledge-store", "endpoint-config", "function-execution",
-    "session-injection",
+    "session-injection", "extension-map", "node-types", "mcp-comparison",
 ]
 
 _TOPIC_INDEX = """
@@ -34,6 +34,9 @@ Topics and what they cover:
   endpoint-config      referenceId vs _id gotcha, urlToken caching
   function-execution   async pattern, inject-back via sessions API
   session-injection    context/state inject for in-session testing
+  extension-map        complete type → extension lookup table
+  node-types           quick reference for all node type strings
+  mcp-comparison       when to use cognigy-vibe vs NiCE official MCP
 
 Call explain() for orientation and topic descriptions.
 Call explain("topic") for full reference on that topic.
@@ -696,6 +699,114 @@ New userId → fresh session. Same userId → continue existing session.
   2. Inject context to simulate a specific state
   3. talk_to_agent(message="...", user_id="test-1", session_id="test-1")  // continues
   4. Verify response matches expected behaviour
+""",
+
+    "extension-map": """
+## extension-map — Node Type → Extension Reference
+
+Every Cognigy node type belongs to an extension package. cognigy_create auto-injects
+the extension field, but this table is useful for reference and debugging.
+
+### Voice Gateway nodes (extension: "@cognigy/voicegateway2")
+  setSessionConfig    Voice Gateway session config (TTS, STT, barge-in, timeouts)
+  hangup              End the call cleanly
+  sendMetadata        Send metadata to the voice channel
+
+### AI Agent nodes (extension: "cognigy-ai-agent")
+  aiAgentJob          The AI Agent job node (persona + instructions)
+  aiAgentJobTool      A tool branch under an aiAgentJob
+  aiAgentToolAnswer   Surfaces tool result back to the LLM
+
+### xApp nodes (extension: "cxone-utils")
+  initAppSession      Generate xApp session URL (stored in input.apps.url)
+  setHTMLAppState     Push HTML content to an active xApp session
+
+### Basic nodes (extension: "@cognigy/basic-nodes")
+  say                 Speak text to the caller
+  code                Run a JavaScript code node
+  wait                Wait for user input (terminates turn)
+  once                Execute children once, then bypass
+  goTo                Jump to another flow
+  question            Ask a question and capture input
+  httpRequest         Make an outbound HTTP call
+  setContext          Set context variables
+  ifThenElse          Conditional branch (create in UI, not via API)
+  lookup              Pattern-match branch
+
+### Rule
+cognigy_create auto-injects extension for all types in this table.
+If you pass extension explicitly, your value takes precedence.
+404 "resource not found" at a valid chart/nodes URL usually means a missing or wrong extension.
+""",
+
+    "node-types": """
+## node-types — Quick Reference
+
+This is an alias for flow-chart-reading + extension-map combined.
+
+### Verified type strings (exact, case-sensitive)
+  say               Speak text
+  code              JavaScript execution
+  wait              Await user input
+  once              First-turn gate (auto-creates onFirstExecution + afterwards children)
+  goTo              Flow jump (requires flow referenceId UUID — NOT hex _id)
+  question          Question + input capture
+  httpRequest       Outbound HTTP
+  setContext        Set context variables
+  ifThenElse        Conditional (NOT "if") — create in UI only
+  lookup            Pattern-match branch
+  setSessionConfig  Voice Gateway config (extension: @cognigy/voicegateway2)
+  hangup            End call (extension: @cognigy/voicegateway2)
+  initAppSession    xApp session init (extension: cxone-utils)
+  setHTMLAppState   xApp HTML push (extension: cxone-utils)
+  aiAgentJob        AI Agent job (extension: cognigy-ai-agent)
+  aiAgentJobTool    AI Agent tool branch (extension: cognigy-ai-agent)
+  aiAgentToolAnswer Tool result surface (extension: cognigy-ai-agent)
+
+For extension details: explain("extension-map")
+For chart reading and hierarchy: explain("flow-chart-reading")
+For building tool branches: explain("agent-tool-branch")
+""",
+
+    "mcp-comparison": """
+## mcp-comparison — cognigy-vibe vs Official NiCE MCP
+
+Two MCPs operate on the same Cognigy API with different purposes.
+
+### Official NiCE MCP (@cognigy/mcp-server)
+Strengths:
+- create_ai_agent: creates project + agent + flow + endpoint in ONE call
+- create_tool: creates aiAgentJobTool + Resolve Tool Action pair, auto-wired
+- manage_flow_nodes: inline node creation with flat config shapes (text: "..." works)
+- list_resources, delete_resource: fast discovery and cleanup
+
+Limitations:
+- Does NOT support: once, onFirstExecution, afterwards, setSessionConfig, hangup, wait
+- Does NOT propagate persona/LLM/temperature/toolChoice to the AI Agent Job Node after creation
+- Returned endpointUrl uses cognigy-api-au1 (returns 401) — must substitute cognigy-endpoint-au1
+- create_tool returns a field called toolId that is actually the mongo _id of the node (misleading)
+
+### cognigy-vibe (this server)
+Strengths:
+- cognigy_create: any node type, with extension auto-injection
+- cognigy_update: always-fresh-GET + merge_config deep-merge (safe partial updates)
+- push_code_node: file-first conflict detection
+- get_flow_chart: hierarchy string + raw relations
+- sync_remote_state: full project state snapshot
+- 17-topic explain library
+
+Limitations:
+- No convenience methods — no single call to create a full agent
+
+### Recommended split (two-MCP pattern)
+Use NiCE for:         create_ai_agent, create_tool, manage_flow_nodes (say/code/question inside tool branches)
+Use cognigy-vibe for: once/setSessionConfig/hangup node creation, patching aiAgentJob config after creation,
+                      push_code_node, get_flow_chart, cognigy_update with merge_config
+
+### Critical gotcha — NiCE does NOT patch the AI Agent Job Node
+After create_ai_agent, the AI Agent Job Node has generic defaults (name: "Customer Support Specialist",
+default LLM, toolChoice: "auto", generic memoryContextInjection).
+ALWAYS follow create_ai_agent with cognigy_update on the aiAgentJob node to set your persona config.
 """,
 }
 

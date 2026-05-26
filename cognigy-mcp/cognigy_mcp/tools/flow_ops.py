@@ -23,7 +23,9 @@ TOOLS: list[Tool] = [
     Tool(
         name="cognigy_list",
         description="List Cognigy resources. Pass project_id for project-scoped resources, "
-                    "agent_id for agent-scoped resources (e.g. listing jobs).",
+                    "agent_id for agent-scoped resources (e.g. listing jobs). "
+                    "resource_type accepts both singular ('flow') and plural ('flows') — "
+                    "both are normalised to the correct API path.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -119,6 +121,101 @@ def _ok(data: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
 
+# ---------------------------------------------------------------------------
+# P1 — Say node config normalisation
+# ---------------------------------------------------------------------------
+
+_SAY_CONFIG_DEFAULTS = {
+    "handoverOutput": "userAndAgent",
+    "preventTranscript": False,
+    "generativeAI_rephraseOutputMode": "none",
+    "generativeAI_amountOfLastUserInputs": 5,
+    "generativeAI_customInputs": "",
+    "generativeAI_temperature": 0.7,
+}
+
+
+def _normalise_say_config(config: dict) -> dict:
+    """Lift config.text → config.say.text envelope for Say nodes.
+    No-op if 'say' key already present or no 'text' key."""
+    if "say" in config or "text" not in config:
+        return config
+    text = config["text"]
+    if isinstance(text, str):
+        text = [text]
+    result = {k: v for k, v in config.items() if k != "text"}
+    result = {**_SAY_CONFIG_DEFAULTS, **result, "say": {
+        "type": "text", "text": text, "data": "", "linear": False, "loop": False
+    }}
+    return result
+
+
+# ---------------------------------------------------------------------------
+# P2 — Extension auto-injection
+# ---------------------------------------------------------------------------
+
+_NODE_EXTENSION_MAP: dict[str, str] = {
+    # Voice gateway nodes
+    "setSessionConfig": "@cognigy/voicegateway2",
+    "hangup": "@cognigy/voicegateway2",
+    "sendMetadata": "@cognigy/voicegateway2",
+    # AI agent nodes
+    "aiAgentJob": "cognigy-ai-agent",
+    "aiAgentJobTool": "cognigy-ai-agent",
+    "aiAgentToolAnswer": "cognigy-ai-agent",
+    # xApp nodes
+    "initAppSession": "cxone-utils",
+    "setHTMLAppState": "cxone-utils",
+    # Basic nodes (explicit for completeness)
+    "say": "@cognigy/basic-nodes",
+    "code": "@cognigy/basic-nodes",
+    "wait": "@cognigy/basic-nodes",
+    "once": "@cognigy/basic-nodes",
+    "goTo": "@cognigy/basic-nodes",
+    "question": "@cognigy/basic-nodes",
+    "httpRequest": "@cognigy/basic-nodes",
+    "setContext": "@cognigy/basic-nodes",
+    "ifThenElse": "@cognigy/basic-nodes",
+    "lookup": "@cognigy/basic-nodes",
+}
+
+
+def _inject_extension(body: dict) -> dict:
+    """Auto-inject extension for known node types if not already present."""
+    if "extension" in body or "type" not in body:
+        return body
+    ext = _NODE_EXTENSION_MAP.get(body["type"])
+    return {**body, "extension": ext} if ext else body
+
+
+# ---------------------------------------------------------------------------
+# P3 — Plural/singular resource_type normalisation
+# ---------------------------------------------------------------------------
+
+_RESOURCE_TYPE_ALIASES: dict[str, str] = {
+    "project": "projects",
+    "flow": "flows",
+    "endpoint": "endpoints",
+    "agent": "aiagents",
+    "ai-agent": "aiagents",
+    "aiagent": "aiagents",
+    "knowledge-store": "knowledgestores",
+    "knowledgestore": "knowledgestores",
+    "function": "functions",
+    "connection": "connections",
+    "extension": "extensions",
+    "locale": "locales",
+    "lexicon": "lexicons",
+    "snapshot": "snapshots",
+    "playbook": "playbooks",
+    "node": "node",  # node stays singular — it routes to chart path
+}
+
+
+def _normalise_rtype(rtype: str) -> str:
+    return _RESOURCE_TYPE_ALIASES.get(rtype.lower(), rtype)
+
+
 def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict, flow_id: str | None) -> str | None:
     if resource_type == "node" and operation == "move" and not flow_id:
         return None  # caller must check
@@ -183,7 +280,7 @@ def _resource_path(resource_type: str, resource_id: str, flow_id: str | None = N
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _cognigy_get(args: dict) -> list[TextContent]:
-        rtype = args["resource_type"]
+        rtype = _normalise_rtype(args["resource_type"])
         rid = args["resource_id"]
         flow_id = args.get("flow_id")
         cached, fresh = cache.get(rtype, rid)
@@ -197,7 +294,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({**data, "_source": "api"})
 
     def _cognigy_list(args: dict) -> list[TextContent]:
-        rtype = args["resource_type"]
+        rtype = _normalise_rtype(args["resource_type"])
         project_id = args.get("project_id")
         agent_id = args.get("agent_id")
         limit = args.get("limit", 100)
@@ -211,12 +308,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok(data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
-        rtype = args["resource_type"]
+        rtype = _normalise_rtype(args["resource_type"])
         body = args["body"]
         flow_id = args.get("flow_id")
         if rtype == "node":
             if not flow_id:
                 return _ok({"error": "flow_id required to create a node"})
+            if body.get("type") == "say" and "config" in body:
+                body = {**body, "config": _normalise_say_config(body["config"])}
+            body = _inject_extension(body)
             path = f"/v2.0/flows/{flow_id}/chart/nodes"
         else:
             path = f"/v2.0/{rtype}"
@@ -229,7 +329,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok(result)
 
     def _cognigy_update(args: dict) -> list[TextContent]:
-        rtype = args["resource_type"]
+        rtype = _normalise_rtype(args["resource_type"])
         rid = args["resource_id"]
         body = args["body"]
         merge_config = args.get("merge_config", False)
@@ -238,6 +338,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if path is None:
             return _ok({"error": "flow_id required when resource_type is 'node'"})
         current = client.get(path)
+        if current.get("type") == "say" and "config" in body:
+            body = {**body, "config": _normalise_say_config(body["config"])}
         if merge_config and "config" in body and "config" in current:
             merged = _deep_merge(current["config"], body["config"])
             body = {**body, "config": merged}
@@ -246,7 +348,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok(result)
 
     def _cognigy_delete(args: dict) -> list[TextContent]:
-        rtype = args["resource_type"]
+        rtype = _normalise_rtype(args["resource_type"])
         rid = args["resource_id"]
         flow_id = args.get("flow_id")
         path = _resource_path(rtype, rid, flow_id)

@@ -1,6 +1,7 @@
 import json
 import pytest
 from cognigy_mcp.tools.state_tools import make_handlers, TOOLS
+from cognigy_mcp.tools.flow_ops import make_handlers as flow_make_handlers
 
 
 def test_tools_exported():
