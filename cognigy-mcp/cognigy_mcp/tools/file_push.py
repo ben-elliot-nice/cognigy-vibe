@@ -2,7 +2,6 @@ from __future__ import annotations
 import difflib
 import json
 from pathlib import Path
-from typing import Any
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
