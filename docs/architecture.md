@@ -2,77 +2,83 @@
 
 ## Overview
 
-This plugin gives Claude Code structured, discoverable access to the Cognigy API. It is built in three layers: a TypeScript CLI, atomic skills, and composite skills. Each layer has a single responsibility and depends only on the layer below it.
+This plugin gives Claude Code structured access to the Cognigy API for building AI agent demos. It is built in two layers: a Python MCP server and a set of composite skills.
 
 ```
-Composite skills       write-code-node, select-node, ...
-      ↓ call
-Atomic skills          get, list, create, update, delete, invoke
-      ↓ invoke
-TypeScript CLI         cli/src/index.ts
+Composite skills       add-aiagent-job, design-agent-*, scope-demo, init-mcp
+      ↓ call MCP tools
+cognigy-vibe MCP       cognigy_create, cognigy_update, get_flow_chart, push_code_node, explain ...
       ↓ calls
 Cognigy REST API
 ```
 
 ---
 
-## Layer 1: TypeScript CLI
+## Layer 1: cognigy-vibe MCP Server
 
-**Location:** `cli/src/`
+**Location:** `cognigy-mcp/`  
+**Install:** `uvx cognigy-vibe-mcp`  
+**Server name (Claude sees):** `cognigy-vibe`
 
-The CLI is the only thing that talks to the Cognigy API. It handles authentication, `.env` discovery, request routing, and JSON output. Every resource (flows, nodes, projects, etc.) is a module in `cli/src/resources/` that exports a `ResourceHandlers` object.
+The MCP server is the only thing that talks to the Cognigy API. It handles authentication, per-project state management, filesystem cache, and conflict detection. Skills call MCP tools — they never make HTTP requests directly.
 
-Invoked as:
-```bash
-npx tsx cli/src/index.ts <verb> <resource> [id] [--flag value ...]
-```
+### Tools (15 total)
 
-Exit codes:
-- `0` — success, JSON on stdout
-- `1` — error, `{ "error": "..." }` on stderr
-- `2` — `.env` found via git root walk, requires user confirmation before proceeding
+| Group | Tools |
+|---|---|
+| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource` |
+| Flow ops | `cognigy_get`, `cognigy_list`, `cognigy_create`, `cognigy_update`, `cognigy_delete`, `cognigy_invoke`, `get_flow_chart` |
+| File push | `push_code_node`, `push_html_node`, `push_tool_from_file` |
+| Testing | `talk_to_agent` |
+| Guidance | `explain` |
 
-Skills never construct API calls themselves. All Cognigy API access goes through this CLI.
+### Key behaviours
+
+- **Extension auto-injection:** `cognigy_create` injects the correct `extension` field for all known node types (e.g. `@cognigy/voicegateway2` for `setSessionConfig`, `cognigy-ai-agent` for `aiAgentJob`)
+- **Say node normalisation:** `config.text: "Hello"` is automatically lifted into the full `config.say.text` envelope
+- **Plural/singular normalisation:** `resource_type: "flow"` or `"flows"` both work
+- **Cache-first reads:** `cognigy_get` serves from a 5-min TTL filesystem cache; writes are always fresh
+- **Conflict detection:** `push_code_node` compares the remote node against a local snapshot and blocks if the Cognigy UI has been edited since the last push
+- **Auto-resync:** If a session has been idle > 4 hours, the server silently re-syncs state before the next tool call
+
+### State storage
+
+Per-project state lives in `~/.config/cognigy-mcp/<project-id>/` — outside the demo repo. The `cognigy:init-mcp` skill creates this directory, a `.cognigy-mcp` symlink in the project root, and the `.claude/mcp.json` entry.
+
+### Reference docs
+
+The `explain` tool carries a 20-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
 
 ---
 
-## Layer 2: Atomic Skills
+## Layer 2: Composite Skills
 
-**Location:** `skills/get/`, `skills/list/`, `skills/create/`, `skills/update/`, `skills/delete/`, `skills/invoke/`
+**Location:** `skills/`
 
-One skill per CLI verb. Each skill knows how to:
-- Derive the plugin root from the injected `Base directory for this skill:` path
-- Run the CLI with the right arguments
-- Handle all three exit codes (including the Exit 2 `.env` confirmation flow)
-- Surface errors clearly
+Skills orchestrate MCP tool calls and user interaction to accomplish higher-level goals. They call MCP tools by name — never make API calls directly.
 
-Atomic skills are **resource-agnostic**. `cognigy:get` works for flows, nodes, projects, charts — anything the CLI supports. Resource-specific knowledge lives in the CLI layer, not in the skill.
+| Skill | Purpose |
+|---|---|
+| `cognigy:init-mcp` | First-time project setup — config dir, symlink, `.claude/mcp.json` |
+| `cognigy:add-aiagent-job` | Add an AI Agent Job node + tool nodes to an existing flow |
+| `cognigy:scope-demo` | Four-phase discovery → demo plan document |
+| `cognigy:design-agent` | Orchestrate full agent design workflow |
+| `cognigy:design-agent-persona` | Agent identity, brand voice, compliance framing |
+| `cognigy:design-agent-jobs` | Job definitions, routing architecture, context schema |
+| `cognigy:design-agent-interfaces` | xApp scenes, webchat patterns, handover context |
+| `cognigy:design-agent-contracts` | Guard sub-flows, obligation state, structured refusals |
 
----
-
-## Layer 3: Composite Skills
-
-**Location:** `skills/select-node/`, `skills/write-code-node/`, ...
-
-Composite skills orchestrate sequences of atomic skill calls to accomplish a higher-level goal. They contain workflow logic, user interaction, and domain knowledge — but **no direct CLI invocations**.
-
-### The key rule: composite skills call atomic skills, not the CLI
+### The key rule: skills call MCP tools, not the API
 
 **Wrong:**
-```bash
-# Hardcoded CLI call in a composite skill
-npx tsx ~/.claude/plugins/.../cli/src/index.ts get node <nodeId> --flowId <flowId>
+```
+cognigy_create(resource_type="node", body={...})  ← direct HTTP, bypasses cache/conflict detection
 ```
 
 **Right:**
 ```
-Invoke the `cognigy:get` skill: get node <nodeId> with --flowId <flowId>
+Call the cognigy-vibe MCP tool cognigy_create with resource_type="node" and body={...}
 ```
-
-Why this matters:
-- **Exit code handling is already solved.** Atomic skills handle Exit 2 `.env` confirmation, `No .env file found`, and error display. Duplicating this in every composite skill creates inconsistency and maintenance burden.
-- **Path derivation is already solved.** The atomic skills know how to find the CLI from the injected `Base directory` path. Composite skills don't need to re-derive it.
-- **Composability.** If CLI invocation syntax changes, only the atomic skills need updating — composite skills remain unchanged.
 
 ---
 
@@ -80,56 +86,39 @@ Why this matters:
 
 **Location:** `docs/`
 
-Composite skills that generate content (e.g. `write-code-node`) need domain knowledge that would be expensive to re-fetch at runtime. This knowledge lives in reference docs that skills read once before starting work:
+Reference docs contain domain knowledge used by skills and the MCP server's `explain` tool:
 
 | File | Purpose |
 |---|---|
 | `docs/cognigy-api-reference.md` | Runtime objects (`input`, `context`, `profile`), all `api.*` functions, available libraries |
 | `docs/cognigy-output-formats.md` | Channel output structures and code examples |
-| `docs/cognigy-code-conventions.md` | Code node structural conventions (`main`, `getVar`, `setVar`, `mergeVar`, `allSettled`, `log`) |
+| `docs/cognigy-code-conventions.md` | Code node structural conventions |
+| `docs/cognigy-agent-patterns.md` | Tool design patterns, two-pass confirmation, context schema |
+| `docs/cognigy-capabilities.md` | Platform reference for demo scoping |
+| `docs/agent-prompting-guide.md` | Persona field purposes, outcome-based framing, tool descriptions as contracts |
 
-Skills instruct Claude to read these files before writing any code:
+Skills read these files before generating content:
 > "Before writing any code, read `<plugin-root>/docs/cognigy-api-reference.md` ..."
 
-The plugin root is always derived from the `Base directory for this skill:` path injected at skill load time — two directories up from the skill file.
+The plugin root is derived from the `Base directory for this skill:` path injected at skill load time — two directories up from the skill file.
 
 ---
 
-## Adding a New Resource
+## Adding a New MCP Tool
 
-New Cognigy API resources need only a CLI module. The atomic skills require no changes.
+1. Add a `Tool` definition to the relevant module in `cognigy-mcp/cognigy_mcp/tools/`
+2. Add a handler function and register it in `make_handlers()`
+3. Add tests in `cognigy-mcp/tests/tools/`
+4. If it covers new Cognigy API patterns, add an `explain` topic in `explain.py`
+5. Bump the patch version in `cognigy-mcp/pyproject.toml` and `.claude-plugin/plugin.json`
 
-1. Run the type extraction script to generate the types file:
-   ```bash
-   cd cli && npx tsx scripts/extract-resource-types.ts <resource>
-   # For sub-resources (e.g. nodes under flows):
-   npx tsx scripts/extract-resource-types.ts <resource> --path /v2.0/parent/{parentId}/resources
-   ```
-2. Implement `cli/src/resources/<resource>.ts` — follow `flows.ts` as the reference pattern
-3. Register it in `cli/src/index.ts`
-
-The private skill `/private:cognigy-generate-resource` automates this process.
+For new node types, add the type → extension mapping to `_NODE_EXTENSION_MAP` in `flow_ops.py` — no other changes needed.
 
 ---
 
 ## Adding a New Composite Skill
 
-1. Identify which atomic skills it will call (`cognigy:get`, `cognigy:create`, etc.)
-2. Identify which reference docs it needs to read before generating content
-3. Write `skills/<skill-name>/SKILL.md` — call atomic skills by name, never hardcode CLI paths
-4. If the skill needs to resolve a flow node by label or type, call `cognigy:select-node` rather than reimplementing node discovery
-
----
-
-## Sub-Resources
-
-Some Cognigy resources live under a parent (e.g. nodes under flows, intents under flows). These declare a `requires` field in their handler:
-
-```typescript
-export const nodes: ResourceHandlers = {
-  requires: ['flowId'],
-  // ...
-}
-```
-
-The CLI validates `requires` before dispatch. The parent ID comes from a `--flag` (e.g. `--flowId`) or from the matching env var (`COGNIGY_FLOW_ID`). Sub-resources do not use a positional ID for the parent — only the child resource ID is positional.
+1. Identify which MCP tools it will call
+2. Write `skills/<skill-name>/SKILL.md` — call MCP tools by name, never construct HTTP requests
+3. Register it in `.claude-plugin/plugin.json`
+4. Bump the patch version in `.claude-plugin/plugin.json`

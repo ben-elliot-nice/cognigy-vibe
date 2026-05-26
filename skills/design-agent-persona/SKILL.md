@@ -91,3 +91,4 @@ Generate `{CustomerName}-agent-persona.md`. Write to the directory from which th
 - For xApp, bidirectional webchat, and handover context → `cognigy:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy:design-agent-contracts`
 - For the full design workflow in one go → `cognigy:design-agent`
+- To build after designing → use `cognigy:add-aiagent-job` (creates nodes via MCP tools)

@@ -1,9 +1,19 @@
 {
   "name": "cognigy",
   "description": "Cognigy AI agent development skills for Claude Code",
-  "version": "1.1.14",
+  "version": "1.2.0",
   "author": {
     "name": "Ben Elliot",
     "email": "ben.elliot@nice.com"
-  }
+  },
+  "skills": [
+    "add-aiagent-job",
+    "design-agent",
+    "design-agent-contracts",
+    "design-agent-interfaces",
+    "design-agent-jobs",
+    "design-agent-persona",
+    "init-mcp",
+    "scope-demo"
+  ]
 }

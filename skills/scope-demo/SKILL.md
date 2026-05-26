@@ -44,11 +44,11 @@ Collect all 12 required facts before proceeding to Phase 2.
 
 **For Fact #11 — Reusable Components:**
 
-If the user has a connected Cognigy project (`.env` present in the working directory), call `cognigy:list` to enumerate existing assets:
+If the user has a connected Cognigy project (`.env` present in the working directory), call the MCP tools to enumerate existing assets:
 
 ```
-cognigy:list resource=flows
-cognigy:list resource=agents
+cognigy_list(resource_type='flows')
+cognigy_list(resource_type='aiagents')
 ```
 
 Present the results and ask: "Which of these are candidates for reuse in this demo?"
@@ -102,6 +102,6 @@ Populate every section. If something is unknown, state the assumption explicitly
 
 - Never skip the Phase 2 confirmation gate
 - Never write output before the Phase 3 explicit confirmation
-- `cognigy:list` in Phase 1 is optional — only call it if `.env` is present
+- `cognigy_list` MCP calls in Phase 1 are optional — only call them if `.env` is present
 - If context covers most facts, extract what you can and only ask about gaps
 - Tool responses should return structured data objects, not verbatim scripted strings — let the LLM phrase the response naturally from structured data
