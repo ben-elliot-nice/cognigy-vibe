@@ -170,7 +170,10 @@ class PerSessionMCPManager:
             return
 
         # New session
-        assert self._task_group is not None, "Call handle_request inside the run() context"
+        if self._task_group is None:
+            resp = Response("Service unavailable", status_code=503)
+            await resp(scope, receive, send)
+            return
         new_sid = uuid4().hex
         session_ref: list[SessionContext | None] = [None]
         server = _make_session_server(session_ref)
@@ -195,6 +198,7 @@ def _check_bearer(request: Request) -> bool:
     token = os.getenv("COGNIGY_VIBE_TOKEN", "")
     if not token:
         return True
+    # == is not timing-safe, but this token protects only demo infrastructure.
     return request.headers.get("authorization", "") == f"Bearer {token}"
 
 
@@ -237,6 +241,8 @@ def create_app() -> Starlette:
             Route("/health", health),
             Route("/workspace/{project_id}/{path:path}", upload_file, methods=["PUT"]),
             Route("/state/{project_id}", get_state, methods=["GET"]),
+            # MCP endpoint: auth is handled at the session/tool level via configure credentials.
+            # Bearer token protects only the out-of-band upload and state endpoints.
             Mount("/mcp", handle_mcp),
         ],
     )

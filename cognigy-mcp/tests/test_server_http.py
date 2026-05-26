@@ -85,6 +85,9 @@ def test_state_endpoint_returns_state_json(client, data_dir):
     assert resp.json() == {"flows": {}}
 
 
+# Access the registered call_tool handler via the MCP Server's request_handlers dict.
+# This is an SDK implementation detail — if the SDK restructures request_handlers,
+# update these tests to match.
 def test_configure_tool_creates_session(tmp_path, monkeypatch):
     monkeypatch.setenv("COGNIGY_VIBE_DATA_DIR", str(tmp_path / "data"))
     import asyncio
