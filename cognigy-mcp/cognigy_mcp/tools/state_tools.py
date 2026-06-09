@@ -120,12 +120,16 @@ def make_handlers(
         errors: list[str] = []
 
         # Flows
+        flows: list = []
         try:
             flows_resp = client.get(f"/v2.0/projects/{project_id}/flows", limit=100)
             flows = flows_resp.get("items", [])
-        except Exception as exc:
-            errors.append(f"flows: {exc}")
-            flows = []
+        except Exception:
+            try:
+                flows_resp = client.get("/v2.0/flows", limit=100)
+                flows = flows_resp.get("items", [])
+            except Exception as exc:
+                errors.append(f"flows: {exc}")
 
         for flow in flows:
             state.set("flows", flow["name"], value={"id": flow["_id"]})
@@ -152,8 +156,14 @@ def make_handlers(
             for agent in agents_resp.get("items", []):
                 state.set("agents", agent["name"], value={"id": agent["_id"]})
                 cache.set("aiagents", agent["_id"], agent)
-        except Exception as exc:
-            errors.append(f"agents: {exc}")
+        except Exception:
+            try:
+                agents_resp = client.get("/v2.0/aiagents", limit=100)
+                for agent in agents_resp.get("items", []):
+                    state.set("agents", agent["name"], value={"id": agent["_id"]})
+                    cache.set("aiagents", agent["_id"], agent)
+            except Exception as exc:
+                errors.append(f"agents: {exc}")
 
         # Endpoints
         try:
@@ -165,8 +175,18 @@ def make_handlers(
                     "flowReferenceId": ep.get("flowReferenceId", ""),
                 })
                 cache.set("endpoints", ep["_id"], ep)
-        except Exception as exc:
-            errors.append(f"endpoints: {exc}")
+        except Exception:
+            try:
+                eps_resp = client.get("/v2.0/endpoints", limit=100)
+                for ep in eps_resp.get("items", []):
+                    state.set("endpoints", ep["name"], value={
+                        "id": ep["_id"],
+                        "urlToken": ep.get("urlToken", ""),
+                        "flowReferenceId": ep.get("flowReferenceId", ""),
+                    })
+                    cache.set("endpoints", ep["_id"], ep)
+            except Exception as exc:
+                errors.append(f"endpoints: {exc}")
 
         state.touch_interaction()
         result: dict = {"synced": True, "project_id": project_id}

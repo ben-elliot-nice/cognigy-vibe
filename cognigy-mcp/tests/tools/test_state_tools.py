@@ -50,13 +50,15 @@ def test_sync_remote_state_calls_api(mock_client, state, cache):
 
 
 def test_sync_handles_list_failure_gracefully(mock_client, state, cache):
-    """sync_remote_state should return synced=True even if agents/endpoints fail."""
+    """sync_remote_state should return synced=True even if both project-scoped and direct agents/endpoints fail."""
     project_id = state.project_id
     mock_client.get.side_effect = [
-        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows OK
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # /projects/{id}/flows OK
         {"nodes": []},                                          # chart OK
-        Exception("API unavailable"),                          # agents FAIL
-        Exception("API unavailable"),                          # endpoints FAIL
+        Exception("API unavailable"),                          # /projects/{id}/aiagents FAIL
+        Exception("API unavailable"),                          # /aiagents direct FAIL
+        Exception("API unavailable"),                          # /projects/{id}/endpoints FAIL
+        Exception("API unavailable"),                          # /endpoints direct FAIL
     ]
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["sync_remote_state"]({"project_id": project_id})
@@ -66,6 +68,27 @@ def test_sync_handles_list_failure_gracefully(mock_client, state, cache):
     assert any("agents" in e for e in data["errors"])
     # Flows should still be registered despite other failures
     assert state.get("flows", "Main Flow", "id") == "flow-1"
+
+
+def test_sync_falls_back_to_direct_endpoints_on_404(mock_client, state, cache):
+    """When project-scoped endpoints 404 (AU1), fall back to direct /v2.0/flows etc."""
+    project_id = state.project_id
+    mock_client.get.side_effect = [
+        Exception("404 Not Found"),                                                          # /projects/{id}/flows → 404
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                # /flows fallback
+        {"nodes": []},                                                                       # chart for Main Flow
+        Exception("404 Not Found"),                                                          # /projects/{id}/aiagents → 404
+        {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                # /aiagents fallback
+        Exception("404 Not Found"),                                                          # /projects/{id}/endpoints → 404
+        {"items": [{"_id": "ep-1", "name": "REST", "urlToken": "tok", "flowReferenceId": "flow-1"}]},  # /endpoints fallback
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["sync_remote_state"]({"project_id": project_id})
+    data = json.loads(result[0].text)
+    assert data["synced"] is True
+    assert state.get("flows", "Main Flow", "id") == "flow-1"
+    assert state.get("agents", "My Agent", "id") == "agent-1"
+    assert state.get("endpoints", "REST", "id") == "ep-1"
 
 
 def test_cognigy_list_singular_resource_type_normalised(mock_client, state, cache):
