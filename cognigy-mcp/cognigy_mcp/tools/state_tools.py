@@ -154,9 +154,9 @@ def make_handlers(
             except Exception:
                 pass  # chart unavailable — skip tool discovery for this flow
 
-        # Agents
+        # Agents — projectId is now a query param, not a path segment
         try:
-            agents_resp = client.get(f"/v2.0/projects/{project_id}/aiagents", limit=100)
+            agents_resp = client.get("/v2.0/aiagents", projectId=project_id, limit=100)
             for agent in agents_resp.get("items", []):
                 state.set("agents", agent["name"], value={"id": agent["_id"]})
                 cache.set("aiagents", agent["_id"], agent)
