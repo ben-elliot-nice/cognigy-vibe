@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import os
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
@@ -204,7 +205,7 @@ def make_handlers(
         if resource_type:
             filtered = full_state.get(resource_type, {})
             return _ok({resource_type: filtered, "_filtered": True})
-        return _ok(full_state)
+        return _ok({**full_state, "_version": pkg_version("cognigy-vibe-mcp")})
 
     def _resolve_resource(args: dict) -> list[TextContent]:
         name = args["name"]
