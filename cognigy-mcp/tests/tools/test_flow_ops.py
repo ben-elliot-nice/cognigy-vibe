@@ -272,6 +272,20 @@ def test_aiagentjobtool_extension_is_basic_nodes(mock_client, state, cache):
     assert call_body["extension"] == "@cognigy/basic-nodes"
 
 
+def test_aiagenttooltanswer_extension_is_basic_nodes(mock_client, state, cache):
+    """aiAgentToolAnswer must map to @cognigy/basic-nodes."""
+    mock_client.post.return_value = {"_id": "answer-1", "type": "aiAgentToolAnswer"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentToolAnswer", "mode": "append", "target": "code-1",
+                 "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "@cognigy/basic-nodes"
+
+
 # ---------------------------------------------------------------------------
 # P3 — Plural/singular resource_type normalisation
 # ---------------------------------------------------------------------------

@@ -159,7 +159,7 @@ _NODE_EXTENSION_MAP: dict[str, str] = {
     "setSessionConfig": "@cognigy/voicegateway2",
     "hangup": "@cognigy/voicegateway2",
     "sendMetadata": "@cognigy/voicegateway2",
-    # AI agent nodes (mapped to @cognigy/basic-nodes on AU1)
+    # AI agent nodes — registered under @cognigy/basic-nodes (not the legacy cognigy-ai-agent extension)
     "aiAgentJob": "@cognigy/basic-nodes",
     "aiAgentJobTool": "@cognigy/basic-nodes",
     "aiAgentToolAnswer": "@cognigy/basic-nodes",
