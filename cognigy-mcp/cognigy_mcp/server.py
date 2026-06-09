@@ -18,9 +18,8 @@ def create_server() -> tuple[Server, list[types.Tool]]:
         base_url=os.environ["COGNIGY_BASE_URL"],
         api_key=os.environ["COGNIGY_API_KEY"],
     )
-    project_id = os.environ["COGNIGY_PROJECT_ID"]
     state = ProjectState(
-        project_id=project_id,
+        project_id=os.getenv("COGNIGY_PROJECT_ID"),
         resync_hours=float(os.getenv("COGNIGY_VIBE_RESYNC_HOURS", "4")),
     )
     cache = Cache(
@@ -53,10 +52,10 @@ def create_server() -> tuple[Server, list[types.Tool]]:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         auto_synced = False
-        if name != "sync_remote_state" and state.needs_resync():
+        if name != "sync_remote_state" and state.project_id and state.needs_resync():
             sync_handler = all_handlers["sync_remote_state"]
             try:
-                sync_handler({"project_id": project_id})
+                sync_handler({"project_id": state.project_id})
                 auto_synced = True
             except Exception:
                 pass  # auto-resync failed; continue with stale state

@@ -15,3 +15,13 @@ def test_server_creates_without_error(monkeypatch, tmp_path):
     assert "talk_to_agent" in tool_names
     assert "sync_remote_state" in tool_names
     assert len(all_tools) == 15
+
+
+def test_server_boots_without_project_id(monkeypatch, tmp_path):
+    """Server must start successfully when COGNIGY_PROJECT_ID is not set."""
+    monkeypatch.setenv("COGNIGY_BASE_URL", "https://cognigy-api-au1.nicecxone.com")
+    monkeypatch.setenv("COGNIGY_API_KEY", "test-key")
+    monkeypatch.delenv("COGNIGY_PROJECT_ID", raising=False)
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
+    server, all_tools = create_server()
+    assert len(all_tools) == 15
