@@ -51,6 +51,8 @@ class CognigyClient:
     def patch(self, path: str, body: dict) -> dict:
         resp = self._http.patch(self._base + path, json=body)
         self._raise_for_status(resp)
+        if resp.status_code == 204:
+            return {}
         return resp.json()
 
     def delete(self, path: str) -> dict:

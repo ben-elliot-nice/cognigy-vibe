@@ -62,6 +62,16 @@ def test_patch_success(client):
     assert result["name"] == "Updated"
 
 
+def test_patch_204_no_content_returns_empty_dict(client):
+    """PATCH returning 204 No Content must not raise and must return {}."""
+    with respx.mock:
+        respx.patch(f"{BASE}/v2.0/flows/flow-123/chart/nodes/node-1").mock(
+            return_value=httpx.Response(204)
+        )
+        result = client.patch("/v2.0/flows/flow-123/chart/nodes/node-1", {"label": "Updated"})
+    assert result == {}
+
+
 def test_delete_success(client):
     with respx.mock:
         respx.delete(f"{BASE}/v2.0/flows/flow-123").mock(
