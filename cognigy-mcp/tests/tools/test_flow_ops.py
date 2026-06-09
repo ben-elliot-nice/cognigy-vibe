@@ -257,3 +257,41 @@ def test_singular_resource_type_normalised(mock_client, state, cache):
     # API should have been called with /v2.0/flows/flow-1, not /v2.0/flow/flow-1
     call_path = mock_client.get.call_args[0][0]
     assert "/v2.0/flows/" in call_path
+
+
+def test_get_flow_chart_bare_nodes_no_nodeId(mock_client, state, cache):
+    """AU1 bare Start/End nodes: relations have _id but not nodeId — must not raise KeyError."""
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "start-id", "type": "start", "label": "Start"},
+            {"_id": "end-id", "type": "end", "label": "End"},
+        ],
+        "relations": [
+            {"_id": "start-id", "nextId": "end-id", "previousId": None, "parentId": None, "childIds": []},
+            {"_id": "end-id", "nextId": None, "previousId": "start-id", "parentId": None, "childIds": []},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-new"})
+    data = json.loads(result[0].text)
+    assert "hierarchy" in data
+    assert "error" not in data
+
+
+def test_get_flow_chart_mixed_nodeId_and_id(mock_client, state, cache):
+    """Some relations have nodeId, others only _id — both must be indexed correctly."""
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "n1", "type": "say", "label": "Hello"},
+            {"_id": "n2", "type": "say", "label": "Bye"},
+        ],
+        "relations": [
+            {"nodeId": "n1", "_id": "n1", "nextId": "n2", "previousId": None, "parentId": None, "childIds": []},
+            {"_id": "n2", "nextId": None, "previousId": "n1", "parentId": None, "childIds": []},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert "hierarchy" in data
+    assert "error" not in data

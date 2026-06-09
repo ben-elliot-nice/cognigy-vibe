@@ -239,7 +239,11 @@ def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dic
 
 def _build_hierarchy(chart: dict) -> str:
     nodes = {n["_id"]: n for n in chart.get("nodes", [])}
-    relations = {r["nodeId"]: r for r in chart.get("relations", [])}
+    relations = {
+        (r.get("nodeId") or r.get("_id")): r
+        for r in chart.get("relations", [])
+        if r.get("nodeId") or r.get("_id")
+    }
 
     def render(node_id: str, indent: int = 0, visited: frozenset = frozenset()) -> list[str]:
         if node_id in visited:
