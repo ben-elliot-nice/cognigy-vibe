@@ -35,16 +35,26 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 class ProjectState:
-    def __init__(self, project_id: str, resync_hours: float = 4.0):
+    def __init__(self, project_id: str | None, resync_hours: float = 4.0):
+        self.resync_hours = resync_hours
+        self._state: dict = {}
+        self._bind(project_id)
+
+    def _bind(self, project_id: str | None) -> None:
         self.project_id = project_id
-        self.config_dir = CONFIG_BASE / project_id
+        self.config_dir = CONFIG_BASE / (project_id or ".unscoped")
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self._state_path = self.config_dir / ".state.json"
         self._seed_path = self.config_dir / ".state-seed.json"
         self._interaction_path = self.config_dir / "last-interaction"
-        self.resync_hours = resync_hours
-        self._state: dict = {}
+        self._state = {}
         self._load()
+
+    def bind_project(self, project_id: str) -> None:
+        """Re-scope this state instance to a specific project. Safe to call mid-session."""
+        if self.project_id == project_id:
+            return
+        self._bind(project_id)
 
     def _load(self) -> None:
         try:
