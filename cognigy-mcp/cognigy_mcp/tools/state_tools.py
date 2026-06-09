@@ -116,6 +116,10 @@ def make_handlers(
         # Write to .env if not already there
         _write_to_dotenv("COGNIGY_PROJECT_ID", project_id)
 
+        # Bind the live state instance to this project so the rest of this session
+        # is scoped correctly (no restart required).
+        state.bind_project(project_id)
+
         cache.invalidate_all()
         errors: list[str] = []
 

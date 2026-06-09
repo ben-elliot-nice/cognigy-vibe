@@ -122,3 +122,24 @@ def test_get_build_state_filtered(mock_client, state, cache):
     assert "flows" in data
     assert "agents" not in data
     assert data["flows"]["Main"]["id"] == "flow-1"
+
+
+def test_sync_remote_state_binds_project_in_session(mock_client, cache, tmp_path, monkeypatch):
+    """sync_remote_state must call bind_project so state.project_id is set for the rest of the session."""
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
+    from cognigy_mcp.state import ProjectState
+    unscoped = ProjectState(project_id=None)
+
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
+        {"nodes": []},                                          # chart
+        {"items": []},                                          # agents
+        {"items": []},                                          # endpoints
+    ]
+    handlers = make_handlers(mock_client, unscoped, cache)
+    result = handlers["sync_remote_state"]({"project_id": "proj-new"})
+    data = json.loads(result[0].text)
+
+    assert data["synced"] is True
+    assert unscoped.project_id == "proj-new"
+    assert unscoped.get("flows", "Main Flow", "id") == "flow-1"
