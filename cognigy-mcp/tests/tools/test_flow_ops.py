@@ -244,6 +244,34 @@ def test_extension_not_overridden_if_present(mock_client, state, cache):
     assert call_body["extension"] == "custom-ext"
 
 
+def test_aiagentjob_extension_is_basic_nodes(mock_client, state, cache):
+    """aiAgentJob must map to @cognigy/basic-nodes, not cognigy-ai-agent."""
+    mock_client.post.return_value = {"_id": "job-1", "type": "aiAgentJob"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentJob", "mode": "append", "target": "start-id",
+                 "label": "My Agent", "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "@cognigy/basic-nodes"
+
+
+def test_aiagentjobtool_extension_is_basic_nodes(mock_client, state, cache):
+    """aiAgentJobTool must map to @cognigy/basic-nodes."""
+    mock_client.post.return_value = {"_id": "tool-1", "type": "aiAgentJobTool"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentJobTool", "mode": "appendChild", "target": "job-1",
+                 "label": "My Tool", "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "@cognigy/basic-nodes"
+
+
 # ---------------------------------------------------------------------------
 # P3 — Plural/singular resource_type normalisation
 # ---------------------------------------------------------------------------

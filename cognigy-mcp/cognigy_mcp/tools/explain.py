@@ -99,9 +99,9 @@ To read a node's config: cognigy_get(resource_type="node", resource_id=nodeId, f
 ### Non-core node types require extension field
   {"type": "initAppSession", "extension": "cxone-utils"}
   {"type": "setHTMLAppState", "extension": "cxone-utils"}
-  {"type": "aiAgentJob", "extension": "cognigy-ai-agent"}
-  {"type": "aiAgentJobTool", "extension": "cognigy-ai-agent"}
-  {"type": "aiAgentToolAnswer", "extension": "cognigy-ai-agent"}
+  {"type": "aiAgentJob", "extension": "@cognigy/basic-nodes"}
+  {"type": "aiAgentJobTool", "extension": "@cognigy/basic-nodes"}
+  {"type": "aiAgentToolAnswer", "extension": "@cognigy/basic-nodes"}
 """,
 
     "agent-tool-branch": """
@@ -117,7 +117,7 @@ Every AI Agent tool is a branch of three nodes under an aiAgentJob:
 ### Step 1: Create aiAgentJobTool
   cognigy_create(resource_type="node", flow_id=..., body={
     "type": "aiAgentJobTool",
-    "extension": "cognigy-ai-agent",
+    "extension": "@cognigy/basic-nodes",
     "label": "my_tool",
     "mode": "appendChild",
     "target": "<aiAgentJobNodeId>",
@@ -143,7 +143,7 @@ Every AI Agent tool is a branch of three nodes under an aiAgentJob:
 
 ### Step 4: Append aiAgentToolAnswer
   cognigy_create(resource_type="node", flow_id=..., body={
-    "type": "aiAgentToolAnswer", "extension": "cognigy-ai-agent",
+    "type": "aiAgentToolAnswer", "extension": "@cognigy/basic-nodes",
     "mode": "append", "target": "<codeNodeId>",
     "config": {}
   })
@@ -206,7 +206,7 @@ Core types (no extension needed):
   say, question, code, setContext, goTo, once, lookup, log, stopBot, httpRequest
   ifThenElse (note: NOT "if")
 
-AI Agent types (extension: "cognigy-ai-agent"):
+AI Agent types (extension: "@cognigy/basic-nodes"):
   aiAgentJob, aiAgentJobTool, aiAgentToolAnswer
 
 xApp/Voice types (extension: "cxone-utils"):
@@ -712,7 +712,7 @@ the extension field, but this table is useful for reference and debugging.
   hangup              End the call cleanly
   sendMetadata        Send metadata to the voice channel
 
-### AI Agent nodes (extension: "cognigy-ai-agent")
+### AI Agent nodes (extension: "@cognigy/basic-nodes")
   aiAgentJob          The AI Agent job node (persona + instructions)
   aiAgentJobTool      A tool branch under an aiAgentJob
   aiAgentToolAnswer   Surfaces tool result back to the LLM
@@ -759,9 +759,9 @@ This is an alias for flow-chart-reading + extension-map combined.
   hangup            End call (extension: @cognigy/voicegateway2)
   initAppSession    xApp session init (extension: cxone-utils)
   setHTMLAppState   xApp HTML push (extension: cxone-utils)
-  aiAgentJob        AI Agent job (extension: cognigy-ai-agent)
-  aiAgentJobTool    AI Agent tool branch (extension: cognigy-ai-agent)
-  aiAgentToolAnswer Tool result surface (extension: cognigy-ai-agent)
+  aiAgentJob        AI Agent job (extension: @cognigy/basic-nodes)
+  aiAgentJobTool    AI Agent tool branch (extension: @cognigy/basic-nodes)
+  aiAgentToolAnswer Tool result surface (extension: @cognigy/basic-nodes)
 
 For extension details: explain("extension-map")
 For chart reading and hierarchy: explain("flow-chart-reading")

@@ -159,10 +159,10 @@ _NODE_EXTENSION_MAP: dict[str, str] = {
     "setSessionConfig": "@cognigy/voicegateway2",
     "hangup": "@cognigy/voicegateway2",
     "sendMetadata": "@cognigy/voicegateway2",
-    # AI agent nodes
-    "aiAgentJob": "cognigy-ai-agent",
-    "aiAgentJobTool": "cognigy-ai-agent",
-    "aiAgentToolAnswer": "cognigy-ai-agent",
+    # AI agent nodes (mapped to @cognigy/basic-nodes on AU1)
+    "aiAgentJob": "@cognigy/basic-nodes",
+    "aiAgentJobTool": "@cognigy/basic-nodes",
+    "aiAgentToolAnswer": "@cognigy/basic-nodes",
     # xApp nodes
     "initAppSession": "cxone-utils",
     "setHTMLAppState": "cxone-utils",
