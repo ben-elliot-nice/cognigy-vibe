@@ -12,7 +12,7 @@ class CognigyClient:
     def __init__(self, base_url: str, api_key: str):
         self._base = base_url.rstrip("/")
         self._http = httpx.Client(
-            headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+            headers={"X-API-Key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
             timeout=30.0,
         )
 
