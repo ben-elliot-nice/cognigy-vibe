@@ -1,7 +1,7 @@
 {
   "name": "cognigy",
   "description": "Cognigy AI agent development skills for Claude Code",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "author": {
     "name": "Ben Elliot",
     "email": "ben.elliot@nice.com"

@@ -37,68 +37,43 @@ def test_resolve_resource_not_found(mock_client, state, cache):
 def test_sync_remote_state_calls_api(mock_client, state, cache):
     project_id = state.project_id
     mock_client.get.side_effect = [
-        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},   # list flows
-        {"nodes": []},  # chart for Main Flow (tool discovery)
-        {"items": [{"_id": "agent-1", "name": "My Agent"}]},   # list agents
-        {"items": [{"_id": "ep-1", "name": "REST", "urlToken": "tok123", "flowReferenceId": "flow-1"}]},  # list endpoints
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                    # GET /v2.0/flows?projectId=...
+        {"nodes": []},                                                                           # chart (tool discovery)
+        {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                    # chart/nodes/aiagents
+        {"items": [{"_id": "ep-1", "name": "REST", "urlToken": "tok123", "flowReferenceId": "flow-1"}]},  # GET /v2.0/endpoints?projectId=...
     ]
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["sync_remote_state"]({"project_id": project_id})
     data = json.loads(result[0].text)
     assert data.get("synced") is True
     assert state.get("flows", "Main Flow", "id") == "flow-1"
+    assert state.get("agents", "My Agent", "id") == "agent-1"
 
 
 def test_sync_handles_list_failure_gracefully(mock_client, state, cache):
-    """sync_remote_state should return synced=True even if both project-scoped and direct agents/endpoints fail."""
+    """sync_remote_state returns synced=True even if flows or endpoints fail."""
     project_id = state.project_id
     mock_client.get.side_effect = [
-        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # /projects/{id}/flows OK
-        {"nodes": []},                                          # chart OK
-        Exception("API unavailable"),                          # /projects/{id}/aiagents FAIL
-        Exception("API unavailable"),                          # /aiagents direct FAIL
-        Exception("API unavailable"),                          # /projects/{id}/endpoints FAIL
-        Exception("API unavailable"),                          # /endpoints direct FAIL
+        Exception("API unavailable"),  # GET /v2.0/flows?projectId=... FAIL
+        Exception("API unavailable"),  # GET /v2.0/endpoints?projectId=... FAIL
     ]
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["sync_remote_state"]({"project_id": project_id})
     data = json.loads(result[0].text)
     assert data["synced"] is True
     assert "errors" in data
-    assert any("agents" in e for e in data["errors"])
-    # Flows should still be registered despite other failures
-    assert state.get("flows", "Main Flow", "id") == "flow-1"
+    assert any("flows" in e for e in data["errors"])
 
 
-def test_sync_falls_back_to_direct_endpoints_on_404(mock_client, state, cache):
-    """When project-scoped endpoints 404 (AU1), fall back to direct /v2.0/flows etc."""
-    project_id = state.project_id
-    mock_client.get.side_effect = [
-        Exception("404 Not Found"),                                                          # /projects/{id}/flows → 404
-        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                # /flows fallback
-        {"nodes": []},                                                                       # chart for Main Flow
-        Exception("404 Not Found"),                                                          # /projects/{id}/aiagents → 404
-        {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                # /aiagents fallback
-        Exception("404 Not Found"),                                                          # /projects/{id}/endpoints → 404
-        {"items": [{"_id": "ep-1", "name": "REST", "urlToken": "tok", "flowReferenceId": "flow-1"}]},  # /endpoints fallback
-    ]
-    handlers = make_handlers(mock_client, state, cache)
-    result = handlers["sync_remote_state"]({"project_id": project_id})
-    data = json.loads(result[0].text)
-    assert data["synced"] is True
-    assert state.get("flows", "Main Flow", "id") == "flow-1"
-    assert state.get("agents", "My Agent", "id") == "agent-1"
-    assert state.get("endpoints", "REST", "id") == "ep-1"
-
-
-def test_cognigy_list_singular_resource_type_normalised(mock_client, state, cache):
-    """'project' should be normalised to 'projects' in the API path."""
-    mock_client.get.return_value = {"items": [{"_id": "p1", "name": "My Project"}]}
+def test_cognigy_list_uses_projectId_query_param(mock_client, state, cache):
+    """cognigy_list with project_id must pass projectId as a query param, not a path segment."""
+    mock_client.get.return_value = {"items": [{"_id": "f1", "name": "My Flow"}]}
     handlers = flow_make_handlers(mock_client, state, cache)
-    handlers["cognigy_list"]({"resource_type": "project", "project_id": "proj-1"})
+    handlers["cognigy_list"]({"resource_type": "flows", "project_id": "proj-1"})
     call_path = mock_client.get.call_args[0][0]
-    assert "projects" in call_path
-    assert "project?" not in call_path  # was bug: literal None in query
+    call_kwargs = mock_client.get.call_args[1]
+    assert call_path == "/v2.0/flows"
+    assert call_kwargs.get("projectId") == "proj-1"
 
 
 def test_sync_no_project_id_lists_projects(mock_client, state, cache):
@@ -132,8 +107,8 @@ def test_sync_remote_state_binds_project_in_session(mock_client, cache, tmp_path
 
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
-        {"nodes": []},                                          # chart
-        {"items": []},                                          # agents
+        {"nodes": []},                                          # chart (tool discovery)
+        {"items": []},                                          # chart/nodes/aiagents
         {"items": []},                                          # endpoints
     ]
     handlers = make_handlers(mock_client, unscoped, cache)

@@ -124,23 +124,20 @@ def make_handlers(
         cache.invalidate_all()
         errors: list[str] = []
 
-        # Flows
+        # Flows — projectId is a query param
         flows: list = []
         try:
-            flows_resp = client.get(f"/v2.0/projects/{project_id}/flows", limit=100)
+            flows_resp = client.get("/v2.0/flows", projectId=project_id, limit=100)
             flows = flows_resp.get("items", [])
-        except Exception:
-            try:
-                flows_resp = client.get("/v2.0/flows", limit=100)
-                flows = flows_resp.get("items", [])
-            except Exception as exc:
-                errors.append(f"flows: {exc}")
+        except Exception as exc:
+            errors.append(f"flows: {exc}")
 
         for flow in flows:
             state.set("flows", flow["name"], value={"id": flow["_id"]})
             cache.set("flows", flow["_id"], flow)
 
-        # Chart-based tool discovery (non-fatal per flow)
+        # Per-flow discovery: aiAgentJobTool nodes + AI Agent definitions
+        seen_agents: set = set()
         for flow in flows:
             try:
                 chart = client.get(f"/v2.0/flows/{flow['_id']}/chart")
@@ -153,26 +150,20 @@ def make_handlers(
                             "flowName": flow["name"],
                         })
             except Exception:
-                pass  # chart unavailable — skip tool discovery for this flow
-
-        # Agents — projectId is now a query param, not a path segment
-        try:
-            agents_resp = client.get("/v2.0/aiagents", projectId=project_id, limit=100)
-            for agent in agents_resp.get("items", []):
-                state.set("agents", agent["name"], value={"id": agent["_id"]})
-                cache.set("aiagents", agent["_id"], agent)
-        except Exception:
+                pass
             try:
-                agents_resp = client.get("/v2.0/aiagents", limit=100)
+                agents_resp = client.get(f"/v2.0/flows/{flow['_id']}/chart/nodes/aiagents")
                 for agent in agents_resp.get("items", []):
-                    state.set("agents", agent["name"], value={"id": agent["_id"]})
-                    cache.set("aiagents", agent["_id"], agent)
-            except Exception as exc:
-                errors.append(f"agents: {exc}")
+                    if agent["_id"] not in seen_agents:
+                        seen_agents.add(agent["_id"])
+                        state.set("agents", agent["name"], value={"id": agent["_id"]})
+                        cache.set("aiagents", agent["_id"], agent)
+            except Exception:
+                pass
 
-        # Endpoints
+        # Endpoints — projectId is a query param
         try:
-            eps_resp = client.get(f"/v2.0/projects/{project_id}/endpoints", limit=100)
+            eps_resp = client.get("/v2.0/endpoints", projectId=project_id, limit=100)
             for ep in eps_resp.get("items", []):
                 state.set("endpoints", ep["name"], value={
                     "id": ep["_id"],
@@ -180,18 +171,8 @@ def make_handlers(
                     "flowReferenceId": ep.get("flowReferenceId", ""),
                 })
                 cache.set("endpoints", ep["_id"], ep)
-        except Exception:
-            try:
-                eps_resp = client.get("/v2.0/endpoints", limit=100)
-                for ep in eps_resp.get("items", []):
-                    state.set("endpoints", ep["name"], value={
-                        "id": ep["_id"],
-                        "urlToken": ep.get("urlToken", ""),
-                        "flowReferenceId": ep.get("flowReferenceId", ""),
-                    })
-                    cache.set("endpoints", ep["_id"], ep)
-            except Exception as exc:
-                errors.append(f"endpoints: {exc}")
+        except Exception as exc:
+            errors.append(f"endpoints: {exc}")
 
         state.touch_interaction()
         result: dict = {"synced": True, "project_id": project_id}

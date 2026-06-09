@@ -303,12 +303,11 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         agent_id = args.get("agent_id")
         limit = args.get("limit", 100)
         if agent_id:
-            path = f"/v2.0/aiagents/{agent_id}/{rtype}"
+            data = client.get(f"/v2.0/aiagents/{agent_id}/{rtype}", limit=limit)
         elif project_id:
-            path = f"/v2.0/projects/{project_id}/{rtype}"
+            data = client.get(f"/v2.0/{rtype}", projectId=project_id, limit=limit)
         else:
-            path = f"/v2.0/{rtype}"
-        data = client.get(path, limit=limit)
+            data = client.get(f"/v2.0/{rtype}", limit=limit)
         return _ok(data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
