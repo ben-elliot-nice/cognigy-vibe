@@ -81,7 +81,6 @@ Add to `.claude/mcp.json`:
 |---|---|
 | `push_code_node` | Push local `.js`/`.ts` to a code node with conflict detection |
 | `push_html_node` | Push local `.html` to a `setHTMLAppState` node |
-| `push_tool_from_file` | Create or update a Cognigy tool from a local JSON file |
 
 ### Testing
 | Tool | Description |

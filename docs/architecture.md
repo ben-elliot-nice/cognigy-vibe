@@ -28,7 +28,7 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 |---|---|
 | State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource` |
 | Flow ops | `cognigy_get`, `cognigy_list`, `cognigy_create`, `cognigy_update`, `cognigy_delete`, `cognigy_invoke`, `get_flow_chart` |
-| File push | `push_code_node`, `push_html_node`, `push_tool_from_file` |
+| File push | `push_code_node`, `push_html_node` |
 | Testing | `talk_to_agent` |
 | Guidance | `explain` |
 
