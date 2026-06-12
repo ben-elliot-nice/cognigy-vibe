@@ -1,7 +1,7 @@
 # Cognigy MCP Uplift Plan — Design Spec
 
 **Date:** 2026-06-12
-**Source:** docs/exploratory-testing-report.md
+**Source:** docs/test-reports/exploratory-testing-report.md
 **Version:** 1.1
 
 ## Overview
