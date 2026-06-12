@@ -386,6 +386,17 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                     "Use push_code_node for .js/.ts files. "
                     'See explain("tool-selection") for guidance.'
                 )})
+            valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}
+            if "mode" in body and body["mode"] not in valid_modes:
+                return _ok({
+                    "error": (
+                        f'Invalid value for field "mode": "{body["mode"]}". '
+                        f'Valid values: appendChild (add as child of container node), '
+                        f'append (add as last sibling), '
+                        f'insertAfter (insert after target sibling — BROKEN on AU1), '
+                        f'insertBefore (insert before target sibling — BROKEN on AU1).'
+                    )
+                })
             if body.get("type") == "say" and "config" in body:
                 body = {**body, "config": _normalise_say_config(body["config"])}
             body = _inject_extension(body)
@@ -417,6 +428,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         path = _resource_path(rtype, rid, flow_id)
         if path is None:
             return _ok({"error": "flow_id required when resource_type is 'node'"})
+        if rtype == "node" and "mode" in body:
+            valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}
+            if body["mode"] not in valid_modes:
+                return _ok({
+                    "error": (
+                        f'Invalid value for field "mode": "{body["mode"]}". '
+                        f'Valid values: appendChild, append, insertAfter, insertBefore.'
+                    )
+                })
         current = client.get(path)
         if rtype == "node" and current.get("type") == "code":
             return _ok({"error": (
