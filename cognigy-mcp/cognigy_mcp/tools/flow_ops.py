@@ -58,6 +58,11 @@ TOOLS: list[Tool] = [
                 "resource_type": {"type": "string"},
                 "body": {"type": "object"},
                 "flow_id": {"type": "string", "description": "Required when creating nodes"},
+                "return_full_object": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns the complete created object. Default false returns minimal {_id, referenceId, type, label} (~90% token savings).",
+                },
             },
             "required": ["resource_type", "body"],
         },
@@ -79,6 +84,11 @@ TOOLS: list[Tool] = [
                     "description": "When true, deep-merges body.config with current config rather than replacing",
                 },
                 "flow_id": {"type": "string", "description": "Required when resource_type is 'node'"},
+                "return_full_object": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns the complete updated object. Default false returns minimal {_id, type, label} (~90% token savings).",
+                },
             },
             "required": ["resource_type", "resource_id", "body"],
         },
@@ -365,7 +375,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if name:
             state.set(rtype, name, value={"id": result["_id"]})
         cache.set(rtype, result["_id"], result)
-        return _ok(result)
+        if args.get("return_full_object"):
+            return _ok(result)
+        minimal = {
+            "_id": result.get("_id"),
+            "referenceId": result.get("referenceId"),
+            "type": result.get("type"),
+            "label": result.get("label"),
+        }
+        return _ok({k: v for k, v in minimal.items() if v is not None})
 
     def _cognigy_update(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
@@ -390,7 +408,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             body = {**body, "config": merged}
         result = client.patch(path, body)
         cache.set(rtype, rid, result)
-        return _ok(result)
+        if args.get("return_full_object"):
+            return _ok(result)
+        minimal = {
+            "_id": result.get("_id"),
+            "type": result.get("type"),
+            "label": result.get("label"),
+        }
+        return _ok({k: v for k, v in minimal.items() if v is not None})
 
     def _cognigy_delete(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
