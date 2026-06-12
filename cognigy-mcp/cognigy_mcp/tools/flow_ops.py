@@ -16,6 +16,11 @@ TOOLS: list[Tool] = [
                 "resource_type": {"type": "string", "description": "e.g. flows, aiagents, endpoints"},
                 "resource_id": {"type": "string"},
                 "flow_id": {"type": "string", "description": "Required when resource_type is 'node'"},
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: return only these keys. Example: fields=['_id','name'] reduces size by ~80%.",
+                },
             },
             "required": ["resource_type", "resource_id"],
         },
@@ -37,6 +42,11 @@ TOOLS: list[Tool] = [
                     "type": "boolean",
                     "default": False,
                     "description": "When true, returns complete objects. Default false returns simplified {id, name} pairs (~95% token savings).",
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: return only these keys from each item. Applied after full_objects filter. Example: fields=['_id','name','description'].",
                 },
             },
             "required": ["resource_type"],
@@ -316,13 +326,19 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         flow_id = args.get("flow_id")
         cached, fresh = cache.get(rtype, rid)
         if fresh and cached:
-            return _ok({**cached, "_source": "cache"})
-        path = _resource_path(rtype, rid, flow_id)
-        if path is None:
-            return _ok({"error": "flow_id required when resource_type is 'node'"})
-        data = client.get(path)
-        cache.set(rtype, rid, data)
-        return _ok({**data, "_source": "api"})
+            data = cached
+            source = "cache"
+        else:
+            path = _resource_path(rtype, rid, flow_id)
+            if path is None:
+                return _ok({"error": "flow_id required when resource_type is 'node'"})
+            data = client.get(path)
+            cache.set(rtype, rid, data)
+            source = "api"
+        fields = args.get("fields")
+        if fields:
+            data = {k: data[k] for k in fields if k in data}
+        return _ok({**data, "_source": source})
 
     def _cognigy_list(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
@@ -346,8 +362,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 if "type" in item:
                     entry["type"] = item["type"]
                 simplified.append(entry)
-            return _ok({"items": simplified, "count": len(simplified)})
-        return _ok(data)
+            result_data = {"items": simplified, "count": len(simplified)}
+        else:
+            result_data = data
+        fields = args.get("fields")
+        if fields:
+            items = result_data.get("items", [])
+            filtered = [{k: item[k] for k in fields if k in item} for item in items]
+            result_data = {"items": filtered, "count": len(filtered)}
+        return _ok(result_data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
