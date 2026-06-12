@@ -40,7 +40,13 @@ TOOLS: list[Tool] = [
     Tool(
         name="cognigy_create",
         description="POST to create a new Cognigy resource. Auto-saves name→ID to .state.json. "
-                    "For nodes, body must include flowId, type, mode, target.",
+                    "For nodes, body must include: "
+                    "type (e.g. 'say', 'code', 'once', 'httpRequest', 'aiAgentJob'), "
+                    "mode — one of: 'appendChild' (add as child of target container), "
+                    "'append' (add as last sibling after target), "
+                    "'insertAfter' or 'insertBefore' (relative to sibling, BROKEN on AU1), "
+                    "target (the _id of the reference node), "
+                    "and flowId (the flow _id).",
         inputSchema={
             "type": "object",
             "properties": {
