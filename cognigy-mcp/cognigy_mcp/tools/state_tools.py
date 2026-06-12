@@ -60,8 +60,10 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="get_build_state",
-        description="Return the current .state.json — all known name→ID mappings. "
-                    "Pass resource_type to scope the response and avoid context overflow on large projects.",
+        description="Return the current .state.json — all known name to ID mappings. "
+                    "Pass resource_type to scope the response and avoid context overflow on large projects. "
+                    "Example: get_build_state(resource_type='flows') returns ~50 tokens vs ~500 for full state. "
+                    "Filter values: flows, agents, endpoints, tools, nodes, jobs.",
         inputSchema={
             "type": "object",
             "properties": {
