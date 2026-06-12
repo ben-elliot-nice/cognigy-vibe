@@ -11,11 +11,11 @@ Use this skill when scoping, planning, or designing a Cognigy AI agent demo — 
 
 ## Reference Docs
 
-Before starting Phase 1, navigate to `<plugin-root>` (two directories up from `skills/scope-demo/`) and read:
+Before starting Phase 1, read:
 
-- `docs/cognigy-capabilities.md` — Platform reference: channels, xApp, AI Agents, Knowledge AI, integrations, build complexity
-- `docs/scope-demo-output-template.md` — Template for the demo plan document generated in Phase 4
-- `docs/scope-demo-discovery-questions.md` — Structured discovery guide for Phase 1 when starting from scratch
+- `references/cognigy-capabilities.md` — Platform reference: channels, xApp, AI Agents, Knowledge AI, integrations, build complexity
+- `references/scope-demo-output-template.md` — Template for the demo plan document generated in Phase 4
+- `references/scope-demo-discovery-questions.md` — Structured discovery guide for Phase 1 when starting from scratch
 
 ---
 
@@ -25,7 +25,7 @@ Collect all 12 required facts before proceeding to Phase 2.
 
 **If context has been provided** (emails, briefs, notes): extract facts from it, then identify and ask only about gaps.
 
-**If starting from scratch:** use `docs/scope-demo-discovery-questions.md` as your guide. Ask questions grouped by section — do not dump all questions at once.
+**If starting from scratch:** use `references/scope-demo-discovery-questions.md` as your guide. Ask questions grouped by section — do not dump all questions at once.
 
 **Required facts:**
 
@@ -89,7 +89,7 @@ After all seven areas are agreed, ask explicitly:
 
 ## Phase 4: Write Output
 
-Generate the demo plan using `docs/scope-demo-output-template.md` as the structure.
+Generate the demo plan using `references/scope-demo-output-template.md` as the structure.
 
 **Filename:** `{CustomerName}-{DemoType}-demo-plan.md`
 **Location:** Write to the directory from which the user launched Claude Code — their working directory, not the plugin root. If the correct path is unclear, ask. Do NOT write files into the plugin directory.
