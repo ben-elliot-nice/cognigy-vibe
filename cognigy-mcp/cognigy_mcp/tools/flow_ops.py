@@ -24,8 +24,8 @@ TOOLS: list[Tool] = [
         name="cognigy_list",
         description="List Cognigy resources. Pass project_id for project-scoped resources, "
                     "agent_id for agent-scoped resources (e.g. listing jobs). "
-                    "resource_type accepts both singular ('flow') and plural ('flows') — "
-                    "both are normalised to the correct API path.",
+                    "resource_type accepts both singular ('flow') and plural ('flows'). "
+                    "Default: returns simplified {id, name} pairs. Use full_objects=true for complete objects.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -33,6 +33,11 @@ TOOLS: list[Tool] = [
                 "project_id": {"type": "string"},
                 "agent_id": {"type": "string"},
                 "limit": {"type": "integer", "default": 100},
+                "full_objects": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns complete objects. Default false returns simplified {id, name} pairs (~95% token savings).",
+                },
             },
             "required": ["resource_type"],
         },
@@ -308,12 +313,24 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         project_id = args.get("project_id")
         agent_id = args.get("agent_id")
         limit = args.get("limit", 100)
+        full_objects = args.get("full_objects", False)
         if agent_id:
             data = client.get(f"/v2.0/aiagents/{agent_id}/{rtype}", limit=limit)
         elif project_id:
             data = client.get(f"/v2.0/{rtype}", projectId=project_id, limit=limit)
         else:
             data = client.get(f"/v2.0/{rtype}", limit=limit)
+        if not full_objects:
+            items = data.get("items", [])
+            simplified = []
+            for item in items:
+                entry = {"id": item.get("_id"), "name": item.get("name")}
+                if "description" in item:
+                    entry["description"] = item["description"]
+                if "type" in item:
+                    entry["type"] = item["type"]
+                simplified.append(entry)
+            return _ok({"items": simplified, "count": len(simplified)})
         return _ok(data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
