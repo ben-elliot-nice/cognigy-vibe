@@ -11,7 +11,7 @@ TOPICS = [
     "flow-chart-reading", "tool-conditions", "two-pass-confirm", "turn-structure",
     "xapp-delivery", "cognigyScript", "code-node-patterns", "voice-gateway",
     "outbound-trigger", "knowledge-store", "endpoint-config", "function-execution",
-    "session-injection", "extension-map", "node-types", "mcp-comparison",
+    "session-injection", "extension-map", "node-types", "mcp-comparison", "tool-selection",
 ]
 
 _TOPIC_INDEX = """
@@ -37,6 +37,7 @@ Topics and what they cover:
   extension-map        complete type → extension lookup table
   node-types           quick reference for all node type strings
   mcp-comparison       when to use cognigy-vibe vs NiCE official MCP
+  tool-selection       when to use push_code_node vs cognigy_create vs cognigy_update
 
 Call explain() for orientation and topic descriptions.
 Call explain("topic") for full reference on that topic.
@@ -849,6 +850,30 @@ Use cognigy-vibe for: once/setSessionConfig/hangup node creation, patching aiAge
 After create_ai_agent, the AI Agent Job Node has generic defaults (name: "Customer Support Specialist",
 default LLM, toolChoice: "auto", generic memoryContextInjection).
 ALWAYS follow create_ai_agent with cognigy_update on the aiAgentJob node to set your persona config.
+""",
+
+    "tool-selection": """
+## tool-selection — Choosing the Right Tool
+
+### Decision tree
+- "Creating a Code node from a local .js/.ts file?" → push_code_node (provides conflict detection against Cognigy UI edits)
+- "Creating any other node (Say, Once, HTTP Request, AI Agent Job, etc.)?" → cognigy_create
+- "Creating an HTML/xApp node from a local .html file?" → push_html_node (sets mode='full' automatically)
+- "Updating an existing node's config?" → cognigy_update with merge_config=true
+- "Reading a node or resource?" → cognigy_get
+
+### Why push_code_node for Code nodes?
+push_code_node provides conflict detection: if someone edited the node in the Cognigy UI
+since your last push, the push is blocked with a diff. cognigy_create has no such protection.
+
+### File-backed vs direct
+- push_code_node / push_html_node: local file → remote node, with conflict detection
+- cognigy_create: create node from scratch, no local file backing
+
+### What about AI Agent Tools?
+The now-removed push_tool_from_file was targeting a hallucinated API endpoint.
+AI Agent tool configuration is done through the aiAgentJobTool node config in a flow.
+See explain("agent-tool-branch") for the three-node pattern.
 """,
 }
 

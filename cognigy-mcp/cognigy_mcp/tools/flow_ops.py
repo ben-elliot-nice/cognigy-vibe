@@ -317,6 +317,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if rtype == "node":
             if not flow_id:
                 return _ok({"error": "flow_id required to create a node"})
+            if body.get("type") == "code":
+                return _ok({"error": (
+                    "Code nodes must be created via push_code_node "
+                    "(provides file-backed conflict detection). "
+                    "Use push_code_node for .js/.ts files. "
+                    'See explain("tool-selection") for guidance.'
+                )})
             if body.get("type") == "say" and "config" in body:
                 body = {**body, "config": _normalise_say_config(body["config"])}
             body = _inject_extension(body)
@@ -341,6 +348,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if path is None:
             return _ok({"error": "flow_id required when resource_type is 'node'"})
         current = client.get(path)
+        if rtype == "node" and current.get("type") == "code":
+            return _ok({"error": (
+                "Code nodes must be updated via push_code_node "
+                "(provides file-backed conflict detection). "
+                'See explain("tool-selection") for guidance.'
+            )})
         if current.get("type") == "say" and "config" in body:
             body = {**body, "config": _normalise_say_config(body["config"])}
         if merge_config and "config" in body and "config" in current:
