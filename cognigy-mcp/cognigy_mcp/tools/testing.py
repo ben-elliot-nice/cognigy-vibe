@@ -25,6 +25,11 @@ TOOLS: list[Tool] = [
                 "flow_id": {"type": "string", "description": "Looks up token from state if endpoint_token not provided"},
                 "session_id": {"type": "string", "description": "Conversation session ID — reuse to continue, new to reset"},
                 "user_id": {"type": "string", "description": "User ID — new value starts fresh session"},
+                "minimal": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns only {outputText, sessionId} (~90% token savings). Default false returns full response.",
+                },
             },
             "required": ["message", "session_id", "user_id"],
         },
@@ -69,7 +74,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         try:
             resp = httpx.post(endpoint_url, json=payload, timeout=30.0)
             resp.raise_for_status()
-            return _ok(resp.json())
+            data = resp.json()
+            if args.get("minimal"):
+                session_info = data.get("data", {})
+                return _ok({
+                    "outputText": session_info.get("output", data.get("output", data.get("text", ""))),
+                    "sessionId": session_id,
+                })
+            return _ok(data)
         except httpx.HTTPStatusError as e:
             return _ok({"error": f"HTTP {e.response.status_code}: {e.response.text}"})
         except Exception as e:
