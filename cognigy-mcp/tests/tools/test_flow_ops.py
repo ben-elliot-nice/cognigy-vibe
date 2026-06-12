@@ -119,8 +119,14 @@ def test_get_flow_chart_returns_hierarchy(mock_client, state, cache):
     result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
     data = json.loads(result[0].text)
     assert "hierarchy" in data
-    assert "relations" in data
+    assert "relations" not in data
     assert "Start" in data["hierarchy"] or "start" in data["hierarchy"]
+
+    # format="both" restores legacy behavior
+    result_both = handlers["get_flow_chart"]({"flow_id": "flow-1", "format": "both"})
+    data_both = json.loads(result_both[0].text)
+    assert "hierarchy" in data_both
+    assert "relations" in data_both
 
 
 def test_build_hierarchy_no_cycle_crash(mock_client, state, cache):

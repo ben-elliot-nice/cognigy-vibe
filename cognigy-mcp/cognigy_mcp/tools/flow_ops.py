@@ -115,12 +115,18 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="get_flow_chart",
-        description="Fetch the full chart for a flow. Returns both the raw relations array and "
-                    "a human-readable hierarchy string for quick orientation.",
+        description="Fetch the full chart for a flow. Default: returns human-readable hierarchy string. "
+                    "Use format='raw' for structured arrays or format='both' for the legacy combined response.",
         inputSchema={
             "type": "object",
             "properties": {
                 "flow_id": {"type": "string"},
+                "format": {
+                    "type": "string",
+                    "enum": ["hierarchy", "raw", "both"],
+                    "default": "hierarchy",
+                    "description": "'hierarchy': tree string only (~95% savings, default). 'raw': nodes + relations arrays. 'both': current behavior (explicit opt-in).",
+                },
             },
             "required": ["flow_id"],
         },
@@ -411,9 +417,16 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
     def _get_flow_chart(args: dict) -> list[TextContent]:
         flow_id = args["flow_id"]
+        fmt = args.get("format", "hierarchy")
         chart = client.get(f"/v2.0/flows/{flow_id}/chart")
-        hierarchy = _build_hierarchy(chart)
-        return _ok({"relations": chart.get("relations", []), "nodes": chart.get("nodes", []), "hierarchy": hierarchy})
+        if fmt == "hierarchy":
+            hierarchy = _build_hierarchy(chart)
+            return _ok({"hierarchy": hierarchy})
+        elif fmt == "raw":
+            return _ok({"nodes": chart.get("nodes", []), "relations": chart.get("relations", [])})
+        else:
+            hierarchy = _build_hierarchy(chart)
+            return _ok({"relations": chart.get("relations", []), "nodes": chart.get("nodes", []), "hierarchy": hierarchy})
 
     return {
         "cognigy_get": _cognigy_get,
