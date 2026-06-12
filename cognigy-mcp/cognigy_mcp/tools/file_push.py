@@ -37,19 +37,6 @@ TOOLS: list[Tool] = [
             "required": ["html_file", "node_id", "flow_id"],
         },
     ),
-    Tool(
-        name="push_tool_from_file",
-        description="Read a local JSON tool definition and create or update it in Cognigy.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "file": {"type": "string", "description": "Absolute path to JSON tool definition"},
-                "project_id": {"type": "string"},
-                "tool_id": {"type": "string", "description": "If provided, updates existing tool instead of creating"},
-            },
-            "required": ["file", "project_id"],
-        },
-    ),
 ]
 
 
@@ -131,35 +118,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         cache.set("nodes", node_id, result)
         return _ok({"success": True, "node_id": node_id, "bytes": len(html)})
 
-    def _push_tool_from_file(args: dict) -> list[TextContent]:
-        path = Path(args["file"])
-        project_id = args["project_id"]
-        tool_id = args.get("tool_id")
-
-        if not path.exists():
-            return _ok({"error": f"File not found: {path}"})
-
-        try:
-            body = json.loads(path.read_text())
-        except json.JSONDecodeError as e:
-            return _ok({"error": f"Invalid JSON in {path}: {e}"})
-
-        try:
-            if tool_id:
-                result = client.patch(f"/v2.0/projects/{project_id}/tools/{tool_id}", body)
-            else:
-                result = client.post(f"/v2.0/projects/{project_id}/tools", body)
-        except Exception as e:
-            return _ok({"error": f"Failed to push tool: {e}"})
-
-        name = result.get("name")
-        rid = result.get("_id")
-        if name and rid:
-            state.set("tools", name, value={"id": rid})
-        return _ok(result)
-
     return {
         "push_code_node": _push_code_node,
         "push_html_node": _push_html_node,
-        "push_tool_from_file": _push_tool_from_file,
     }

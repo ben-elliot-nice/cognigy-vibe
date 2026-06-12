@@ -11,20 +11,20 @@ TOPICS = [
     "flow-chart-reading", "tool-conditions", "two-pass-confirm", "turn-structure",
     "xapp-delivery", "cognigyScript", "code-node-patterns", "voice-gateway",
     "outbound-trigger", "knowledge-store", "endpoint-config", "function-execution",
-    "session-injection", "extension-map", "node-types", "mcp-comparison",
+    "session-injection", "extension-map", "node-types", "mcp-comparison", "tool-selection",
 ]
 
 _TOPIC_INDEX = """
 Topics and what they cover:
 
-  node-positioning     append vs appendChild modes, insertAfter 500 bug on AU1
+  node-positioning     append vs appendChild modes, child branch population, insertAfter 500 bug on AU1
   node-wiring          chart structure, relations array, sequential vs child chains
   agent-tool-branch    aiAgentJobTool + code + toolAnswer assembly, tool args access
   node-config-update   full-replace semantics, merge_config pattern, silent field deletion
   flow-chart-reading   reading chart output, node type strings, extension field
   tool-conditions      CognigyScript condition field, hiding tools from LLM
   two-pass-confirm     inter-turn flag management, STOP gate wording
-  turn-structure       Once/OnFirstTime/Afterwards, input.execution, context reset prevention
+  turn-structure       Once/OnFirstTime/Afterwards, input.execution, context reset prevention, child branch API patterns
   xapp-delivery        session init, postMessage bridge, SDK.submit, dual xApp moments
   cognigyScript        interpolation contexts, what works where
   code-node-patterns   api.* functions, as const bug, httpRequest .result, no fetch/import
@@ -37,6 +37,7 @@ Topics and what they cover:
   extension-map        complete type → extension lookup table
   node-types           quick reference for all node type strings
   mcp-comparison       when to use cognigy-vibe vs NiCE official MCP
+  tool-selection       when to use push_code_node vs cognigy_create vs cognigy_update
 
 Call explain() for orientation and topic descriptions.
 Call explain("topic") for full reference on that topic.
@@ -66,6 +67,22 @@ Use cognigy_invoke with operation="move":
 - Using chartReference as target → 404 "Failed to find chart node"
 - New flows have Start and End nodes; list them first to get Start ID as initial append target
 - Child nodes (tool branches) only exist in childIds[], NOT in next chain — append returns 404 on them
+
+### Child branch population (Once node example)
+Once nodes auto-create two child branch nodes: OnFirstTime and Afterwards.
+Each branch appears as a separate node in the chart with its own _id.
+
+To add a node into a branch:
+1. Find the branch node in the chart (e.g. OnFirstTime child of the Once node)
+2. Use mode: "appendChild" with target set to the BRANCH NODE's _id
+
+Common pitfall: targeting the parent Once node's _id instead of the branch node.
+The branch node's _id is what you need — it's the container for child nodes.
+
+Example: chart shows Once node "a1b2" with childIds ["c3d4", "e5f6"]
+  - "c3d4" is the OnFirstTime branch node
+  - "e5f6" is the Afterwards branch node
+  - To add a Code node to OnFirstTime, target "c3d4", NOT "a1b2"
 """,
 
     "node-wiring": """
@@ -358,6 +375,32 @@ If context resets every turn, check:
   1. Set Context is in main chain (move to OnFirstTime)
   2. Flow is being reset by a goTo with reset=true
   3. Multiple flows calling into each other with shared context
+
+### Programmatic child branch population
+Once nodes auto-create OnFirstTime and Afterwards branches — do NOT attempt to create
+them manually (returns HTTP 400 "operation conflicts with constraints").
+
+To add a node to a child branch via the API:
+1. GET the flow chart to find the Once node and its childIds
+2. The childIds array contains the branch node _ids
+3. Create your node with mode="appendChild", target="<branch-node-id>"
+
+Full example — adding a Code node to OnFirstTime:
+  // Step 1: get_flow_chart to find the Once node
+  // Chart shows Once node "once-abc" with childIds ["onfirst-xyz", "after-xyz"]
+
+  // Step 2: create the Code node as child of OnFirstTime branch
+  cognigy_create(resource_type="node", body={
+    "flowId": "<flow-id>",
+    "type": "code",
+    "label": "Load Guest Profile",
+    "mode": "appendChild",
+    "target": "onfirst-xyz",
+    "config": {"code": "const profile = await api.httpRequest({...});"}
+  })
+
+Unlike aiAgentJobTool branches (which use append after the tool node),
+Once branches use appendChild with the branch node as target.
 """,
 
     "xapp-delivery": """
@@ -807,6 +850,30 @@ Use cognigy-vibe for: once/setSessionConfig/hangup node creation, patching aiAge
 After create_ai_agent, the AI Agent Job Node has generic defaults (name: "Customer Support Specialist",
 default LLM, toolChoice: "auto", generic memoryContextInjection).
 ALWAYS follow create_ai_agent with cognigy_update on the aiAgentJob node to set your persona config.
+""",
+
+    "tool-selection": """
+## tool-selection — Choosing the Right Tool
+
+### Decision tree
+- "Creating a Code node from a local .js/.ts file?" → push_code_node (provides conflict detection against Cognigy UI edits)
+- "Creating any other node (Say, Once, HTTP Request, AI Agent Job, etc.)?" → cognigy_create
+- "Creating an HTML/xApp node from a local .html file?" → push_html_node (sets mode='full' automatically)
+- "Updating an existing node's config?" → cognigy_update with merge_config=true
+- "Reading a node or resource?" → cognigy_get
+
+### Why push_code_node for Code nodes?
+push_code_node provides conflict detection: if someone edited the node in the Cognigy UI
+since your last push, the push is blocked with a diff. cognigy_create has no such protection.
+
+### File-backed vs direct
+- push_code_node / push_html_node: local file → remote node, with conflict detection
+- cognigy_create: create node from scratch, no local file backing
+
+### What about AI Agent Tools?
+The now-removed push_tool_from_file was targeting a hallucinated API endpoint.
+AI Agent tool configuration is done through the aiAgentJobTool node config in a flow.
+See explain("agent-tool-branch") for the three-node pattern.
 """,
 }
 

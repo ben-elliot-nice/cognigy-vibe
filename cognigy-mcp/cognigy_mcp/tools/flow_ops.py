@@ -16,6 +16,11 @@ TOOLS: list[Tool] = [
                 "resource_type": {"type": "string", "description": "e.g. flows, aiagents, endpoints"},
                 "resource_id": {"type": "string"},
                 "flow_id": {"type": "string", "description": "Required when resource_type is 'node'"},
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: return only these keys. Example: fields=['_id','name'] reduces size by ~80%.",
+                },
             },
             "required": ["resource_type", "resource_id"],
         },
@@ -24,8 +29,8 @@ TOOLS: list[Tool] = [
         name="cognigy_list",
         description="List Cognigy resources. Pass project_id for project-scoped resources, "
                     "agent_id for agent-scoped resources (e.g. listing jobs). "
-                    "resource_type accepts both singular ('flow') and plural ('flows') — "
-                    "both are normalised to the correct API path.",
+                    "resource_type accepts both singular ('flow') and plural ('flows'). "
+                    "Default: returns simplified {id, name} pairs. Use full_objects=true for complete objects.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -33,6 +38,16 @@ TOOLS: list[Tool] = [
                 "project_id": {"type": "string"},
                 "agent_id": {"type": "string"},
                 "limit": {"type": "integer", "default": 100},
+                "full_objects": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns complete objects. Default false returns simplified {id, name} pairs (~95% token savings).",
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional: return only these keys from each item. Applied after full_objects filter. Example: fields=['_id','name','description'].",
+                },
             },
             "required": ["resource_type"],
         },
@@ -40,13 +55,24 @@ TOOLS: list[Tool] = [
     Tool(
         name="cognigy_create",
         description="POST to create a new Cognigy resource. Auto-saves name→ID to .state.json. "
-                    "For nodes, body must include flowId, type, mode, target.",
+                    "For nodes, body must include: "
+                    "type (e.g. 'say', 'code', 'once', 'httpRequest', 'aiAgentJob'), "
+                    "mode — one of: 'appendChild' (add as child of target container), "
+                    "'append' (add as last sibling after target), "
+                    "'insertAfter' or 'insertBefore' (relative to sibling, BROKEN on AU1), "
+                    "target (the _id of the reference node), "
+                    "and flowId (the flow _id).",
         inputSchema={
             "type": "object",
             "properties": {
                 "resource_type": {"type": "string"},
                 "body": {"type": "object"},
                 "flow_id": {"type": "string", "description": "Required when creating nodes"},
+                "return_full_object": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns the complete created object. Default false returns minimal {_id, referenceId, type, label} (~90% token savings).",
+                },
             },
             "required": ["resource_type", "body"],
         },
@@ -68,6 +94,11 @@ TOOLS: list[Tool] = [
                     "description": "When true, deep-merges body.config with current config rather than replacing",
                 },
                 "flow_id": {"type": "string", "description": "Required when resource_type is 'node'"},
+                "return_full_object": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "When true, returns the complete updated object. Default false returns minimal {_id, type, label} (~90% token savings).",
+                },
             },
             "required": ["resource_type", "resource_id", "body"],
         },
@@ -104,12 +135,18 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="get_flow_chart",
-        description="Fetch the full chart for a flow. Returns both the raw relations array and "
-                    "a human-readable hierarchy string for quick orientation.",
+        description="Fetch the full chart for a flow. Default: returns human-readable hierarchy string. "
+                    "Use format='raw' for structured arrays or format='both' for the legacy combined response.",
         inputSchema={
             "type": "object",
             "properties": {
                 "flow_id": {"type": "string"},
+                "format": {
+                    "type": "string",
+                    "enum": ["hierarchy", "raw", "both"],
+                    "default": "hierarchy",
+                    "description": "'hierarchy': tree string only (~95% savings, default). 'raw': nodes + relations arrays. 'both': current behavior (explicit opt-in).",
+                },
             },
             "required": ["flow_id"],
         },
@@ -289,26 +326,51 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         flow_id = args.get("flow_id")
         cached, fresh = cache.get(rtype, rid)
         if fresh and cached:
-            return _ok({**cached, "_source": "cache"})
-        path = _resource_path(rtype, rid, flow_id)
-        if path is None:
-            return _ok({"error": "flow_id required when resource_type is 'node'"})
-        data = client.get(path)
-        cache.set(rtype, rid, data)
-        return _ok({**data, "_source": "api"})
+            data = cached
+            source = "cache"
+        else:
+            path = _resource_path(rtype, rid, flow_id)
+            if path is None:
+                return _ok({"error": "flow_id required when resource_type is 'node'"})
+            data = client.get(path)
+            cache.set(rtype, rid, data)
+            source = "api"
+        fields = args.get("fields")
+        if fields:
+            data = {k: data[k] for k in fields if k in data}
+        return _ok({**data, "_source": source})
 
     def _cognigy_list(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
         project_id = args.get("project_id")
         agent_id = args.get("agent_id")
         limit = args.get("limit", 100)
+        full_objects = args.get("full_objects", False)
         if agent_id:
             data = client.get(f"/v2.0/aiagents/{agent_id}/{rtype}", limit=limit)
         elif project_id:
             data = client.get(f"/v2.0/{rtype}", projectId=project_id, limit=limit)
         else:
             data = client.get(f"/v2.0/{rtype}", limit=limit)
-        return _ok(data)
+        if not full_objects:
+            items = data.get("items", [])
+            simplified = []
+            for item in items:
+                entry = {"id": item.get("_id"), "name": item.get("name")}
+                if "description" in item:
+                    entry["description"] = item["description"]
+                if "type" in item:
+                    entry["type"] = item["type"]
+                simplified.append(entry)
+            result_data = {"items": simplified, "count": len(simplified)}
+        else:
+            result_data = data
+        fields = args.get("fields")
+        if fields:
+            items = result_data.get("items", [])
+            filtered = [{k: item[k] for k in fields if k in item} for item in items]
+            result_data = {"items": filtered, "count": len(filtered)}
+        return _ok(result_data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
@@ -317,6 +379,24 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if rtype == "node":
             if not flow_id:
                 return _ok({"error": "flow_id required to create a node"})
+            if body.get("type") == "code":
+                return _ok({"error": (
+                    "Code nodes must be created via push_code_node "
+                    "(provides file-backed conflict detection). "
+                    "Use push_code_node for .js/.ts files. "
+                    'See explain("tool-selection") for guidance.'
+                )})
+            valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}
+            if "mode" in body and body["mode"] not in valid_modes:
+                return _ok({
+                    "error": (
+                        f'Invalid value for field "mode": "{body["mode"]}". '
+                        f'Valid values: appendChild (add as child of container node), '
+                        f'append (add as last sibling), '
+                        f'insertAfter (insert after target sibling — BROKEN on AU1), '
+                        f'insertBefore (insert before target sibling — BROKEN on AU1).'
+                    )
+                })
             if body.get("type") == "say" and "config" in body:
                 body = {**body, "config": _normalise_say_config(body["config"])}
             body = _inject_extension(body)
@@ -329,7 +409,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if name:
             state.set(rtype, name, value={"id": result["_id"]})
         cache.set(rtype, result["_id"], result)
-        return _ok(result)
+        if args.get("return_full_object"):
+            return _ok(result)
+        minimal = {
+            "_id": result.get("_id"),
+            "referenceId": result.get("referenceId"),
+            "type": result.get("type"),
+            "label": result.get("label"),
+        }
+        return _ok({k: v for k, v in minimal.items() if v is not None})
 
     def _cognigy_update(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
@@ -340,7 +428,22 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         path = _resource_path(rtype, rid, flow_id)
         if path is None:
             return _ok({"error": "flow_id required when resource_type is 'node'"})
+        if rtype == "node" and "mode" in body:
+            valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}
+            if body["mode"] not in valid_modes:
+                return _ok({
+                    "error": (
+                        f'Invalid value for field "mode": "{body["mode"]}". '
+                        f'Valid values: appendChild, append, insertAfter, insertBefore.'
+                    )
+                })
         current = client.get(path)
+        if rtype == "node" and current.get("type") == "code":
+            return _ok({"error": (
+                "Code nodes must be updated via push_code_node "
+                "(provides file-backed conflict detection). "
+                'See explain("tool-selection") for guidance.'
+            )})
         if current.get("type") == "say" and "config" in body:
             body = {**body, "config": _normalise_say_config(body["config"])}
         if merge_config and "config" in body and "config" in current:
@@ -348,7 +451,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             body = {**body, "config": merged}
         result = client.patch(path, body)
         cache.set(rtype, rid, result)
-        return _ok(result)
+        if args.get("return_full_object"):
+            return _ok(result)
+        minimal = {
+            "_id": result.get("_id"),
+            "type": result.get("type"),
+            "label": result.get("label"),
+        }
+        return _ok({k: v for k, v in minimal.items() if v is not None})
 
     def _cognigy_delete(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
@@ -375,9 +485,16 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
     def _get_flow_chart(args: dict) -> list[TextContent]:
         flow_id = args["flow_id"]
+        fmt = args.get("format", "hierarchy")
         chart = client.get(f"/v2.0/flows/{flow_id}/chart")
-        hierarchy = _build_hierarchy(chart)
-        return _ok({"relations": chart.get("relations", []), "nodes": chart.get("nodes", []), "hierarchy": hierarchy})
+        if fmt == "hierarchy":
+            hierarchy = _build_hierarchy(chart)
+            return _ok({"hierarchy": hierarchy})
+        elif fmt == "raw":
+            return _ok({"nodes": chart.get("nodes", []), "relations": chart.get("relations", [])})
+        else:
+            hierarchy = _build_hierarchy(chart)
+            return _ok({"relations": chart.get("relations", []), "nodes": chart.get("nodes", []), "hierarchy": hierarchy})
 
     return {
         "cognigy_get": _cognigy_get,

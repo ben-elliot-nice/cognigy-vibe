@@ -8,7 +8,6 @@ def test_all_tools_exported():
     names = [t.name for t in TOOLS]
     assert "push_code_node" in names
     assert "push_html_node" in names
-    assert "push_tool_from_file" in names
 
 
 def test_push_code_node_first_push(mock_client, state, cache, tmp_path):
@@ -81,19 +80,6 @@ def test_push_html_node(mock_client, state, cache, tmp_path):
     assert patch_body["config"]["mode"] == "full"
 
 
-def test_push_tool_from_file_create(mock_client, state, cache, tmp_path):
-    tool_file = tmp_path / "my_tool.json"
-    tool_def = {"name": "my_tool", "description": "Does stuff", "parameters": []}
-    tool_file.write_text(json.dumps(tool_def))
-    mock_client.post.return_value = {"_id": "tool-1", **tool_def}
-    handlers = make_handlers(mock_client, state, cache)
-    result = handlers["push_tool_from_file"]({
-        "file": str(tool_file), "project_id": "proj-1",
-    })
-    data = json.loads(result[0].text)
-    assert data["_id"] == "tool-1"
-
-
 def test_push_code_node_patch_failure_returns_error(mock_client, state, cache, tmp_path):
     script = tmp_path / "payment.js"
     script.write_text("some code")
@@ -109,10 +95,3 @@ def test_push_code_node_patch_failure_returns_error(mock_client, state, cache, t
     assert cache.get_node_snapshot("node-1") is None
 
 
-def test_push_tool_from_file_invalid_json(mock_client, state, cache, tmp_path):
-    bad_file = tmp_path / "bad.json"
-    bad_file.write_text("not valid json {")
-    handlers = make_handlers(mock_client, state, cache)
-    result = handlers["push_tool_from_file"]({"file": str(bad_file), "project_id": "proj-1"})
-    data = json.loads(result[0].text)
-    assert "error" in data
