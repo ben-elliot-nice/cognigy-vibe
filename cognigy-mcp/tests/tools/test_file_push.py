@@ -95,3 +95,58 @@ def test_push_code_node_patch_failure_returns_error(mock_client, state, cache, t
     assert cache.get_node_snapshot("node-1") is None
 
 
+def test_push_code_node_create_new_node(mock_client, state, cache, tmp_path):
+    script = tmp_path / "init.js"
+    script.write_text("api.say('hello');")
+    mock_client.post.return_value = {"_id": "node-new", "type": "code", "label": "Init"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_code_node"]({
+        "script_file": str(script),
+        "flow_id": "flow-1",
+        "mode": "append",
+        "target": "node-start",
+        "label": "Init",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["created"] is True
+    assert data["node_id"] == "node-new"
+    assert cache.get_node_snapshot("node-new") == "api.say('hello');"
+    posted_body = mock_client.post.call_args[0][1]
+    assert posted_body["type"] == "code"
+    assert posted_body["mode"] == "append"
+    assert posted_body["target"] == "node-start"
+    assert posted_body["extension"] == "@cognigy/basic-nodes"
+    assert posted_body["config"]["code"] == "api.say('hello');"
+
+
+def test_push_code_node_create_missing_mode_or_target(mock_client, state, cache, tmp_path):
+    script = tmp_path / "init.js"
+    script.write_text("api.say('hello');")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_code_node"]({
+        "script_file": str(script),
+        "flow_id": "flow-1",
+        "mode": "append",
+        # target omitted
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    mock_client.post.assert_not_called()
+
+
+def test_push_code_node_create_post_failure(mock_client, state, cache, tmp_path):
+    script = tmp_path / "init.js"
+    script.write_text("api.say('hello');")
+    mock_client.post.side_effect = Exception("api error")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_code_node"]({
+        "script_file": str(script),
+        "flow_id": "flow-1",
+        "mode": "append",
+        "target": "node-start",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+
+

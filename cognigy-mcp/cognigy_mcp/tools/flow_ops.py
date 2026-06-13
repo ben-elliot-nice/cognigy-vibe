@@ -383,7 +383,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _ok({"error": (
                     "Code nodes must be created via push_code_node "
                     "(provides file-backed conflict detection). "
-                    "Use push_code_node for .js/.ts files. "
+                    "To create a new code node: push_code_node(script_file=..., flow_id=..., mode=..., target=...). "
                     'See explain("tool-selection") for guidance.'
                 )})
             valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}
