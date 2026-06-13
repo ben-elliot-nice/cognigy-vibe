@@ -9,7 +9,7 @@ from cognigy_mcp.state import ProjectState
 TOPICS = [
     "node-positioning", "node-wiring", "agent-tool-branch", "node-config-update",
     "flow-chart-reading", "tool-conditions", "two-pass-confirm", "turn-structure",
-    "xapp-delivery", "cognigyScript", "code-node-patterns", "voice-gateway",
+    "xapp-delivery", "xapp-event-handling", "cognigyScript", "code-node-patterns", "voice-gateway",
     "outbound-trigger", "knowledge-store", "endpoint-config", "function-execution",
     "session-injection", "extension-map", "node-types", "mcp-comparison", "tool-selection",
 ]
@@ -26,6 +26,7 @@ Topics and what they cover:
   two-pass-confirm     inter-turn flag management, STOP gate wording
   turn-structure       Once/OnFirstTime/Afterwards, input.execution, context reset prevention, child branch API patterns
   xapp-delivery        session init, postMessage bridge, SDK.submit, dual xApp moments
+  xapp-event-handling  non-blocking xApp pattern: flow structure, ephemeral data capture, SDK.submit vs webhook inject variants
   cognigyScript        interpolation contexts, what works where
   code-node-patterns   api.* functions, as const bug, httpRequest .result, no fetch/import
   voice-gateway        VG endpoint routing, Set Session Config, SIP headers, DTMF
@@ -453,6 +454,184 @@ Each is a separate initAppSession cycle. Store URLs separately:
   context.xappSessionUrl      // first moment
   context.xappDocUploadUrl    // second moment
 This pattern is NOT in the Cognigy documentation — it is discovered during build.
+""",
+
+    "xapp-event-handling": """
+## xapp-event-handling — Non-Blocking xApp with Async Event Loop
+
+### What this pattern solves
+
+An agent cannot pause mid-turn waiting for a user to act on a secondary screen — the session would time out. This pattern splits the interaction across two turns:
+
+- **Turn N (delivery turn):** the tool branch pushes the xApp, calls aiAgentToolAnswer immediately, and returns control to the agent. The agent confirms and holds the conversation open naturally.
+- **Turn N+M (event turn):** when the user submits the xApp (or an external system injects a result), a discriminating field arrives in input.data. An IF node at the very top of the flow intercepts it before the AI Agent Job runs. The flow handles the result and ends the turn without treating it as a user utterance.
+
+**Channels:** Works on voice and digital. On voice, the xApp URL is typically delivered via SMS before aiAgentToolAnswer. On digital/chat, the xApp may be delivered inline — no SMS step required.
+
+---
+
+### Two variants — choose by what triggers the result
+
+**Variant A — SDK.submit() (no external system)**
+Use when the user's action IS the result: selection, option pick, address confirmation, simple form.
+The xApp calls sdk.submit(data) on user action. Cognigy receives it as the next turn. input.data contains the submitted payload.
+No session identity required in the xApp HTML.
+
+**Variant B — Webhook inject (external system processes the action)**
+Use when a 3rd party must process the action before the result is known: payment processors, document signing, external approvals.
+The xApp POSTs to an external API. That API calls the Cognigy Sessions endpoint to inject the outcome. input.data contains the injected payload.
+The xApp HTML must embed {{ci.URLToken}}, {{ci.userId}}, {{ci.sessionId}} at render time.
+
+Why not SDK.submit() for Variant B: the user tapping "pay" is not payment succeeding. The payment processor's callback is the authoritative event.
+
+---
+
+### Flow structure (both variants)
+
+```
+Start
+└── ifThenElse  ← checks EVERY turn for xApp submit / webhook inject
+    ├── Then → [extract + normalise code node] → Say (optional ack) → Once → End
+    └── Else → Once
+                ├── OnFirstTime → [init nodes] → AI Agent Job
+                └── Afterwards  → AI Agent Job
+                                    └── [tool branch: xApp delivery chain]
+```
+
+The IF node sits between Start and Once. It runs on every turn. The AI Agent Job only runs from Afterwards — it never sees the submit/inject turn directly.
+
+---
+
+### Tool branch delivery sequence
+
+#### 1. Say node (voice only — skip for digital)
+Immediate audio feedback before the xApp fires.
+  "One moment — I'll send that to your phone."
+
+#### 2. initAppSession
+Generates input.apps.url (EPHEMERAL — only available this turn).
+Configure: backgroundColor, logoUrl, pageTitle, appLoadingText.
+
+#### 3. setHTMLAppState
+Push HTML to the xApp session. waitForInput: false is mandatory — this is what makes the pattern non-blocking.
+  config: { mode: "full", waitForInput: false, closeOnSubmit: true, autoOpen: false }
+
+#### 4. Code node — capture ephemeral data + set toolResponse
+CRITICAL: input.apps.url and input.aiAgent.toolArgs.* both expire at end of this turn.
+This node must run immediately after setHTMLAppState.
+
+  // Persist xApp URL
+  context.shortTermMemory.xappUrl = input.apps.url;
+
+  // Persist whatever tool args the LLM collected
+  context.shortTermMemory.pendingField = input.aiAgent.toolArgs.your_field;
+
+  // Set spoken response for agent
+  context.toolResponse = {
+    success: true,
+    summary: "I've sent that to your screen — complete it when you're ready.",
+    data: { xappSent: true }
+  };
+  api.resolve();
+
+#### 5. SMS delivery (voice only)
+Send context.shortTermMemory.xappUrl to the caller via SMS. Skip entirely for digital channels.
+
+#### 6. aiAgentToolAnswer
+  { "answer": "{{JSON.stringify(context.toolResponse)}}", "maxLoops": 4 }
+
+Returns control to the agent with the tool result. Nothing is waiting for the xApp.
+The agent speaks the summary and holds a normal conversation.
+
+---
+
+### xApp HTML — Variant A (SDK.submit)
+
+  <script src="https://xapp.cognigy.ai/sdk/cognigy-xapp-sdk.js"></script>
+  <script>
+    const sdk = new CognigyXAppSDK();
+    function submitChoice(value) {
+      sdk.submit({ selectedOption: value });
+    }
+  </script>
+  <!-- Render options from injected context data -->
+  <script>
+    const OPTIONS = {{JSON.stringify(context.shortTermMemory.options)}};
+    // render buttons calling submitChoice(...)
+  </script>
+
+Submitted payload arrives as input.data:
+  { "selectedOption": "choice-value" }
+
+---
+
+### xApp HTML — Variant B (Webhook inject)
+
+  <script>
+    const SESSION = {
+      urlToken:  '{{ci.URLToken}}',
+      userId:    '{{ci.userId}}',
+      sessionId: '{{ci.sessionId}}'
+    };
+    async function submitAction(outcome) {
+      await fetch('https://your-api.example.com/webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outcome, ...SESSION })
+      });
+    }
+  </script>
+
+External API then injects into Cognigy:
+  POST /v2.0/projects/{projectId}/sessions/{sessionId}
+  { "data": { "paymentResult": { "success": "true", "reference": "PAY-123" } } }
+
+Injected payload arrives as input.data.paymentResult (or whatever field you choose).
+
+---
+
+### IF node conditions
+
+Choose a discriminating field that ONLY appears in submit/inject payloads, never in a regular turn.
+
+Variant A: input.data.selectedOption exists
+Variant B: input.data.paymentResult exists  (or your chosen field)
+
+### Then branch — extract and store for next turn
+
+Variant A:
+  context.shortTermMemory.selectedOption = input.data.selectedOption;
+
+Variant B (watch for string booleans — external APIs often return "true"/"false" not true/false):
+  var result = input.data.paymentResult;
+  context.shortTermMemory.paymentSuccess = result.success === 'true';
+
+Write results to context.shortTermMemory (LLM-visible). The agent picks them up naturally on the next user utterance.
+
+For immediate spoken acknowledgement, add a Say node in the Then branch before the flow ends.
+
+### Else branch
+Empty. Falls through to Once for normal turns. Do not add nodes here.
+
+---
+
+### Gotchas
+
+**input.apps.url is one-turn only.** Miss it and the URL is gone — no recovery without re-running initAppSession (different URL).
+
+**input.aiAgent.toolArgs.* is one-turn only.** The LLM's collected parameters only exist on the tool execution turn. Persist to context in the code node immediately after setHTMLAppState.
+
+**waitForInput: false must be set on setHTMLAppState.** If omitted or true, the flow blocks.
+
+**The IF node's next pointer matters.** Both branches fall through to next. Ensure next points to Once, not null.
+
+**Else branch is empty by design.** Normal turns are handled by Once → Afterwards. Do not add nodes to Else.
+
+**Submit/inject turns must not reach the AI Agent Job.** The Then branch flows to Once → End. If a submit payload leaks into Afterwards, the agent interprets it as a user utterance.
+
+**Variant B: string booleans.** External APIs commonly send "true"/"false" strings. Normalise explicitly: result.success === 'true', not result.success === true.
+
+**Variant B: do not use SDK.submit() when a 3rd party processes the action.** User tap ≠ successful processing. Use webhook inject so the external system's outcome — not the user's gesture — is the authoritative event.
 """,
 
     "cognigyScript": """
