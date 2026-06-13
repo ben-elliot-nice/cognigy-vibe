@@ -11,16 +11,22 @@ TOOLS: list[Tool] = [
     Tool(
         name="push_code_node",
         description="Read a local .js/.ts file and push its content to a Cognigy Code node. "
-                    "Performs conflict detection: if the remote node was edited in the Cognigy UI "
-                    "since the last push, the operation is blocked and a diff is returned.",
+                    "Two modes: "
+                    "(1) UPDATE — provide node_id to push to an existing code node with conflict detection. "
+                    "(2) CREATE — omit node_id and provide mode + target to create a new code node and push in one step. "
+                    "Conflict detection: if the remote node was edited in the Cognigy UI since the last push, "
+                    "the operation is blocked and a diff is returned.",
         inputSchema={
             "type": "object",
             "properties": {
                 "script_file": {"type": "string", "description": "Absolute path to .js or .ts file"},
-                "node_id": {"type": "string"},
                 "flow_id": {"type": "string"},
+                "node_id": {"type": "string", "description": "ID of an existing code node to update. Omit to create a new node."},
+                "mode": {"type": "string", "description": "Required when creating: appendChild or append (see node-positioning)"},
+                "target": {"type": "string", "description": "Required when creating: ID of the reference node for positioning"},
+                "label": {"type": "string", "description": "Node label when creating (default: 'Code')"},
             },
-            "required": ["script_file", "node_id", "flow_id"],
+            "required": ["script_file", "flow_id"],
         },
     ),
     Tool(
@@ -63,7 +69,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
     def _push_code_node(args: dict) -> list[TextContent]:
         path = Path(args["script_file"])
-        node_id = args["node_id"]
+        node_id = args.get("node_id")
         flow_id = args["flow_id"]
 
         if not path.exists():
@@ -71,6 +77,30 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         local_content = path.read_text()
 
+        # Creation path: no node_id provided — create then push
+        if not node_id:
+            mode = args.get("mode")
+            target = args.get("target")
+            if not mode or not target:
+                return _ok({"error": "Provide node_id to update an existing code node, or mode + target to create a new one"})
+            body = {
+                "type": "code",
+                "label": args.get("label", "Code"),
+                "mode": mode,
+                "target": target,
+                "extension": "@cognigy/basic-nodes",
+                "config": {"code": local_content},
+            }
+            try:
+                result = client.post(f"/v2.0/flows/{flow_id}/chart/nodes", body)
+            except Exception as e:
+                return _ok({"error": f"Failed to create code node: {e}"})
+            node_id = result["_id"]
+            cache.set("nodes", node_id, result)
+            cache.set_node_snapshot(node_id, local_content)
+            return _ok({"success": True, "node_id": node_id, "created": True, "bytes": len(local_content)})
+
+        # Update path: push to existing node with conflict detection
         try:
             remote = client.get(f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}")
         except Exception as e:
@@ -79,7 +109,6 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         remote_code = remote.get("config", {}).get("code", "")
         snapshot = cache.get_node_snapshot(node_id)
 
-        # Conflict: remote has been edited in UI since last push
         if snapshot is not None and remote_code != snapshot:
             return _ok({
                 "conflict": True,
