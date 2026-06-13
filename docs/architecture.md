@@ -17,12 +17,13 @@ Cognigy REST API
 ## Layer 1: cognigy-vibe MCP Server
 
 **Location:** `cognigy-mcp/`  
+**Package:** `cognigy-vibe-mcp` (PyPI)  
 **Install:** `uvx cognigy-vibe-mcp`  
 **Server name (Claude sees):** `cognigy-vibe`
 
 The MCP server is the only thing that talks to the Cognigy API. It handles authentication, per-project state management, filesystem cache, and conflict detection. Skills call MCP tools — they never make HTTP requests directly.
 
-### Tools (15 total)
+### Tools (14 total)
 
 | Group | Tools |
 |---|---|
@@ -34,20 +35,75 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 
 ### Key behaviours
 
-- **Extension auto-injection:** `cognigy_create` injects the correct `extension` field for all known node types (e.g. `@cognigy/voicegateway2` for `setSessionConfig`, `cognigy-ai-agent` for `aiAgentJob`)
+- **Extension auto-injection:** `cognigy_create` injects the correct `extension` field for all known node types (e.g. `@cognigy/voicegateway2` for `setSessionConfig`, `@cognigy/basic-nodes` for `aiAgentJob`)
 - **Say node normalisation:** `config.text: "Hello"` is automatically lifted into the full `config.say.text` envelope
 - **Plural/singular normalisation:** `resource_type: "flow"` or `"flows"` both work
-- **Cache-first reads:** `cognigy_get` serves from a 5-min TTL filesystem cache; writes are always fresh
+- **Cache-first reads:** `cognigy_get` serves from a configurable TTL filesystem cache (default 5 min); writes are always fresh
 - **Conflict detection:** `push_code_node` compares the remote node against a local snapshot and blocks if the Cognigy UI has been edited since the last push
-- **Auto-resync:** If a session has been idle > 4 hours, the server silently re-syncs state before the next tool call
+- **Auto-resync:** If a session has been idle > threshold (default 4 hours), the server silently re-syncs state before the next tool call
+- **Code node protection:** `cognigy_create` and `cognigy_update` block code node operations and redirect to `push_code_node` (which provides file-backed conflict detection)
+- **Mode validation:** `cognigy_create` validates the `mode` field and returns a clear error for invalid values; `insertAfter` / `insertBefore` are marked BROKEN on AU1
+- **Token-efficient defaults:** `cognigy_list` returns simplified `{id, name}` pairs by default (~95% savings); `cognigy_create`/`cognigy_update` return minimal objects by default (~90% savings); both support optional `fields` filtering
+
+### `cognigy_invoke` operations
+
+| Operation | Path |
+|---|---|
+| `node/move` | `POST /v2.0/flows/{flowId}/chart/nodes/{id}/move` |
+| `flow/clone` | `POST /v2.0/flows/{id}/clone` |
+| `aiagent/train` | `POST /v2.0/aiagents/{id}/train` |
+| `sessions/inject-context` | `POST /v2.0/sessions/{id}/context/inject` |
+| `sessions/inject-state` | `POST /v2.0/sessions/{id}/state/inject` |
+| `sessions/reset-context` | `POST /v2.0/sessions/{id}/context/reset` |
+| `sessions/reset-state` | `POST /v2.0/sessions/{id}/state/reset` |
+| `knowledgestore/run` | `POST /v2.0/knowledgestores/{id}/connectors/{connectorId}/run` |
+
+### Internal modules
+
+| Module | Responsibility |
+|---|---|
+| `server.py` | MCP server wiring, auto-resync middleware, tool dispatch |
+| `api.py` | `CognigyClient` — thin httpx wrapper; derives endpoint URL from base URL |
+| `state.py` | `ProjectState` — name→ID mappings, seed/runtime merge, interaction timestamp |
+| `cache.py` | `Cache` — filesystem TTL cache for resource JSON + code node snapshots |
+| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource` |
+| `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer |
+| `tools/file_push.py` | `push_code_node` (conflict detection), `push_html_node` |
+| `tools/testing.py` | `talk_to_agent` — REST endpoint test harness |
+| `tools/explain.py` | `explain` — 21-topic in-server reference library |
 
 ### State storage
 
-Per-project state lives in `~/.config/cognigy-mcp/<project-id>/` — outside the demo repo. The `cognigy:init-mcp` skill creates this directory, a `.cognigy-mcp` symlink in the project root, and the `.claude/mcp.json` entry.
+Per-project state lives in `~/.config/cognigy-mcp/<project-id>/`:
 
-### Reference docs
+```
+~/.config/cognigy-mcp/<project-id>/
+├── .state.json          # runtime name→ID mappings (written by sync_remote_state)
+├── .state-seed.json     # optional seed defaults (merged under runtime state)
+├── last-interaction     # epoch timestamp — drives auto-resync threshold
+└── cache/               # filesystem TTL cache
+    ├── flows/           # resource JSON by ID
+    ├── nodes/           # resource JSON + code snapshots (code.js per node)
+    └── ...
+```
 
-The `explain` tool carries a 20-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
+State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls.
+
+The `cognigy:init-mcp` skill creates this directory, a `.cognigy-mcp` symlink in the project root, and the `.claude/mcp.json` entry.
+
+### Reference docs (runtime guidance)
+
+**Location:** `runtime-reference/`
+
+These files contain domain knowledge read by skills before generating code or content. Skills read them via the `Base directory for this skill:` path injected at skill load time.
+
+| File | Purpose |
+|---|---|
+| `runtime-reference/cognigy-api-reference.md` | Runtime objects (`input`, `context`, `profile`), all `api.*` functions, available libraries |
+| `runtime-reference/cognigy-output-formats.md` | Channel output structures and code examples |
+| `runtime-reference/cognigy-code-conventions.md` | Code node structural conventions |
+
+The `explain` tool carries a 21-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
 
 ---
 
@@ -68,6 +124,8 @@ Skills orchestrate MCP tool calls and user interaction to accomplish higher-leve
 | `cognigy:design-agent-interfaces` | xApp scenes, webchat patterns, handover context |
 | `cognigy:design-agent-contracts` | Guard sub-flows, obligation state, structured refusals |
 
+`cognigy:scope-demo` has a `references/` subdirectory (`skills/scope-demo/references/`) containing `cognigy-capabilities.md`, `scope-demo-discovery-questions.md`, and `scope-demo-output-template.md` — referenced at runtime by the skill.
+
 ### The key rule: skills call MCP tools, not the API
 
 **Wrong:**
@@ -82,25 +140,38 @@ Call the cognigy-vibe MCP tool cognigy_create with resource_type="node" and body
 
 ---
 
-## Reference Docs
+## Hooks
 
-**Location:** `docs/`
-
-Reference docs contain domain knowledge used by skills and the MCP server's `explain` tool:
+**Location:** `hooks/`
 
 | File | Purpose |
 |---|---|
-| `docs/cognigy-api-reference.md` | Runtime objects (`input`, `context`, `profile`), all `api.*` functions, available libraries |
-| `docs/cognigy-output-formats.md` | Channel output structures and code examples |
-| `docs/cognigy-code-conventions.md` | Code node structural conventions |
+| `hooks/hooks.json` | Hook registration — `PreToolUse` on `mcp__cognigy-vibe__.*` |
+| `hooks/onboarding-gate.sh` | Injects architectural primer on the first Cognigy MCP call per session |
+
+The onboarding gate fires before any `cognigy-vibe` tool call. On the first call in a session it denies the tool call and injects a primer (project/flow/node/agent hierarchy, key tool guidance) as `additionalContext`. On all subsequent calls it exits immediately. `explain` calls bypass the gate unconditionally.
+
+---
+
+## Design docs and specs
+
+**Location:** `docs/`
+
+| File | Purpose |
+|---|---|
 | `docs/cognigy-agent-patterns.md` | Tool design patterns, two-pass confirmation, context schema |
-| `docs/cognigy-capabilities.md` | Platform reference for demo scoping |
 | `docs/agent-prompting-guide.md` | Persona field purposes, outcome-based framing, tool descriptions as contracts |
+| `docs/superpowers/specs/` | Brainstorming design specs |
+| `docs/superpowers/plans/` | Implementation plans |
+| `docs/test-reports/` | Exploratory testing reports |
 
-Skills read these files before generating content:
-> "Before writing any code, read `<plugin-root>/docs/cognigy-api-reference.md` ..."
+---
 
-The plugin root is derived from the `Base directory for this skill:` path injected at skill load time — two directories up from the skill file.
+## Plugin registration
+
+**Location:** `.claude-plugin/plugin.json`
+
+Declares the plugin name, description, version, and author. Version must be bumped (patch) on every change to `cli/` or `skills/`.
 
 ---
 
