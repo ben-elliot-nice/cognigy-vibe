@@ -186,8 +186,8 @@ def make_handlers(
             for ep in eps_resp.get("items", []):
                 state.set("endpoints", ep["name"], value={
                     "id": ep["_id"],
-                    "urlToken": ep.get("urlToken", ""),
-                    "flowReferenceId": ep.get("flowReferenceId", ""),
+                    "urlToken": ep.get("URLToken") or ep.get("urlToken", ""),
+                    "flowReferenceId": ep.get("flowId") or ep.get("flowReferenceId", ""),
                 })
                 cache.set("endpoints", ep["_id"], ep)
         except Exception as exc:

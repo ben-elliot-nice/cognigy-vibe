@@ -365,10 +365,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             data = client.get(f"/v2.0/{rtype}", projectId=project_id, limit=limit)
         else:
             data = client.get(f"/v2.0/{rtype}", limit=limit)
+        raw_items = data if isinstance(data, list) else data.get("items", [])
         if not full_objects:
-            items = data.get("items", [])
             simplified = []
-            for item in items:
+            for item in raw_items:
                 entry = {"id": item.get("_id"), "name": item.get("name")}
                 if "description" in item:
                     entry["description"] = item["description"]
@@ -377,7 +377,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 simplified.append(entry)
             result_data = {"items": simplified, "count": len(simplified)}
         else:
-            result_data = data
+            result_data = data if not isinstance(data, list) else {"items": data, "count": len(data)}
         fields = args.get("fields")
         if fields:
             items = result_data.get("items", [])
@@ -421,7 +421,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         resource_id = result.get("_id") or result.get("id")
         name = result.get("name") or result.get("label")
         if name and resource_id:
-            state.set(rtype, name, value={"id": resource_id})
+            if rtype == "node":
+                state.set("nodes", name, value={"id": resource_id, "flowId": flow_id})
+            else:
+                state.set(rtype, name, value={"id": resource_id})
         if resource_id:
             cache.set(rtype, resource_id, result)
         if args.get("return_full_object"):

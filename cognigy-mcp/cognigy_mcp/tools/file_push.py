@@ -96,8 +96,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             except Exception as e:
                 return _ok({"error": f"Failed to create code node: {e}"})
             node_id = result["_id"]
+            label = args.get("label", "Code")
             cache.set("nodes", node_id, result)
             cache.set_node_snapshot(node_id, local_content)
+            state.set("nodes", label, value={"id": node_id, "flowId": flow_id})
             return _ok({"success": True, "node_id": node_id, "created": True, "bytes": len(local_content)})
 
         # Update path: push to existing node with conflict detection
