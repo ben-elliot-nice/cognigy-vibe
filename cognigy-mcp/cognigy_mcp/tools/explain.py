@@ -937,7 +937,14 @@ New userId → fresh session. Same userId → continue existing session.
 ## extension-map — Node Type → Extension Reference
 
 Every Cognigy node type belongs to an extension package. cognigy_create auto-injects
-the extension field, but this table is useful for reference and debugging.
+the extension field using two sources in priority order:
+
+1. Static map (built-in types, always available)
+2. Dynamic index built by sync_remote_state from installed project extensions
+
+For custom extensions: run sync_remote_state once after installing or updating an
+extension in the Cognigy UI. cognigy_create will then auto-inject the correct
+extension for any node type that extension defines — no manual lookup needed.
 
 ### Voice Gateway nodes (extension: "@cognigy/voicegateway2")
   setSessionConfig    Voice Gateway session config (TTS, STT, barge-in, timeouts)
@@ -965,10 +972,12 @@ the extension field, but this table is useful for reference and debugging.
   ifThenElse          Conditional branch (create in UI, not via API)
   lookup              Pattern-match branch
 
-### Rule
-cognigy_create auto-injects extension for all types in this table.
-If you pass extension explicitly, your value takes precedence.
-404 "resource not found" at a valid chart/nodes URL usually means a missing or wrong extension.
+### Custom extension nodes
+Not listed here — discovered automatically at sync_remote_state time.
+Use get_build_state(resource_type="extension_map") to inspect the live index.
+If you pass extension explicitly, your value takes precedence over both maps.
+404 "resource not found" at a valid chart/nodes URL usually means a missing or
+wrong extension — run sync_remote_state then retry.
 """,
 
     "node-types": """
