@@ -460,7 +460,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _ok({
                     "error": (
                         f'Invalid value for field "mode": "{body["mode"]}". '
-                        f'Valid values: appendChild, append, insertAfter, insertBefore.'
+                        f'Valid values: appendChild (child of container, aiAgentJobTool only), '
+                        f'append (sibling after target — also correct for Once/IF branches: target the branch marker _id), '
+                        f'insertAfter (may return 500 on AU1 — prefer append), '
+                        f'insertBefore (may return 500 on AU1 — prefer append).'
                     )
                 })
         current = client.get(path)
