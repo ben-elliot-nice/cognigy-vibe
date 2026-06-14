@@ -32,6 +32,31 @@ def test_cognigy_get_cache_miss_calls_api(mock_client, state, cache):
     mock_client.get.assert_called_once()
 
 
+def test_cognigy_get_aiagents_calls_canonical_endpoint(mock_client, state, cache):
+    """cognigy_get for aiagents must call /v2.0/aiagents/{id}, not a chart/node endpoint.
+
+    Regression guard for issue #22: cache pollution caused cognigy_get to return
+    chart-node data. On cache miss the live call must go to the canonical path.
+    """
+    canonical_resource = {
+        "_id": "agent-1",
+        "name": "My Agent",
+        "speakingStyle": "formal",
+        "knowledgeReferenceId": "ks-xyz",
+    }
+    mock_client.get.return_value = canonical_resource
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "aiagents", "resource_id": "agent-1"})
+    data = json.loads(result[0].text)
+
+    called_path = mock_client.get.call_args[0][0]
+    assert called_path == "/v2.0/aiagents/agent-1", (
+        f"Expected /v2.0/aiagents/agent-1, got {called_path}"
+    )
+    assert data.get("speakingStyle") == "formal"
+    assert "_source" in data
+
+
 def test_cognigy_list_returns_items(mock_client, state, cache):
     mock_client.get.return_value = {"items": [{"_id": "f1", "name": "Flow 1"}]}
     handlers = make_handlers(mock_client, state, cache)

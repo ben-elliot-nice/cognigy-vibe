@@ -175,8 +175,12 @@ def make_handlers(
                 for agent in agents_resp.get("items", []):
                     if agent["_id"] not in seen_agents:
                         seen_agents.add(agent["_id"])
-                        state.set("agents", agent["name"], value={"id": agent["_id"]})
-                        cache.set("aiagents", agent["_id"], agent)
+                        try:
+                            agent_resource = client.get(f"/v2.0/aiagents/{agent['_id']}")
+                            cache.set("aiagents", agent["_id"], agent_resource)
+                            state.set("agents", agent_resource.get("name", agent.get("name", agent["_id"])), value={"id": agent["_id"]})
+                        except Exception:
+                            state.set("agents", agent.get("name", agent["_id"]), value={"id": agent["_id"]})
             except Exception:
                 pass
 
