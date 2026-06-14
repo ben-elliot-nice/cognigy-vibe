@@ -53,3 +53,137 @@ def test_explain_knowledge_store_has_correct_source_creation_fields(mock_client,
 
     # Must NOT document knowledgeStoreId as part of a valid body example
     assert 'body={"knowledgeStoreId"' not in text, "knowledgeStoreId must not be in body examples"
+
+
+# ── Issue #14: IF node type string and creation docs ────────────────────────
+
+def test_flow_chart_reading_if_node_type_is_if_not_ifthenelse(mock_client, state, cache):
+    """flow-chart-reading must document type string as 'if', not 'ifThenElse'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "flow-chart-reading"})
+    text = result[0].text
+    assert 'ifThenElse (note: NOT "if")' not in text, \
+        "Must not document inverted type string"
+    assert 'if (note: NOT "ifThenElse")' in text, \
+        "Must document correct type string: if (note: NOT \"ifThenElse\")"
+
+
+def test_flow_chart_reading_if_node_is_createable_via_api(mock_client, state, cache):
+    """flow-chart-reading must document that IF nodes CAN be created via cognigy_create."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "flow-chart-reading"})
+    text = result[0].text
+    assert "Cannot be created via cognigy_create" not in text, \
+        "Must not claim IF nodes are UI-only"
+    assert 'cognigy_create' in text and '"type": "if"' in text, \
+        "Must document cognigy_create with type 'if'"
+
+
+def test_flow_chart_reading_if_node_config_schema(mock_client, state, cache):
+    """flow-chart-reading must document the correct condition config schema."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "flow-chart-reading"})
+    text = result[0].text
+    assert '"condition"' in text, "Must document top-level 'condition' key"
+    assert "conditions[0]" not in text, "Must not document wrong schema 'conditions[0]'"
+
+
+def test_node_types_if_type_string(mock_client, state, cache):
+    """node-types must document type string 'if', not 'ifThenElse'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-types"})
+    text = result[0].text
+    assert "ifThenElse        Conditional (NOT" not in text, \
+        "node-types must not have inverted ifThenElse entry"
+    assert "if                Conditional (NOT" in text, \
+        "node-types must have correct 'if' entry"
+    assert "create in UI only" not in text, \
+        "node-types must not say 'create in UI only' for if nodes"
+
+
+def test_extension_map_if_type_string(mock_client, state, cache):
+    """extension-map must list 'if' not 'ifThenElse' for the conditional node type."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "extension-map"})
+    text = result[0].text
+    assert "ifThenElse          Conditional branch (create in UI" not in text, \
+        "extension-map must not have UI-only ifThenElse entry"
+    assert "if                  Conditional branch" in text, \
+        "extension-map must have 'if' conditional branch entry"
+
+
+# ── Issue #21: xApp extension strings ───────────────────────────────────────
+
+def test_extension_map_xapp_extension_is_basic_nodes(mock_client, state, cache):
+    """extension-map must document xApp nodes as @cognigy/basic-nodes, not cxone-utils."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "extension-map"})
+    text = result[0].text
+    assert '### xApp nodes (extension: "cxone-utils")' not in text, \
+        "extension-map must not document xApp extension as cxone-utils"
+    assert '### xApp nodes (extension: "@cognigy/basic-nodes")' in text, \
+        "extension-map must document xApp extension as @cognigy/basic-nodes"
+
+
+def test_node_wiring_xapp_extension_is_basic_nodes(mock_client, state, cache):
+    """node-wiring inline examples must use @cognigy/basic-nodes for xApp nodes."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-wiring"})
+    text = result[0].text
+    assert '"extension": "cxone-utils"' not in text, \
+        "node-wiring must not document cxone-utils extension"
+    assert '"initAppSession"' in text and '"@cognigy/basic-nodes"' in text, \
+        "node-wiring must document initAppSession with @cognigy/basic-nodes"
+
+
+def test_xapp_delivery_extension_is_basic_nodes(mock_client, state, cache):
+    """xapp-delivery must document setHTMLAppState with @cognigy/basic-nodes."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-delivery"})
+    text = result[0].text
+    assert 'extension: "cxone-utils"' not in text, \
+        "xapp-delivery must not reference cxone-utils extension"
+    assert 'extension: "@cognigy/basic-nodes"' in text, \
+        "xapp-delivery must document @cognigy/basic-nodes for setHTMLAppState"
+
+
+def test_node_types_xapp_extension_is_basic_nodes(mock_client, state, cache):
+    """node-types must document xApp nodes as @cognigy/basic-nodes."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-types"})
+    text = result[0].text
+    assert "cxone-utils" not in text, \
+        "node-types must not reference cxone-utils"
+    assert "initAppSession" in text and "@cognigy/basic-nodes" in text, \
+        "node-types must reference @cognigy/basic-nodes for xApp nodes"
+
+
+# ── Issue #15 (doc): xapp-event-handling Variant B inject path ──────────────
+
+def test_xapp_event_handling_variant_b_inject_path(mock_client, state, cache):
+    """xapp-event-handling must not document the non-existent management API inject path."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-event-handling"})
+    text = result[0].text
+    assert "POST /v2.0/projects/{projectId}/sessions/{sessionId}" not in text, \
+        "Must not document the non-existent management API path (returns 404 on AU1)"
+    assert "cognigy-endpoint-" in text or "urlToken" in text, \
+        "Must document the correct REST endpoint injection path"
+
+
+# ── Associated: node-wiring relation field names ─────────────────────────────
+
+def test_node_wiring_relation_field_names_are_correct(mock_client, state, cache):
+    """node-wiring must document actual API field names: 'node', 'next', 'children'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-wiring"})
+    text = result[0].text
+    assert '"nodeId"' not in text, \
+        "node-wiring must not document 'nodeId' — actual field is 'node'"
+    assert '"nextId"' not in text, \
+        "node-wiring must not document 'nextId' — actual field is 'next'"
+    assert '"childIds"' not in text, \
+        "node-wiring must not document 'childIds' — actual field is 'children'"
+    assert '"node"' in text, "node-wiring must document 'node' field"
+    assert '"next"' in text, "node-wiring must document 'next' field"
+    assert '"children"' in text, "node-wiring must document 'children' field"

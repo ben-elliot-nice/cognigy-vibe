@@ -98,16 +98,15 @@ GET /v2.0/flows/{flowId}/chart returns:
 
 ### Relations entry shape
   {
-    "nodeId": "abc",
-    "previousId": "xyz",   // node before in sequential chain (null for first)
-    "nextId": "def",       // node after in sequential chain (null for last)
-    "parentId": null,      // set if this is a child node (e.g. tool branch)
-    "childIds": ["..."]    // children hanging off this node (e.g. tool nodes)
+    "node": "abc",         // the node ID this relation describes
+    "_id": "rel-id",       // the relation's own MongoDB ID (different from node _id)
+    "next": "def",         // next node in sequential chain (null if last)
+    "children": ["..."]    // child node IDs (e.g. tool branches, if-node branches)
   }
 
 ### Sequential chain vs children
-- Sequential: follow nextId links from start node
-- Children: follow childIds from parent (aiAgentJob, ifThenElse branches)
+- Sequential: follow "next" links from start node
+- Children: follow "children" array from parent (aiAgentJob, if node branches)
 - Tool branches are children of aiAgentJob, NOT in sequential chain
 
 ### IMPORTANT: Chart endpoint returns metadata only
@@ -115,8 +114,8 @@ GET /v2.0/flows/{flowId}/chart does NOT include node config fields (code, condit
 To read a node's config: cognigy_get(resource_type="node", resource_id=nodeId, flow_id=flowId)
 
 ### Non-core node types require extension field
-  {"type": "initAppSession", "extension": "cxone-utils"}
-  {"type": "setHTMLAppState", "extension": "cxone-utils"}
+  {"type": "initAppSession", "extension": "@cognigy/basic-nodes"}
+  {"type": "setHTMLAppState", "extension": "@cognigy/basic-nodes"}
   {"type": "aiAgentJob", "extension": "@cognigy/basic-nodes"}
   {"type": "aiAgentJobTool", "extension": "@cognigy/basic-nodes"}
   {"type": "aiAgentToolAnswer", "extension": "@cognigy/basic-nodes"}
@@ -222,12 +221,12 @@ Node config fields are NOT included — use cognigy_get(resource_type="node", ..
 ### Verified node type strings (exact, case-sensitive)
 Core types (no extension needed):
   say, question, code, setContext, goTo, once, lookup, log, stopBot, httpRequest
-  ifThenElse (note: NOT "if")
+  if (note: NOT "ifThenElse")
 
 AI Agent types (extension: "@cognigy/basic-nodes"):
   aiAgentJob, aiAgentJobTool, aiAgentToolAnswer
 
-xApp/Voice types (extension: "cxone-utils"):
+xApp/Voice types (extension: "@cognigy/basic-nodes"):
   initAppSession  (NOT "xAppInitSession")
   setHTMLAppState (NOT "setHTMLxAppState")
 
@@ -240,15 +239,26 @@ xApp/Voice types (extension: "cxone-utils"):
     "position": {"x": 0, "y": 100}
   }
 
-### ifThenElse nodes
-Cannot be created via cognigy_create — only via Cognigy UI.
-Condition is in config.conditions[0].rule — it is an OBJECT, not a string:
-  config.conditions[0].rule = {
-    "left": "{{context.someVar}}",
-    "operand": "equals",   // equals, notEquals, contains, greaterThan, lessThan, etc.
-    "right": "expectedValue"
-  }
-Branches are in childIds[]: index 0 = true branch, index 1 = false/else branch.
+### if nodes (NOT "ifThenElse")
+Can be created via cognigy_create. Type string is "if".
+  cognigy_create(resource_type="node", flow_id=..., body={
+    "type": "if",
+    "mode": "append",
+    "target": "<previousNodeId>",
+    "config": {
+      "condition": {
+        "type": "rule",
+        "rule": {
+          "left": "context.someVar",
+          "operand": "neq",    // equals, notEquals (neq), contains, greaterThan, lessThan
+          "right": "someValue"
+        }
+      }
+    }
+  })
+Creating an if node auto-creates two branch container nodes: Then (childIds[0]) and Else (childIds[1]).
+To add nodes inside a branch: use mode="appendChild", target="<branch-container-_id>".
+Branches are in childIds[]: index 0 = Then (true), index 1 = Else (false).
 
 ### Reading the hierarchy string
 get_flow_chart returns "hierarchy": a tree string like:
@@ -441,7 +451,7 @@ xApp session URL must be persisted in context — input.apps.url is ephemeral.
 
 ### api.setAppState() limitation + conditional push pattern
 api.setAppState() in code nodes CANNOT push HTML content or external URLs.
-Use the setHTMLAppState node instead (type: "setHTMLAppState", extension: "cxone-utils").
+Use the setHTMLAppState node instead (type: "setHTMLAppState", extension: "@cognigy/basic-nodes").
 Pattern for conditional xApp push from code:
   1. Code node: context.xappTrigger = true;
   2. ifThenElse: condition = context.xappTrigger === true
@@ -582,9 +592,19 @@ Submitted payload arrives as input.data:
     }
   </script>
 
-External API then injects into Cognigy:
-  POST /v2.0/projects/{projectId}/sessions/{sessionId}
-  { "data": { "paymentResult": { "success": "true", "reference": "PAY-123" } } }
+External API then injects into Cognigy via the REST endpoint (same channel as talk_to_agent):
+  POST https://cognigy-endpoint-{env}.nicecxone.com/{urlToken}
+  {
+    "userId": "<userId from SESSION>",
+    "sessionId": "<sessionId from SESSION>",
+    "text": "",
+    "data": { "paymentResult": { "success": "true", "reference": "PAY-123" } }
+  }
+
+IMPORTANT: The management API (/v2.0/projects/…/sessions/…) does NOT support injection on
+AU1 — it returns 404. The correct injection path is the REST endpoint host shown above,
+not the management API. The xApp HTML's SESSION object already contains the urlToken,
+userId, and sessionId needed to construct this call.
 
 Injected payload arrives as input.data.paymentResult (or whatever field you choose).
 
@@ -956,7 +976,7 @@ extension for any node type that extension defines — no manual lookup needed.
   aiAgentJobTool      A tool branch under an aiAgentJob
   aiAgentToolAnswer   Surfaces tool result back to the LLM
 
-### xApp nodes (extension: "cxone-utils")
+### xApp nodes (extension: "@cognigy/basic-nodes")
   initAppSession      Generate xApp session URL (stored in input.apps.url)
   setHTMLAppState     Push HTML content to an active xApp session
 
@@ -969,7 +989,7 @@ extension for any node type that extension defines — no manual lookup needed.
   question            Ask a question and capture input
   httpRequest         Make an outbound HTTP call
   setContext          Set context variables
-  ifThenElse          Conditional branch (create in UI, not via API)
+  if                  Conditional branch (NOT "ifThenElse") — create via cognigy_create
   lookup              Pattern-match branch
 
 ### Custom extension nodes
@@ -994,12 +1014,12 @@ This is an alias for flow-chart-reading + extension-map combined.
   question          Question + input capture
   httpRequest       Outbound HTTP
   setContext        Set context variables
-  ifThenElse        Conditional (NOT "if") — create in UI only
+  if                Conditional (NOT "ifThenElse") — create via cognigy_create
   lookup            Pattern-match branch
   setSessionConfig  Voice Gateway config (extension: @cognigy/voicegateway2)
   hangup            End call (extension: @cognigy/voicegateway2)
-  initAppSession    xApp session init (extension: cxone-utils)
-  setHTMLAppState   xApp HTML push (extension: cxone-utils)
+  initAppSession    xApp session init (extension: @cognigy/basic-nodes)
+  setHTMLAppState   xApp HTML push (extension: @cognigy/basic-nodes)
   aiAgentJob        AI Agent job (extension: @cognigy/basic-nodes)
   aiAgentJobTool    AI Agent tool branch (extension: @cognigy/basic-nodes)
   aiAgentToolAnswer Tool result surface (extension: @cognigy/basic-nodes)
