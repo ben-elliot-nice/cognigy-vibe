@@ -88,40 +88,43 @@ Use cognigy_invoke with operation="move":
 - Child nodes (tool branches) only exist in childIds[], NOT in next chain — append returns 404 on them
 
 ### Child branch population (Once node example)
-Once nodes auto-create two child branch nodes: OnFirstTime and Afterwards.
-Each branch appears as a separate node in the chart with its own _id.
+Once nodes auto-create two branch marker nodes: OnFirstTime and Afterwards.
+Each marker appears as a child of the Once node with its own _id.
 
-To add a node into a branch:
-1. Find the branch node in the chart (e.g. OnFirstTime child of the Once node)
-2. Use mode: "appendChild" with target set to the BRANCH NODE's _id
+Content inside a branch must be a SIBLING of the marker (append after it), not a child of it:
+  CORRECT: mode: "append",      target: <branchMarkerId>   ← sibling-after-marker, renders inside branch
+  WRONG:   mode: "appendChild", target: <branchMarkerId>   ← child OF marker, breaks UI rendering
 
-Common pitfall: targeting the parent Once node's _id instead of the branch node.
-The branch node's _id is what you need — it's the container for child nodes.
+Example: Once node "a1b2" with childIds ["c3d4", "e5f6"]
+  - "c3d4" is the OnFirstTime branch marker
+  - "e5f6" is the Afterwards branch marker
+  - To add a Code node to OnFirstTime:
+    cognigy_create(body={"mode": "append", "target": "c3d4", "flowId": "..."})
+    → Code becomes sibling of c3d4 within Once's children = renders inside OnFirstTime section
 
-Example: chart shows Once node "a1b2" with childIds ["c3d4", "e5f6"]
-  - "c3d4" is the OnFirstTime branch node
-  - "e5f6" is the Afterwards branch node
-  - To add a Code node to OnFirstTime, target "c3d4", NOT "a1b2"
+Common pitfall: targeting the parent Once node's _id ("a1b2") instead of the branch marker ("c3d4").
 
 ### IF node branch population
-IF nodes (type: "if") auto-create two branch container nodes when created.
-Each branch container has its own _id and appears in the IF node's childIds[]:
-  - childIds[0] = Then branch container
-  - childIds[1] = Else branch container
+IF nodes (type: "if") auto-create two branch marker nodes when created.
+Each marker appears in the IF node's childIds[]:
+  - childIds[0] = Then branch marker
+  - childIds[1] = Else branch marker
 
-To add a node into an IF branch:
+Content inside a branch must be a SIBLING of the marker (same rule as Once above):
+  CORRECT: mode: "append",      target: <branchMarkerId>
+  WRONG:   mode: "appendChild", target: <branchMarkerId>
+
+Steps to populate an IF branch:
 1. Create the IF node via cognigy_create (see flow-chart-reading for correct config schema)
 2. GET the flow chart — find the IF node's childIds array
-3. childIds[0] is the Then container _id, childIds[1] is the Else container _id
-4. Create child nodes with mode: "appendChild", target: <branch-container-_id>
+3. childIds[0] is the Then marker _id, childIds[1] is the Else marker _id
+4. Create content nodes with mode: "append", target: <branch-marker-_id>
 
 Example: IF node "if-abc" with childIds ["then-xyz", "else-xyz"]
-  - To add a Say node to the Then branch: mode="appendChild", target="then-xyz"
-  - To add a Code node to the Else branch: mode="appendChild", target="else-xyz"
+  - To add a Say node to Then: mode="append", target="then-xyz"
+  - To add a Code node to Else: mode="append", target="else-xyz"
 
-Common pitfall: targeting the IF node's own _id ("if-abc") instead of the branch container.
-The IF node itself is NOT the container — use its childIds entries.
-This is the same pattern as Once → OnFirstTime/Afterwards branches (see above).
+Common pitfall: targeting the IF node's own _id ("if-abc") instead of the branch marker.
 """,
 
     "node-wiring": """

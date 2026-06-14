@@ -204,8 +204,16 @@ def test_node_positioning_documents_if_branch_population(mock_client, state, cac
     text = result[0].text
     assert "IF node" in text or "if node" in text.lower(), "Should document IF node branch pattern"
     assert "Then" in text and "Else" in text, "Should name both branch containers"
-    assert "childIds[0]" in text or "children[0]" in text, "Should document how to find branch container IDs"
-    assert "appendChild" in text, "Should document appendChild for branch population"
+    assert "childIds[0]" in text or "children[0]" in text, "Should document how to find branch marker IDs"
+    assert '"append"' in text, "Should document append (not appendChild) as the correct mode for branch content"
+
+
+def test_node_positioning_branch_content_uses_append_sibling(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-positioning"})
+    text = result[0].text
+    assert "sibling" in text.lower(), "Should explain append creates a sibling of the branch marker, not a child"
+    assert "WRONG" in text, "Should explicitly label appendChild as wrong for branch content insertion"
 
 
 def test_project_snapshots_topic_exists_and_documents_api(mock_client, state, cache):
