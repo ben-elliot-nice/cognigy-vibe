@@ -367,6 +367,25 @@ def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, ca
     assert data.get("referenceId") == "ks-source-ref-123"
 
 
+def test_get_flow_chart_shows_type_and_label_with_real_api_fields(mock_client, state, cache):
+    """Chart using real AU1 field names (node/next/children) must render [type] label — not [] id (id)."""
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "start-1", "type": "start", "label": "Start"},
+            {"_id": "say-1", "type": "say", "label": "Hello there"},
+        ],
+        "relations": [
+            {"node": "start-1", "next": "say-1", "children": [], "_id": "rel-a"},
+            {"node": "say-1", "next": None, "children": [], "_id": "rel-b"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert "[start] Start" in data["hierarchy"], f"Expected '[start] Start' in: {data['hierarchy']}"
+    assert "[say] Hello there" in data["hierarchy"], f"Expected '[say] Hello there' in: {data['hierarchy']}"
+
+
 def test_cognigy_list_handles_bare_list_response(mock_client, state, cache):
     """Endpoints that return a bare list (e.g. /v2.0/aiagents/{id}/jobs) must not crash."""
     mock_client.get.return_value = [
