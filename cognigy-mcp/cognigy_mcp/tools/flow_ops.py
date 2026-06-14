@@ -421,7 +421,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         resource_id = result.get("_id") or result.get("id")
         name = result.get("name") or result.get("label")
         if name and resource_id:
-            state.set(rtype, name, value={"id": resource_id})
+            if rtype == "node":
+                state.set("nodes", name, value={"id": resource_id, "flowId": flow_id})
+            else:
+                state.set(rtype, name, value={"id": resource_id})
         if resource_id:
             cache.set(rtype, resource_id, result)
         if args.get("return_full_object"):

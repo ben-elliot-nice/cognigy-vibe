@@ -367,6 +367,22 @@ def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, ca
     assert data.get("referenceId") == "ks-source-ref-123"
 
 
+def test_cognigy_create_node_saved_to_nodes_state_key(mock_client, state, cache):
+    """Created nodes must be stored under 'nodes' key so resolve_resource('nodes', ...) finds them."""
+    mock_client.post.return_value = {"_id": "node-xyz", "type": "say", "label": "Greeting"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "say", "mode": "append", "target": "start-id", "label": "Greeting",
+                 "config": {"say": {"type": "text", "text": ["Hello"]}}},
+    })
+    entry = state.get("nodes", "Greeting")
+    assert entry is not None, "Node not found in state under 'nodes' key"
+    assert entry["id"] == "node-xyz"
+    assert entry["flowId"] == "flow-1"
+
+
 def test_get_flow_chart_shows_type_and_label_with_real_api_fields(mock_client, state, cache):
     """Chart using real AU1 field names (node/next/children) must render [type] label — not [] id (id)."""
     mock_client.get.return_value = {
