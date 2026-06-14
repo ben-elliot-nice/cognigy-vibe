@@ -435,25 +435,30 @@ them manually (returns HTTP 400 "operation conflicts with constraints").
 
 To add a node to a child branch via the API:
 1. GET the flow chart to find the Once node and its childIds
-2. The childIds array contains the branch node _ids
-3. Create your node with mode="appendChild", target="<branch-node-id>"
+2. The childIds array contains the branch marker _ids (onFirstExecution and afterwards)
+3. Create your node with mode="append", target="<branch-marker-id>"
+
+The node inserts as a sibling after the branch marker — it renders inside that branch section.
+Do NOT use appendChild mode on a branch marker: that nests the node INSIDE the marker, breaking UI rendering.
 
 Full example — adding a Code node to OnFirstTime:
   // Step 1: get_flow_chart to find the Once node
   // Chart shows Once node "once-abc" with childIds ["onfirst-xyz", "after-xyz"]
+  //   "onfirst-xyz" = OnFirstTime branch marker (_id)
+  //   "after-xyz"   = Afterwards branch marker (_id)
 
-  // Step 2: create the Code node as child of OnFirstTime branch
+  // Step 2: create the Code node as sibling after OnFirstTime marker
   cognigy_create(resource_type="node", body={
     "flowId": "<flow-id>",
     "type": "code",
     "label": "Load Guest Profile",
-    "mode": "appendChild",
+    "mode": "append",
     "target": "onfirst-xyz",
     "config": {"code": "const profile = await api.httpRequest({...});"}
   })
 
-Unlike aiAgentJobTool branches (which use append after the tool node),
-Once branches use appendChild with the branch node as target.
+Same rule as IF node branches — mode="append" after the branch marker, not appendChild into it.
+See node-positioning for the appendChild vs append distinction.
 """,
 
     "xapp-delivery": """

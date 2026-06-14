@@ -293,3 +293,18 @@ def test_node_types_references_say_node_topic(mock_client, state, cache):
     text = result[0].text
     assert "say-node" in text, \
         'node-types must reference explain("say-node") for say node config schema'
+
+
+# ── Issue #37: turn-structure contradicts node-positioning on Once branch insertion ──
+
+def test_turn_structure_once_branch_uses_append_not_appendchild(mock_client, state, cache):
+    """turn-structure must document mode='append' for Once branch population, not mode='appendChild'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "turn-structure"})
+    text = result[0].text
+    assert 'mode="appendChild"' not in text, \
+        "turn-structure must not document appendChild for Once branches (contradicts node-positioning)"
+    assert 'mode="append"' in text, \
+        "turn-structure must document mode='append' for branch population"
+    assert "onfirst" in text.lower(), \
+        "turn-structure must show branch marker _id as the append target"
