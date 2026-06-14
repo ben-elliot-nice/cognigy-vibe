@@ -288,6 +288,26 @@ def test_aiagenttooltanswer_extension_is_basic_nodes(mock_client, state, cache):
     assert call_body["extension"] == "@cognigy/basic-nodes"
 
 
+def test_inject_extension_uses_dynamic_map_as_fallback(mock_client, state, cache):
+    """A node type unknown to the static map should get its extension from state['extension_map']."""
+    state.set("extension_map", value={"myCustomNode": "my-custom-ext"})
+    mock_client.post.return_value = {"_id": "node-1", "type": "myCustomNode", "label": "My Node"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {
+            "type": "myCustomNode",
+            "mode": "append",
+            "target": "start-id",
+            "label": "My Node",
+            "config": {},
+        },
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "my-custom-ext"
+
+
 # ---------------------------------------------------------------------------
 # P3 — Plural/singular resource_type normalisation
 # ---------------------------------------------------------------------------

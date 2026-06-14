@@ -217,11 +217,15 @@ _NODE_EXTENSION_MAP: dict[str, str] = {
 }
 
 
-def _inject_extension(body: dict) -> dict:
-    """Auto-inject extension for known node types if not already present."""
+def _inject_extension(body: dict, dynamic_map: dict | None = None) -> dict:
+    """Auto-inject extension for known node types if not already present.
+    Checks static map first, then falls back to project-specific dynamic_map."""
     if "extension" in body or "type" not in body:
         return body
-    ext = _NODE_EXTENSION_MAP.get(body["type"])
+    node_type = body["type"]
+    ext = _NODE_EXTENSION_MAP.get(node_type)
+    if ext is None and dynamic_map:
+        ext = dynamic_map.get(node_type)
     return {**body, "extension": ext} if ext else body
 
 
@@ -408,7 +412,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 })
             if body.get("type") == "say" and "config" in body:
                 body = {**body, "config": _normalise_say_config(body["config"])}
-            body = _inject_extension(body)
+            body = _inject_extension(body, state.get("extension_map") or {})
             path = f"/v2.0/flows/{flow_id}/chart/nodes"
         else:
             path = f"/v2.0/{rtype}"
