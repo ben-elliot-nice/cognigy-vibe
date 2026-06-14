@@ -138,6 +138,23 @@ def make_handlers(
             state.set("flows", flow["name"], value={"id": flow["_id"]})
             cache.set("flows", flow["_id"], flow)
 
+        # Extensions — build type → extension_name index for custom node auto-injection
+        ext_map: dict[str, str] = {}
+        try:
+            exts_resp = client.get("/v2.0/extensions", projectId=project_id, limit=100)
+            for ext_summary in exts_resp.get("_embedded", {}).get("extensions", []):
+                ext_id = ext_summary["_links"]["self"]["href"].split("/")[-1]
+                ext_name = ext_summary["name"]
+                try:
+                    ext_detail = client.get(f"/v2.0/extensions/{ext_id}")
+                    for node_def in ext_detail.get("nodes", []):
+                        ext_map[node_def["type"]] = ext_name
+                except Exception:
+                    pass
+        except Exception as exc:
+            errors.append(f"extensions: {exc}")
+        state.set("extension_map", value=ext_map)
+
         # Per-flow discovery: aiAgentJobTool nodes + AI Agent definitions
         seen_agents: set = set()
         for flow in flows:
