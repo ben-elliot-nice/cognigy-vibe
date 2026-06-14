@@ -405,10 +405,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             path = f"/v2.0/{rtype}"
         result = client.post(path, body)
         # Auto-save to state
+        resource_id = result.get("_id") or result.get("id")
         name = result.get("name") or result.get("label")
-        if name:
-            state.set(rtype, name, value={"id": result["_id"]})
-        cache.set(rtype, result["_id"], result)
+        if name and resource_id:
+            state.set(rtype, name, value={"id": resource_id})
+        if resource_id:
+            cache.set(rtype, resource_id, result)
         if args.get("return_full_object"):
             return _ok(result)
         minimal = {
