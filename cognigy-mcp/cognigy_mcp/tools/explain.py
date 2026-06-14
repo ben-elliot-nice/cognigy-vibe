@@ -12,12 +12,13 @@ TOPICS = [
     "xapp-delivery", "xapp-event-handling", "cognigyScript", "code-node-patterns", "voice-gateway",
     "outbound-trigger", "knowledge-store", "endpoint-config", "function-execution",
     "session-injection", "extension-map", "node-types", "mcp-comparison", "tool-selection",
+    "project-snapshots",
 ]
 
 _TOPIC_INDEX = """
 Topics and what they cover:
 
-  node-positioning     append vs appendChild modes, child branch population, insertAfter 500 bug on AU1
+  node-positioning     append vs appendChild modes, child branch population, insertAfter + insertBefore 500 bug on AU1, insert-before workaround
   node-wiring          chart structure, relations array, sequential vs child chains
   agent-tool-branch    aiAgentJobTool + code + toolAnswer assembly, tool args access
   node-config-update   full-replace semantics, merge_config pattern, silent field deletion
@@ -39,6 +40,7 @@ Topics and what they cover:
   node-types           quick reference for all node type strings
   mcp-comparison       when to use cognigy-vibe vs NiCE official MCP
   tool-selection       when to use push_code_node vs cognigy_create vs cognigy_update
+  project-snapshots    create project snapshots for versioning (flow-level versioning does not exist in the API)
 
 Call explain() for orientation and topic descriptions.
 Call explain("topic") for full reference on that topic.
@@ -59,6 +61,22 @@ Use when adding aiAgentJobTool as a child of an aiAgentJob node.
 ### BROKEN on AU1 (return 500 "Error while reading ChartData")
   - insertAfter
   - insertBefore
+
+### Workaround: inserting a node BEFORE an existing target
+There is no direct "insert before" mode. To place a new node before target node T:
+
+Option A — append after predecessor (preferred):
+  1. GET the flow chart
+  2. Find T's predecessor: the relation whose "next" == T._id
+  3. Create the new node with mode: "append", target: <predecessorNodeId>
+
+Option B — append anywhere, then move:
+  1. Create the new node with mode: "append" anywhere convenient
+  2. cognigy_invoke(resource_type="flows", resource_id=<flowId>,
+       operation="move", body={"nodeId": <newNodeId>, "mode": "append", "target": <predecessorNodeId>})
+
+Use Option A when you know the predecessor. Use Option B when the node already exists
+and needs repositioning.
 
 ### Move an existing node
 Use cognigy_invoke with operation="move":
@@ -84,6 +102,26 @@ Example: chart shows Once node "a1b2" with childIds ["c3d4", "e5f6"]
   - "c3d4" is the OnFirstTime branch node
   - "e5f6" is the Afterwards branch node
   - To add a Code node to OnFirstTime, target "c3d4", NOT "a1b2"
+
+### IF node branch population
+IF nodes (type: "if") auto-create two branch container nodes when created.
+Each branch container has its own _id and appears in the IF node's childIds[]:
+  - childIds[0] = Then branch container
+  - childIds[1] = Else branch container
+
+To add a node into an IF branch:
+1. Create the IF node via cognigy_create (see flow-chart-reading for correct config schema)
+2. GET the flow chart — find the IF node's childIds array
+3. childIds[0] is the Then container _id, childIds[1] is the Else container _id
+4. Create child nodes with mode: "appendChild", target: <branch-container-_id>
+
+Example: IF node "if-abc" with childIds ["then-xyz", "else-xyz"]
+  - To add a Say node to the Then branch: mode="appendChild", target="then-xyz"
+  - To add a Code node to the Else branch: mode="appendChild", target="else-xyz"
+
+Common pitfall: targeting the IF node's own _id ("if-abc") instead of the branch container.
+The IF node itself is NOT the container — use its childIds entries.
+This is the same pattern as Once → OnFirstTime/Afterwards branches (see above).
 """,
 
     "node-wiring": """
@@ -1092,6 +1130,48 @@ since your last push, the push is blocked with a diff. cognigy_create has no suc
 The now-removed push_tool_from_file was targeting a hallucinated API endpoint.
 AI Agent tool configuration is done through the aiAgentJobTool node config in a flow.
 See explain("agent-tool-branch") for the three-node pattern.
+""",
+
+    "project-snapshots": """
+## project-snapshots — Project Versioning via Snapshots
+
+### Flow-level versioning does not exist
+POST /v2.0/flows/{flowId}/versions returns 404. The "Save Version" button in the Cognigy UI
+creates a project-level snapshot, not a flow-scoped version. There is no API for flow-scoped versioning.
+
+### Create a project snapshot (captures entire project state)
+  cognigy_create(resource_type="snapshot", body={
+    "name": "Task 0 — Foundation",
+    "description": "Baseline before AI Agent job additions",
+    "projectId": "<projectId>"
+  })
+
+Required fields: name, description, projectId
+"description" is required — omitting it returns HTTP 400.
+
+### Response: async job (not the snapshot itself)
+Snapshot creation is asynchronous. The response is a queued job:
+  {
+    "_id": "<jobId>",
+    "status": "queued",
+    "type": "createSnapshot",
+    "progress": 0,
+    "parameters": {
+      "properties": {"name": "...", "description": "..."}
+    }
+  }
+The jobId is NOT the snapshotId. The snapshot appears in the Cognigy UI once the job completes
+(usually within a few seconds). There is no polling endpoint for job completion.
+
+### List existing snapshots
+  cognigy_list(resource_type="snapshots", project_id="<projectId>")
+Returns: {"items": [...], "count": N}
+
+### When to snapshot
+Use at task completion milestones during multi-agent builds:
+  - Before starting a major new component (safety checkpoint)
+  - After a working demo state is confirmed (named "DEMO READY")
+  - Before destructive operations (delete/replace flow nodes)
 """,
 }
 

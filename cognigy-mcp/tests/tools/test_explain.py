@@ -187,3 +187,33 @@ def test_node_wiring_relation_field_names_are_correct(mock_client, state, cache)
     assert '"node"' in text, "node-wiring must document 'node' field"
     assert '"next"' in text, "node-wiring must document 'next' field"
     assert '"children"' in text, "node-wiring must document 'children' field"
+
+
+def test_node_positioning_documents_insert_before_workaround(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-positioning"})
+    text = result[0].text
+    assert "insertBefore" in text, "Should mention insertBefore by name"
+    assert "predecessor" in text, "Should document the predecessor-node workaround"
+    assert "move" in text.lower(), "Should mention the move operation as alternative"
+
+
+def test_node_positioning_documents_if_branch_population(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-positioning"})
+    text = result[0].text
+    assert "IF node" in text or "if node" in text.lower(), "Should document IF node branch pattern"
+    assert "Then" in text and "Else" in text, "Should name both branch containers"
+    assert "childIds[0]" in text or "children[0]" in text, "Should document how to find branch container IDs"
+    assert "appendChild" in text, "Should document appendChild for branch population"
+
+
+def test_project_snapshots_topic_exists_and_documents_api(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "project-snapshots"})
+    text = result[0].text
+    assert len(text) > 100
+    assert "snapshot" in text.lower()
+    assert "description" in text, "Should document the required description field"
+    assert "queued" in text, "Should explain the async/queued response"
+    assert "cognigy_create" in text, "Should show how to create via MCP tool"
