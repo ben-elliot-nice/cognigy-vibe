@@ -57,9 +57,10 @@ TOOLS: list[Tool] = [
         description="POST to create a new Cognigy resource. Auto-saves name→ID to .state.json. "
                     "For nodes, body must include: "
                     "type (e.g. 'say', 'code', 'once', 'httpRequest', 'aiAgentJob'), "
-                    "mode — one of: 'appendChild' (add as child of target container), "
-                    "'append' (add as last sibling after target), "
-                    "'insertAfter' or 'insertBefore' (relative to sibling, BROKEN on AU1), "
+                    "mode — one of: 'appendChild' (add as child of container, used for aiAgentJobTool only), "
+                    "'append' (add as sibling after target — also the correct mode for Once/IF branch insertion: "
+                    "target the branch marker _id, not the parent Once/IF node), "
+                    "'insertAfter' or 'insertBefore' (may return 500 on AU1 — use append instead), "
                     "target (the _id of the reference node), "
                     "and flowId (the flow _id).",
         inputSchema={
@@ -411,10 +412,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _ok({
                     "error": (
                         f'Invalid value for field "mode": "{body["mode"]}". '
-                        f'Valid values: appendChild (add as child of container node), '
-                        f'append (add as last sibling), '
-                        f'insertAfter (insert after target sibling — BROKEN on AU1), '
-                        f'insertBefore (insert before target sibling — BROKEN on AU1).'
+                        f'Valid values: appendChild (child of container, aiAgentJobTool only), '
+                        f'append (sibling after target — also correct for Once/IF branches: target the branch marker _id), '
+                        f'insertAfter (may return 500 on AU1 — prefer append), '
+                        f'insertBefore (may return 500 on AU1 — prefer append).'
                     )
                 })
             if body.get("type") == "say" and "config" in body:
