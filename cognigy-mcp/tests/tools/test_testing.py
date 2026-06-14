@@ -155,3 +155,64 @@ def test_talk_to_agent_minimal_with_outputs_array(real_client, state, cache):
         })
     data = json.loads(result[0].text)
     assert data["outputText"] == "Array output text"
+
+
+def test_talk_to_agent_sends_data_param_in_payload(real_client, state, cache):
+    """data param must be forwarded in the REST POST body."""
+    handlers = make_handlers(real_client, state, cache)
+    captured = {}
+    with respx.mock:
+        def capture(request):
+            import json
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"text": "ok", "data": {}})
+        respx.post(f"{ENDPOINT_BASE}/tok123").mock(side_effect=capture)
+        handlers["talk_to_agent"]({
+            "message": "",
+            "endpoint_token": "tok123",
+            "session_id": "sess-data",
+            "user_id": "user-data",
+            "data": {"selectedStore": "Repco Cheltenham", "selectedQuantity": 2},
+        })
+    assert captured["body"]["data"] == {
+        "selectedStore": "Repco Cheltenham",
+        "selectedQuantity": 2,
+    }, "data param must be forwarded to POST body"
+    assert captured["body"]["text"] == "", "message defaults to empty string"
+
+
+def test_talk_to_agent_data_defaults_to_empty_dict_when_omitted(real_client, state, cache):
+    """When data is not provided, POST body must have data: {}."""
+    handlers = make_handlers(real_client, state, cache)
+    captured = {}
+    with respx.mock:
+        def capture(request):
+            import json
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"text": "Hi!", "data": {}})
+        respx.post(f"{ENDPOINT_BASE}/tok123").mock(side_effect=capture)
+        handlers["talk_to_agent"]({
+            "message": "Hello",
+            "endpoint_token": "tok123",
+            "session_id": "sess-1",
+            "user_id": "user-1",
+        })
+    assert captured["body"]["data"] == {}, "data must default to {}"
+
+
+def test_talk_to_agent_message_optional_when_data_provided(real_client, state, cache):
+    """talk_to_agent must not raise when message is absent and data is provided."""
+    handlers = make_handlers(real_client, state, cache)
+    with respx.mock:
+        respx.post(f"{ENDPOINT_BASE}/tok123").mock(
+            return_value=httpx.Response(200, json={"text": "Noted.", "data": {}})
+        )
+        # No "message" key at all — should not raise KeyError
+        result = handlers["talk_to_agent"]({
+            "endpoint_token": "tok123",
+            "session_id": "sess-xapp",
+            "user_id": "user-xapp",
+            "data": {"xappField": "value"},
+        })
+    data = json.loads(result[0].text)
+    assert "error" not in data, f"Should not error on missing message: {data}"
