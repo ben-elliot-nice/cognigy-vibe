@@ -37,10 +37,11 @@ def test_resolve_resource_not_found(mock_client, state, cache):
 def test_sync_remote_state_calls_api(mock_client, state, cache):
     project_id = state.project_id
     mock_client.get.side_effect = [
-        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                    # GET /v2.0/flows?projectId=...
-        {"_embedded": {"extensions": []}},                                                       # GET /v2.0/extensions?projectId=...
-        {"nodes": []},                                                                           # chart (tool discovery)
-        {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                    # chart/nodes/aiagents
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                     # GET /v2.0/flows?projectId=...
+        {"_embedded": {"extensions": []}},                                                        # GET /v2.0/extensions?projectId=...
+        {"nodes": []},                                                                            # chart (tool discovery)
+        {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                     # chart/nodes/aiagents
+        {"_id": "agent-1", "name": "My Agent", "speakingStyle": "formal"},                       # GET /v2.0/aiagents/agent-1
         {"items": [{"_id": "ep-1", "name": "REST", "URLToken": "tok123", "flowId": "flow-1"}]},  # GET /v2.0/endpoints?projectId=...
     ]
     handlers = make_handlers(mock_client, state, cache)
@@ -49,6 +50,50 @@ def test_sync_remote_state_calls_api(mock_client, state, cache):
     assert data.get("synced") is True
     assert state.get("flows", "Main Flow", "id") == "flow-1"
     assert state.get("agents", "My Agent", "id") == "agent-1"
+
+
+def test_sync_remote_state_caches_canonical_aiagent_resource(mock_client, state, cache):
+    """sync_remote_state must cache the canonical AI Agent resource, not chart-node data.
+
+    The chart/nodes/aiagents endpoint returns hybrid objects with chart-node fields
+    (nodeId, config.name, type: "aiAgentJob"). Caching these directly causes
+    cognigy_get to return node config instead of the agent resource (issue #22).
+    After the fix, sync must fetch /v2.0/aiagents/{id} and cache that instead.
+    """
+    project_id = state.project_id
+    chart_node_data = {
+        "_id": "agent-1",
+        "type": "aiAgentJob",
+        "nodeId": "node-abc",
+        "config": {"name": "My Agent", "instructions": "be helpful"},
+    }
+    canonical_resource = {
+        "_id": "agent-1",
+        "name": "My Agent",
+        "description": "A helpful agent",
+        "speakingStyle": "formal",
+        "knowledgeReferenceId": "ks-xyz",
+    }
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
+        {"_embedded": {"extensions": []}},                      # extensions
+        {"nodes": []},                                          # chart (tool discovery)
+        {"items": [chart_node_data]},                           # chart/nodes/aiagents
+        canonical_resource,                                     # /v2.0/aiagents/agent-1
+        {"items": []},                                          # endpoints
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["sync_remote_state"]({"project_id": project_id})
+
+    cached, fresh = cache.get("aiagents", "agent-1")
+    assert fresh, "Cache entry should be fresh after sync"
+    assert cached is not None, "Cache entry should exist for agent-1"
+    assert "speakingStyle" in cached, (
+        f"Cached data must be canonical AI Agent resource, not chart-node data. Got: {cached}"
+    )
+    assert "nodeId" not in cached, (
+        f"Cache must not contain chart-node fields (nodeId). Got: {cached}"
+    )
 
 
 def test_sync_handles_list_failure_gracefully(mock_client, state, cache):
