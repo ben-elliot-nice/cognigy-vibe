@@ -171,6 +171,47 @@ def test_xapp_event_handling_variant_b_inject_path(mock_client, state, cache):
         "Must document the correct REST endpoint injection path"
 
 
+# ── Issue #39 (doc): xapp-event-handling three gaps ─────────────────────────
+
+def test_xapp_event_handling_sdk_path_is_relative(mock_client, state, cache):
+    """xapp-event-handling Variant A SDK script must use /sdk/app-page-sdk.js, not the xapp.cognigy.ai URL."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-event-handling"})
+    text = result[0].text
+    assert "xapp.cognigy.ai/sdk/cognigy-xapp-sdk.js" not in text, \
+        "Must not document the old xapp.cognigy.ai SDK URL — correct path is /sdk/app-page-sdk.js"
+    assert "/sdk/app-page-sdk.js" in text, \
+        "Must document the correct SDK script path: /sdk/app-page-sdk.js"
+    assert "SDK is not required for Variant B" in text or \
+           "SDK not required for Variant B" in text or \
+           "not required" in text.lower() and "variant b" in text.lower(), \
+        "Must note that the SDK script is not required for Variant B (webhook inject pattern)"
+
+
+def test_xapp_event_handling_toolargs_valid_in_html(mock_client, state, cache):
+    """xapp-event-handling must document that toolArgs can be used directly in setHTMLAppState HTML."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-event-handling"})
+    text = result[0].text
+    # Must show toolArgs used directly in an HTML template (not just warn they expire)
+    assert "{{input.aiAgent.toolArgs." in text, \
+        "Must show {{input.aiAgent.toolArgs.field}} used directly in HTML — not just warn about expiry"
+    # Must explain WHY it's safe — setHTMLAppState runs on the same tool turn
+    assert "same" in text.lower() and "turn" in text.lower() and "html" in text.lower(), \
+        "Must explain that toolArgs are available in HTML because setHTMLAppState runs on the same tool turn"
+
+
+def test_xapp_event_handling_multistate_ui_documented(mock_client, state, cache):
+    """xapp-event-handling must document the multi-state async UI pattern for Variant B."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-event-handling"})
+    text = result[0].text
+    assert "showState" in text or "show-state" in text or "state-processing" in text, \
+        "Must document multi-state UI pattern (e.g. showState, state-processing)"
+    assert "processing" in text.lower(), \
+        "Must show a processing/spinner state for async Variant B flows"
+
+
 # ── Associated: node-wiring relation field names ─────────────────────────────
 
 def test_node_wiring_relation_field_names_are_correct(mock_client, state, cache):

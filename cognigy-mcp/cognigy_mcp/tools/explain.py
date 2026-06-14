@@ -604,7 +604,9 @@ The agent speaks the summary and holds a normal conversation.
 
 ### xApp HTML — Variant A (SDK.submit)
 
-  <script src="https://xapp.cognigy.ai/sdk/cognigy-xapp-sdk.js"></script>
+SDK script path: use the relative path served by the xApp environment.
+
+  <script src="/sdk/app-page-sdk.js"></script>
   <script>
     const sdk = new CognigyXAppSDK();
     function submitChoice(value) {
@@ -624,13 +626,23 @@ Submitted payload arrives as input.data:
 
 ### xApp HTML — Variant B (Webhook inject)
 
+SDK is not required for Variant B — the page never calls sdk.submit(), so omit the SDK script tag entirely.
+
+You may use {{input.aiAgent.toolArgs.field}} directly in the HTML template passed to setHTMLAppState.
+The node runs on the same tool execution turn, so toolArgs are still available when CognigyScript is
+evaluated server-side. Use context if you need the value after this turn.
+
+Example using toolArgs directly in HTML:
+  <span>{{input.aiAgent.toolArgs.guest_name}}</span>
+  <input value="{{input.aiAgent.toolArgs.room_type}}" />
+
   <script>
     const SESSION = {
       urlToken:  '{{ci.URLToken}}',
       userId:    '{{ci.userId}}',
       sessionId: '{{ci.sessionId}}'
     };
-    async function submitAction(outcome) {
+    async function fireWebhook(outcome) {
       await fetch('https://your-api.example.com/webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -638,6 +650,30 @@ Submitted payload arrives as input.data:
       });
     }
   </script>
+
+#### Multi-state async UI (recommended for Variant B)
+
+Without state transitions the page appears frozen while the webhook fires. Use JS-driven state
+visibility so the user sees a processing state before the outcome is known.
+
+  <script>
+    function showState(name) {
+      ['form', 'processing', 'success', 'declined'].forEach(s => {
+        document.getElementById('state-' + s).classList.toggle('hidden', s !== name);
+      });
+    }
+    async function handleSubmit() {
+      showState('processing');
+      await fireWebhook('success');
+      showState('success');
+    }
+  </script>
+  <div id="state-form"><!-- form fields --></div>
+  <div id="state-processing" class="hidden"><!-- spinner --></div>
+  <div id="state-success" class="hidden"><!-- confirmation --></div>
+  <div id="state-declined" class="hidden"><!-- retry prompt --></div>
+
+States: form → processing (on submit) → success or declined (on webhook result).
 
 External API then injects into Cognigy via the REST endpoint (same channel as talk_to_agent):
   POST https://cognigy-endpoint-{env}.nicecxone.com/{urlToken}
