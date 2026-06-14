@@ -150,3 +150,22 @@ def test_push_code_node_create_post_failure(mock_client, state, cache, tmp_path)
     assert "error" in data
 
 
+def test_push_code_node_create_saves_to_state(mock_client, state, cache, tmp_path):
+    """push_code_node creation path must add the new node to state so resolve_resource('nodes', ...) works."""
+    script = tmp_path / "init.js"
+    script.write_text("api.say('hello');")
+    mock_client.post.return_value = {"_id": "node-new", "type": "code", "label": "Init"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["push_code_node"]({
+        "script_file": str(script),
+        "flow_id": "flow-1",
+        "mode": "append",
+        "target": "node-start",
+        "label": "Init",
+    })
+    entry = state.get("nodes", "Init")
+    assert entry is not None, "Node not found in state after push_code_node creation"
+    assert entry["id"] == "node-new"
+    assert entry["flowId"] == "flow-1"
+
+
