@@ -225,3 +225,16 @@ def test_project_snapshots_topic_exists_and_documents_api(mock_client, state, ca
     assert "description" in text, "Should document the required description field"
     assert "queued" in text, "Should explain the async/queued response"
     assert "cognigy_create" in text, "Should show how to create via MCP tool"
+
+
+# ── Issue #31: flow-chart-reading IF branch population contradicts node-positioning ──
+
+def test_flow_chart_reading_if_branch_uses_append_not_appendchild(mock_client, state, cache):
+    """flow-chart-reading must document mode='append' for IF branches, not mode='appendChild'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "flow-chart-reading"})
+    text = result[0].text
+    assert 'mode="appendChild"' not in text, \
+        "flow-chart-reading must not document appendChild for IF branches (contradicts node-positioning)"
+    assert 'mode="append"' in text and 'branch-marker' in text, \
+        "flow-chart-reading must document mode='append' with branch-marker as target"
