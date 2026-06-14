@@ -485,3 +485,12 @@ def test_cognigy_create_snapshot_posts_to_correct_url(mock_client, state, cache)
     )
     data = json.loads(result[0].text)
     assert data.get("status") == "queued" or data.get("type") == "createSnapshot"
+
+
+# ── Issue #37: cognigy_create description misleads on branch insertion ──
+
+def test_cognigy_create_description_documents_branch_marker_pattern():
+    """cognigy_create description must tell users to append on branch marker for Once/IF branches."""
+    tool = next(t for t in TOOLS if t.name == "cognigy_create")
+    assert "branch marker" in tool.description, \
+        "cognigy_create description must mention 'branch marker' pattern for Once/IF branch insertion"
