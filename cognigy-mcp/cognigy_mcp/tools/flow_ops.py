@@ -355,6 +355,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
     def _cognigy_list(args: dict) -> list[TextContent]:
         rtype = _normalise_rtype(args["resource_type"])
+        if rtype in ("node", "nodes"):
+            return _ok({
+                "error": (
+                    "Nodes cannot be listed independently — they exist only within a flow chart. "
+                    "Use get_flow_chart(flow_id=<flowId>) to list all nodes in a flow."
+                )
+            })
         project_id = args.get("project_id")
         agent_id = args.get("agent_id")
         limit = args.get("limit", 100)

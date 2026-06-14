@@ -429,3 +429,34 @@ def test_get_flow_chart_format_both_includes_raw(mock_client, state, cache):
     assert "hierarchy" in data
     assert "nodes" in data
     assert "relations" in data
+
+
+def test_cognigy_list_node_returns_helpful_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    for rtype in ("node", "nodes"):
+        result = handlers["cognigy_list"]({"resource_type": rtype})
+        data = json.loads(result[0].text)
+        assert "error" in data
+        assert "get_flow_chart" in data["error"]
+        mock_client.get.assert_not_called()
+
+
+def test_cognigy_create_snapshot_posts_to_correct_url(mock_client, state, cache):
+    mock_client.post.return_value = {
+        "_id": "job-abc123",
+        "status": "queued",
+        "type": "createSnapshot",
+        "parameters": {"properties": {"name": "My Snapshot", "description": "test"}},
+        "progress": 0,
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({
+        "resource_type": "snapshot",
+        "body": {"name": "My Snapshot", "description": "test", "projectId": "proj-1"},
+    })
+    mock_client.post.assert_called_once_with(
+        "/v2.0/snapshots",
+        {"name": "My Snapshot", "description": "test", "projectId": "proj-1"},
+    )
+    data = json.loads(result[0].text)
+    assert data.get("status") == "queued" or data.get("type") == "createSnapshot"
