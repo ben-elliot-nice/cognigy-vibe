@@ -298,7 +298,7 @@ Can be created via cognigy_create. Type string is "if".
     }
   })
 Creating an if node auto-creates two branch container nodes: Then (childIds[0]) and Else (childIds[1]).
-To add nodes inside a branch: use mode="appendChild", target="<branch-container-_id>".
+To add nodes inside a branch: use mode="append", target="<branch-marker-_id>" (same rule as Once nodes — append after the marker, not as a child of it).
 Branches are in childIds[]: index 0 = Then (true), index 1 = Else (false).
 
 ### Reading the hierarchy string
