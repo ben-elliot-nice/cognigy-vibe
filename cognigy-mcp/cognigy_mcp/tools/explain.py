@@ -11,7 +11,7 @@ TOPICS = [
     "flow-chart-reading", "tool-conditions", "two-pass-confirm", "turn-structure",
     "xapp-delivery", "xapp-event-handling", "cognigyScript", "code-node-patterns", "voice-gateway",
     "outbound-trigger", "knowledge-store", "endpoint-config", "function-execution",
-    "session-injection", "extension-map", "node-types", "mcp-comparison", "tool-selection",
+    "session-injection", "extension-map", "node-types", "say-node", "mcp-comparison", "tool-selection",
     "project-snapshots",
 ]
 
@@ -38,6 +38,7 @@ Topics and what they cover:
   session-injection    context/state inject for in-session testing
   extension-map        complete type → extension lookup table
   node-types           quick reference for all node type strings
+  say-node             say node config schema: correct text field, required _cognigy/_data fields, generativeAI_customInputs
   mcp-comparison       when to use cognigy-vibe vs NiCE official MCP
   tool-selection       when to use push_code_node vs cognigy_create vs cognigy_update
   project-snapshots    create project snapshots for versioning (flow-level versioning does not exist in the API)
@@ -1047,7 +1048,7 @@ wrong extension — run sync_remote_state then retry.
 This is an alias for flow-chart-reading + extension-map combined.
 
 ### Verified type strings (exact, case-sensitive)
-  say               Speak text
+  say               Speak text (config schema: explain("say-node"))
   code              JavaScript execution
   wait              Await user input
   once              First-turn gate (auto-creates onFirstExecution + afterwards children)
@@ -1068,6 +1069,71 @@ This is an alias for flow-chart-reading + extension-map combined.
 For extension details: explain("extension-map")
 For chart reading and hierarchy: explain("flow-chart-reading")
 For building tool branches: explain("agent-tool-branch")
+""",
+
+    "say-node": """
+## say-node — Say Node Config Schema
+
+### CRITICAL: text must be a plain string array
+
+The say node's config.say.text field is a plain string array — NOT an array of objects.
+
+WRONG (causes [object Object] in output):
+  Passing objects instead of strings — e.g. text as an array of {type, content} objects.
+  This is a common mistake when following a rich-text schema pattern.
+  DO NOT use object elements in the text array.
+
+CORRECT:
+  "config": {
+    "say": {
+      "text": ["Hello, how can I help?"]
+    }
+  }
+
+### Full minimal config with all required fields
+
+  cognigy_create(resource_type="node", flow_id=..., body={
+    "type": "say",
+    "label": "Greeting",
+    "mode": "append",
+    "target": "<previousNodeId>",
+    "config": {
+      "say": {
+        "text": ["Hello, how can I help you today?"],
+        "type": "text",
+        "data": "",
+        "linear": false,
+        "loop": false,
+        "_cognigy": {},
+        "_data": {"_cognigy": {}}
+      },
+      "generativeAI_customInputs": []
+    }
+  })
+
+### Required fields
+- "text": ["..."]              — plain string array; one string per output variation
+- "type": "text"               — output type; always "text" for standard text output
+- "data": ""                   — data payload; empty string is valid
+- "linear": false              — whether to cycle through text variants linearly
+- "loop": false                — whether to loop back to first variant after last
+- "_cognigy": {}               — internal Cognigy metadata; must be present as empty object
+- "_data": {"_cognigy": {}}    — internal data wrapper; must be present with _cognigy key
+- "generativeAI_customInputs": []  — empty array (NOT empty string "")
+
+### Using CognigyScript in say text
+CognigyScript interpolation works in the say node text field:
+  "text": ["Hello {{context.shortTermMemory.customerName}}, how can I help?"]
+
+### Multiple output variations (random selection)
+  "text": ["Hello! How can I help?", "Hi there! What can I do for you?"]
+Cognigy picks one at random each time the node fires.
+With "linear": true — cycles through in order instead of random selection.
+
+### Common mistake
+Passing a string directly instead of an array:
+  WRONG: "text": "Hello"
+  CORRECT: "text": ["Hello"]
 """,
 
     "mcp-comparison": """
