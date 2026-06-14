@@ -76,11 +76,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             resp.raise_for_status()
             data = resp.json()
             if args.get("minimal"):
-                session_info = data.get("data", {})
-                return _ok({
-                    "outputText": session_info.get("output", data.get("output", data.get("text", ""))),
-                    "sessionId": session_id,
-                })
+                # Prefer top-level text; fall back to outputs[] for array-shaped responses.
+                # If text is "" (falsy), we treat it as absent and try outputs[] next.
+                text = (
+                    data.get("text")
+                    or next((o.get("text") for o in data.get("outputs", []) if o.get("text")), None)
+                    or ""
+                )
+                return _ok({"outputText": text, "sessionId": session_id})
             return _ok(data)
         except httpx.HTTPStatusError as e:
             return _ok({"error": f"HTTP {e.response.status_code}: {e.response.text}"})

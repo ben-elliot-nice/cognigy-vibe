@@ -326,6 +326,26 @@ def test_get_flow_chart_bare_nodes_no_nodeId(mock_client, state, cache):
     assert "error" not in data
 
 
+def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, cache):
+    """cognigy_create must not raise KeyError when API response lacks _id.
+    Repro: creating a knowledge source returns a response without _id.
+    """
+    mock_client.post.return_value = {
+        "name": "Battery Trade-In Policy",
+        "type": "manual",
+        "referenceId": "ks-source-ref-123",
+        # No "_id" key — this is what the knowledge source API returns
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({
+        "resource_type": "knowledgestores/ks123/sources",
+        "body": {"name": "Battery Trade-In Policy", "type": "manual"},
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data.get("referenceId") == "ks-source-ref-123"
+
+
 def test_get_flow_chart_mixed_nodeId_and_id(mock_client, state, cache):
     """Some relations have nodeId, others only _id — both must be indexed correctly."""
     mock_client.get.return_value = {

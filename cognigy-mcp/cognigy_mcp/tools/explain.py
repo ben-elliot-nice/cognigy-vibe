@@ -813,9 +813,19 @@ Project → KnowledgeStore → Sources → Chunks
   cognigy_list(resource_type="knowledgestores", project_id=...)
 
 ### Create a source
-  Path: POST /v2.0/knowledgestores/{ksId}/sources
-  Use cognigy_invoke or cognigy_create with custom path.
-  Body: {"knowledgeStoreId": "<ksId>", "name": "My Docs", "type": "text", "content": "..."}
+  cognigy_create(resource_type="knowledgestores/{ksId}/sources",
+    body={"name": "My Source", "type": "manual"})
+
+  INVALID fields (API returns 400):
+  - knowledgeStoreId → not needed (ksId is already in the resource_type path)
+  - content → not a create-time field; text is added as chunks after creation
+  - type: "text" → not a valid type; use "manual"
+
+### Add text chunks to a source
+  After creating the source, add its text content as chunks:
+  cognigy_create(resource_type="knowledgestores/{ksId}/sources/{sourceId}/chunks",
+    body={"text": "The battery trade-in policy allows..."})
+  Retrieve sourceId from the cognigy_create response (referenceId or follow with cognigy_list).
 
 ### Trigger ingestion via connector
   cognigy_invoke(resource_type="knowledgestore", resource_id=<ksId>,

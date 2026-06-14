@@ -37,3 +37,19 @@ def test_explain_unknown_topic_returns_topic_list(mock_client, state, cache):
     text = result[0].text
     assert "nonexistent-topic" in text
     assert "Topics" in text
+
+
+def test_explain_knowledge_store_has_correct_source_creation_fields(mock_client, state, cache):
+    """Regression: knowledge-store topic must not document invalid API fields in examples."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "knowledge-store"})
+    text = result[0].text
+
+    # Must document the correct type value in an example
+    assert '"manual"' in text, "Should document type: 'manual'"
+
+    # Must document chunks endpoint
+    assert "chunks" in text, "Should document adding content as chunks"
+
+    # Must NOT document knowledgeStoreId as part of a valid body example
+    assert 'body={"knowledgeStoreId"' not in text, "knowledgeStoreId must not be in body examples"
