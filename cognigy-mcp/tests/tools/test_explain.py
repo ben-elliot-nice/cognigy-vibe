@@ -238,3 +238,58 @@ def test_flow_chart_reading_if_branch_uses_append_not_appendchild(mock_client, s
         "flow-chart-reading must not document appendChild for IF branches (contradicts node-positioning)"
     assert 'mode="append"' in text and 'branch-marker' in text, \
         "flow-chart-reading must document mode='append' with branch-marker as target"
+
+
+# ── Issue #34: say node config schema ───────────────────────────────────────
+
+def test_say_node_topic_exists(mock_client, state, cache):
+    """say-node must be a recognised explain topic."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "say-node"})
+    text = result[0].text
+    assert "Unknown topic" not in text, "say-node must be a known topic"
+    assert len(text) > 100
+
+
+def test_say_node_text_is_string_array(mock_client, state, cache):
+    """say-node must document text as a plain string array, not array of objects."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "say-node"})
+    text = result[0].text
+    assert '"text": ["' in text, \
+        'say-node must show text as a plain string array, e.g. "text": ["Hello"]'
+    assert '"text": [{"type"' not in text, \
+        'say-node must not document text as array of objects'
+    assert '"text": [{"content"' not in text, \
+        'say-node must not document text as array of objects with content key'
+
+
+def test_say_node_required_fields_documented(mock_client, state, cache):
+    """say-node must document the required _cognigy and _data fields."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "say-node"})
+    text = result[0].text
+    assert '"_cognigy": {}' in text, "say-node must document _cognigy: {}"
+    assert '"_data"' in text, "say-node must document _data field"
+
+
+def test_say_node_generative_ai_custom_inputs_is_array(mock_client, state, cache):
+    """say-node must document generativeAI_customInputs as empty array, not empty string."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "say-node"})
+    text = result[0].text
+    assert 'generativeAI_customInputs' in text, \
+        "say-node must mention generativeAI_customInputs"
+    assert '"generativeAI_customInputs": []' in text, \
+        "say-node must document generativeAI_customInputs as empty array []"
+    assert '"generativeAI_customInputs": ""' not in text, \
+        "say-node must not document generativeAI_customInputs as empty string"
+
+
+def test_node_types_references_say_node_topic(mock_client, state, cache):
+    """node-types must cross-reference say-node topic for config schema."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-types"})
+    text = result[0].text
+    assert "say-node" in text, \
+        'node-types must reference explain("say-node") for say node config schema'
