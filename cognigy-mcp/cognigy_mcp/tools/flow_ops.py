@@ -276,11 +276,13 @@ def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dic
 
 def _build_hierarchy(chart: dict) -> str:
     nodes = {n["_id"]: n for n in chart.get("nodes", [])}
-    relations = {
-        (r.get("nodeId") or r.get("_id")): r
-        for r in chart.get("relations", [])
-        if r.get("nodeId") or r.get("_id")
-    }
+
+    # Real Cognigy API format: {"node": "<nodeId>", "next": "<nextId>", "children": [...], "_id": "<relId>"}
+    relations: dict[str, dict] = {}
+    for r in chart.get("relations", []):
+        node_id = r.get("node")
+        if node_id:
+            relations[node_id] = r
 
     def render(node_id: str, indent: int = 0, visited: frozenset = frozenset()) -> list[str]:
         if node_id in visited:
@@ -292,19 +294,26 @@ def _build_hierarchy(chart: dict) -> str:
         prefix = "  " * indent
         lines = [f"{prefix}[{ntype}] {label} ({node_id})"]
         rel = relations.get(node_id, {})
-        for child_id in rel.get("childIds", []):
+        for child_id in rel.get("children", []):
             lines += render(child_id, indent + 1, visited)
-        next_id = rel.get("nextId")
+        next_id = rel.get("next")
         if next_id:
             lines += render(next_id, indent, visited)
         return lines
 
-    # Find root: node with no parent and no previous
-    roots = [
-        nid for nid, rel in relations.items()
-        if not rel.get("parentId") and not rel.get("previousId")
-    ]
-    lines = []
+    # Root nodes: not referenced as next or child by any other relation
+    referenced: set[str] = set()
+    for rel in relations.values():
+        if rel.get("next"):
+            referenced.add(rel["next"])
+        for child_id in rel.get("children", []):
+            referenced.add(child_id)
+
+    roots = [node_id for node_id in relations if node_id not in referenced]
+    # Fallback: pure cycle with no external entry point — start from any node so CYCLE is detected
+    if not roots and relations:
+        roots = [next(iter(relations))]
+    lines: list[str] = []
     for root in roots:
         lines += render(root)
     return "\n".join(lines) if lines else "(empty chart)"
