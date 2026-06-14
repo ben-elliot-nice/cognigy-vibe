@@ -87,3 +87,71 @@ def test_talk_to_agent_flow_id_not_found_shows_known_endpoints(real_client, stat
     data = json.loads(result[0].text)
     assert "error" in data
     assert "Known Endpoint" in data["error"]
+
+
+def test_talk_to_agent_minimal_returns_text(real_client, state, cache):
+    """minimal=True should return the text field from the response."""
+    handlers = make_handlers(real_client, state, cache)
+    with respx.mock:
+        respx.post(f"{ENDPOINT_BASE}/tok123").mock(
+            return_value=httpx.Response(200, json={
+                "text": "How can I help with your parts enquiry?",
+                "data": {},
+                "sessionId": "sess-1",
+            })
+        )
+        result = handlers["talk_to_agent"]({
+            "message": "Hi",
+            "endpoint_token": "tok123",
+            "session_id": "sess-1",
+            "user_id": "user-1",
+            "minimal": True,
+        })
+    data = json.loads(result[0].text)
+    assert data["outputText"] == "How can I help with your parts enquiry?"
+    assert data["sessionId"] == "sess-1"
+
+
+def test_talk_to_agent_minimal_text_field_wins_over_outputs_array(real_client, state, cache):
+    """When text is present at top level, it takes priority over outputs[] array."""
+    handlers = make_handlers(real_client, state, cache)
+    with respx.mock:
+        respx.post(f"{ENDPOINT_BASE}/tok123").mock(
+            return_value=httpx.Response(200, json={
+                "text": "Hello there",
+                "outputs": [{"text": "This should not win", "type": "output"}],
+                "data": {},
+            })
+        )
+        result = handlers["talk_to_agent"]({
+            "message": "Hi",
+            "endpoint_token": "tok123",
+            "session_id": "sess-1",
+            "user_id": "user-1",
+            "minimal": True,
+        })
+    data = json.loads(result[0].text)
+    assert data["outputText"] == "Hello there"
+
+
+def test_talk_to_agent_minimal_with_outputs_array(real_client, state, cache):
+    """minimal=True should extract text from outputs[] array when top-level text absent."""
+    handlers = make_handlers(real_client, state, cache)
+    with respx.mock:
+        respx.post(f"{ENDPOINT_BASE}/tok123").mock(
+            return_value=httpx.Response(200, json={
+                "outputs": [
+                    {"text": "Array output text", "type": "output"},
+                ],
+                "sessionId": "sess-1",
+            })
+        )
+        result = handlers["talk_to_agent"]({
+            "message": "Hi",
+            "endpoint_token": "tok123",
+            "session_id": "sess-1",
+            "user_id": "user-1",
+            "minimal": True,
+        })
+    data = json.loads(result[0].text)
+    assert data["outputText"] == "Array output text"
