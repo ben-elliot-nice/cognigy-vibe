@@ -41,7 +41,7 @@ def test_sync_remote_state_calls_api(mock_client, state, cache):
         {"_embedded": {"extensions": []}},                                                       # GET /v2.0/extensions?projectId=...
         {"nodes": []},                                                                           # chart (tool discovery)
         {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                    # chart/nodes/aiagents
-        {"items": [{"_id": "ep-1", "name": "REST", "urlToken": "tok123", "flowReferenceId": "flow-1"}]},  # GET /v2.0/endpoints?projectId=...
+        {"items": [{"_id": "ep-1", "name": "REST", "URLToken": "tok123", "flowId": "flow-1"}]},  # GET /v2.0/endpoints?projectId=...
     ]
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["sync_remote_state"]({"project_id": project_id})
@@ -121,6 +121,23 @@ def test_sync_remote_state_binds_project_in_session(mock_client, cache, tmp_path
     assert data["synced"] is True
     assert unscoped.project_id == "proj-new"
     assert unscoped.get("flows", "Main Flow", "id") == "flow-1"
+
+
+def test_sync_stores_endpoint_token_from_URLToken_field(mock_client, state, cache):
+    """sync_remote_state must read URLToken (PascalCase) from the API response — the real AU1 field name."""
+    project_id = state.project_id
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},
+        {"_embedded": {"extensions": []}},
+        {"nodes": []},
+        {"items": []},
+        {"items": [{"_id": "ep-1", "name": "REST Endpoint", "URLToken": "real-token-abc", "flowId": "flow-ref-1"}]},
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["sync_remote_state"]({"project_id": project_id})
+    ep = state.get("endpoints", "REST Endpoint")
+    assert ep["urlToken"] == "real-token-abc", f"Expected 'real-token-abc', got '{ep.get('urlToken')}'"
+    assert ep["flowReferenceId"] == "flow-ref-1", f"Expected 'flow-ref-1', got '{ep.get('flowReferenceId')}'"
 
 
 def test_sync_remote_state_builds_extension_map(mock_client, state, cache, monkeypatch):
