@@ -16,22 +16,27 @@ TOOLS: list[Tool] = [
                     "session state by userId and reusing one will carry stale context silently. "
                     "IMPORTANT: This tool returns text output only. Tool calls made by the agent are "
                     "NOT visible in the response — only the agent's spoken text is returned. "
+                    "For xApp submit emulation: send message=\"\" and data={...submitted payload...}. "
                     "Pass data={verbose: true} in the request body to surface errors that are otherwise swallowed.",
         inputSchema={
             "type": "object",
             "properties": {
-                "message": {"type": "string"},
+                "message": {"type": "string", "description": "User text. Use empty string for data-only turns (xApp submit emulation)."},
                 "endpoint_token": {"type": "string", "description": "URL token from endpoint config"},
                 "flow_id": {"type": "string", "description": "Looks up token from state if endpoint_token not provided"},
                 "session_id": {"type": "string", "description": "Conversation session ID — reuse to continue, new to reset"},
                 "user_id": {"type": "string", "description": "User ID — new value starts fresh session"},
+                "data": {
+                    "type": "object",
+                    "description": "Optional data payload forwarded as input.data in the flow. Use for xApp submit emulation: pass the sdk.submit() payload here with message=\"\".",
+                },
                 "minimal": {
                     "type": "boolean",
                     "default": False,
                     "description": "When true, returns only {outputText, sessionId} (~90% token savings). Default false returns full response.",
                 },
             },
-            "required": ["message", "session_id", "user_id"],
+            "required": ["session_id", "user_id"],
         },
     ),
 ]
@@ -44,7 +49,7 @@ def _ok(data: dict) -> list[TextContent]:
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _talk_to_agent(args: dict) -> list[TextContent]:
-        message = args["message"]
+        message = args.get("message", "")
         session_id = args["session_id"]
         user_id = args["user_id"]
         token = args.get("endpoint_token")
@@ -68,7 +73,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             "userId": user_id,
             "sessionId": session_id,
             "text": message,
-            "data": {},
+            "data": args.get("data") or {},
         }
 
         try:
