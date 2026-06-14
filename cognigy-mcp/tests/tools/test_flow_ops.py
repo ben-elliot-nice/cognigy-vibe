@@ -367,6 +367,21 @@ def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, ca
     assert data.get("referenceId") == "ks-source-ref-123"
 
 
+def test_cognigy_list_handles_bare_list_response(mock_client, state, cache):
+    """Endpoints that return a bare list (e.g. /v2.0/aiagents/{id}/jobs) must not crash."""
+    mock_client.get.return_value = [
+        {"_id": "job-1", "type": "aiAgentJob", "name": "Job One"},
+        {"_id": "job-2", "type": "aiAgentJob", "name": "Job Two"},
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({"resource_type": "jobs", "agent_id": "agent-abc"})
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["count"] == 2
+    assert data["items"][0]["id"] == "job-1"
+    assert data["items"][1]["id"] == "job-2"
+
+
 def test_get_flow_chart_format_both_includes_raw(mock_client, state, cache):
     """format='both' must include hierarchy, nodes, and relations."""
     mock_client.get.return_value = {
