@@ -87,3 +87,14 @@ def test_voice_silence_timeout_topic_exists(mock_client, state, cache):
     assert "noUserInput" in text, "Must document noUserInput system intent"
     assert "userNoInputTimeout" in text, "Must document timeout field"
     assert "reprompt" in text.lower(), "Must document reprompt-then-escalate pattern"
+
+
+def test_code_node_patterns_no_addtoinput(mock_client, state, cache):
+    """issue #42: api.addToInput must not appear in code-node-patterns; setVar/mergeVar must."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain_dev"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    assert "api.addToInput" not in text, \
+        "api.addToInput must be removed — it is unreliable and causes transpile errors"
+    assert "setVar" in text, "setVar utility must be documented as the replacement"
+    assert "mergeVar" in text, "mergeVar utility must be documented as the replacement"

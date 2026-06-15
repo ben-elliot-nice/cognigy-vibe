@@ -1,5 +1,8 @@
 # Cognigy Code Node — Conventions
 
+> **Deprecated:** This file is superseded by `explain("code-node-patterns")` in cognigy-vibe-mcp.
+> Read this for legacy reference only. The MCP explain tool is the authoritative source.
+
 Structural conventions for writing maintainable Cognigy Code Nodes. Follow these patterns unless there is a specific reason not to.
 
 ## Structure

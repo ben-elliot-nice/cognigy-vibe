@@ -1,5 +1,8 @@
 # Cognigy Output Formats
 
+> **Deprecated:** This file is superseded by `explain("output-formats")` in cognigy-vibe-mcp.
+> Read this for legacy reference only. The MCP explain tool is the authoritative source.
+
 Channel output formats for use in Cognigy Code Nodes with `api.say(text, data)` or `api.output(text, data)`.
 
 All formats use the `_cognigy._default` structure which Cognigy automatically adapts for each channel.
