@@ -349,3 +349,37 @@ def test_turn_structure_once_branch_uses_append_not_appendchild(mock_client, sta
         "turn-structure must document mode='append' for branch population"
     assert "onfirst" in text.lower(), \
         "turn-structure must show branch marker _id as the append target"
+
+
+def test_all_migrated_topics_accessible_via_explain(mock_client, state, cache):
+    """After promotion, explain must serve all migrated topics from the generated module."""
+    handlers = make_handlers(mock_client, state, cache)
+    for topic in TOPICS:
+        result = handlers["explain"]({"topic": topic})
+        text = result[0].text
+        assert "Unknown topic" not in text, f"explain({topic!r}) returned Unknown topic"
+        assert len(text) > 50, f"explain({topic!r}) returned too-short content"
+
+
+def test_voice_silence_timeout_accessible_via_explain(mock_client, state, cache):
+    """voice-silence-timeout must be accessible via the promoted explain tool."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "voice-silence-timeout"})
+    text = result[0].text
+    assert "noUserInput" in text
+    assert "Unknown topic" not in text
+
+
+def test_xapp_event_handling_variant_a_payload_path_via_explain(mock_client, state, cache):
+    """issue #40 regression: explain must serve corrected xapp-event-handling."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-event-handling"})
+    text = result[0].text
+    assert "input.data._cognigy._app.payload" in text
+    assert "input.data.selectedOption" not in text
+
+
+def test_explain_dev_tool_removed(mock_client, state, cache):
+    """explain_dev was a migration scaffold — it must not exist in TOOLS after promotion."""
+    assert not any(t.name == "explain_dev" for t in TOOLS), \
+        "explain_dev must be removed from TOOLS after full migration"

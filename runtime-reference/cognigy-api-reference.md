@@ -1,5 +1,8 @@
 # Cognigy Code Node — API Reference
 
+> **Deprecated:** This file is superseded by `explain("code-node-patterns")` in cognigy-vibe-mcp.
+> Read this for legacy reference only. The MCP explain tool is the authoritative source.
+
 Reference for writing code in Cognigy Code Nodes. Read this before writing any code node code.
 
 ## Execution Model
@@ -140,9 +143,16 @@ api.getLLMTokenUsageForSession()
 ```
 
 ### Input Enrichment
+
+Do NOT use `api.addToInput()` — it is unreliable in code nodes and causes transpile errors.
+Write to `input` using the `setVar`/`mergeVar` utility functions instead:
+
 ```js
-api.addToInput('key', value)     // add data to input for downstream nodes
+await setVar('input.smsNumber', number)
+await mergeVar('input.requestPayload', { url, method, headers, body })
 ```
+
+`input` properties are turn-scoped: they reset on every new message, unlike `context`.
 
 ### Profile
 ```js
