@@ -5,6 +5,11 @@ from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+from cognigy_mcp.tools._explain_topics_generated import (
+    TOPICS as _DEV_TOPICS,
+    _TOPIC_INDEX as _DEV_TOPIC_INDEX,
+    _CONTENT as _DEV_CONTENT,
+)
 
 TOPICS = [
     "node-positioning", "node-wiring", "agent-tool-branch", "node-config-update",
@@ -1304,6 +1309,25 @@ TOOLS: list[Tool] = [
             },
         },
     ),
+    Tool(
+        name="explain_dev",
+        description=(
+            "Retrieve implementation guidance for migrated Cognigy topics.\n\n"
+            "Topics: " + " | ".join(_DEV_TOPICS) + "\n\n"
+            "Call explain_dev() for orientation.\n"
+            "Call explain_dev(\"topic\") for full reference on that topic.\n"
+            "For topics not listed here, use explain() instead."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "Topic name from the list above. Omit for orientation overview.",
+                },
+            },
+        },
+    ),
 ]
 
 
@@ -1325,4 +1349,16 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             f"Available Topics:\n{_TOPIC_INDEX}"
         )
 
-    return {"explain": _explain}
+    def _explain_dev(args: dict) -> list[TextContent]:
+        topic = args.get("topic", "").strip()
+        if not topic:
+            return _ok("# cognigy-vibe-mcp Dev Reference Library\n\n" + _DEV_TOPIC_INDEX)
+        content = _DEV_CONTENT.get(topic)
+        if content:
+            return _ok(content.strip())
+        return _ok(
+            f"Unknown topic: '{topic}'\n\n"
+            f"Available Topics:\n{_DEV_TOPIC_INDEX}"
+        )
+
+    return {"explain": _explain, "explain_dev": _explain_dev}
