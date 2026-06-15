@@ -76,3 +76,14 @@ def test_xapp_event_handling_variant_a_correct_payload_path(mock_client, state, 
         "Must show the full input.data structure with _cognigy nesting"
     assert "input.data.selectedOption" not in text, \
         "Old flat path input.data.selectedOption must be gone"
+
+
+def test_voice_silence_timeout_topic_exists(mock_client, state, cache):
+    """issue #41: voice-silence-timeout topic must be accessible via explain_dev."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain_dev"]({"topic": "voice-silence-timeout"})
+    text = result[0].text
+    assert "Unknown topic" not in text
+    assert "noUserInput" in text, "Must document noUserInput system intent"
+    assert "userNoInputTimeout" in text, "Must document timeout field"
+    assert "reprompt" in text.lower(), "Must document reprompt-then-escalate pattern"

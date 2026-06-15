@@ -46,6 +46,7 @@ platform:
 
 voice:
   voice-gateway              VG endpoint routing, Set Session Config, SIP headers, DTMF
+  voice-silence-timeout      Voice Gateway silence detection — three modes, noUserInput intent wiring, reprompt-then-escalate counter
 
 xapp:
   xapp                       xApp architecture overview, variant selection, and channel differences
