@@ -41,20 +41,19 @@ def test_explain_dev_xapp_primer_mentions_variants(mock_client, state, cache):
 
 def test_explain_dev_unknown_topic_returns_error_with_available_topics(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
-    result = handlers["explain_dev"]({"topic": "node-positioning"})
+    result = handlers["explain_dev"]({"topic": "definitely-not-a-real-topic"})
     text = result[0].text
-    assert "node-positioning" in text          # echoes the bad topic name
-    assert "code-node-patterns" in text        # lists what IS available
+    assert "definitely-not-a-real-topic" in text   # echoes the bad topic name
+    assert "code-node-patterns" in text             # lists what IS available
 
 
-def test_explain_dev_does_not_serve_legacy_content(mock_client, state, cache):
-    """explain_dev must return an error for topics that only exist in the legacy explain tool."""
+def test_explain_dev_unknown_topic_returns_error(mock_client, state, cache):
+    """explain_dev must return an error for topics that don't exist at all."""
     handlers = make_handlers(mock_client, state, cache)
-    result = handlers["explain_dev"]({"topic": "node-positioning"})
+    result = handlers["explain_dev"]({"topic": "definitely-not-a-real-topic"})
     text = result[0].text
     assert "Unknown topic" in text
-    # Legacy content for node-positioning starts with this heading
-    assert "Inserting and Moving Nodes" not in text
+    assert "definitely-not-a-real-topic" in text
 
 
 def test_existing_explain_tool_unchanged(mock_client, state, cache):

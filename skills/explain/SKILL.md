@@ -15,6 +15,37 @@ Topics and what they cover:
 
   code-node-patterns         api.* functions, as const bug, httpRequest .result, no fetch/import
 
+aiagent:
+  agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
+  tool-conditions            CognigyScript condition field, hiding tools from LLM
+  tool-selection             when to use push_code_node vs cognigy_create vs cognigy_update
+  turn-structure             Once/OnFirstTime/Afterwards, input.execution, context reset prevention, child branch API patterns
+  two-pass-confirm           inter-turn flag management, STOP gate wording
+
+code:
+  cognigyScript              interpolation contexts, what works where
+  function-execution         async pattern, inject-back via sessions API
+  session-injection          context/state inject for in-session testing
+
+nodes:
+  flow-chart-reading         reading chart output, node type strings, extension field
+  node-config-update         full-replace semantics, merge_config pattern, silent field deletion
+  node-positioning           append vs appendChild modes, child branch population, insertAfter + insertBefore 500 bug on AU1, insert-before workaround
+  node-types                 quick reference for all node type strings
+  node-wiring                chart structure, relations array, sequential vs child chains
+
+platform:
+  endpoint-config            referenceId vs _id gotcha, urlToken caching
+  extension-map              complete type → extension lookup table
+  knowledge-store            chunking, connector run, source management
+  mcp-comparison             when to use cognigy-vibe vs NiCE official MCP
+  outbound-trigger           6-step CXone trigger, Accept-Encoding: identity requirement
+  project-snapshots          create project snapshots for versioning (flow-level versioning does not exist in the API)
+  say-node                   say node config schema: correct text field, required _cognigy/_data fields, generativeAI_customInputs
+
+voice:
+  voice-gateway              VG endpoint routing, Set Session Config, SIP headers, DTMF
+
 xapp:
   xapp                       xApp architecture overview, variant selection, and channel differences
   xapp-delivery              session init, postMessage bridge, SDK.submit, dual xApp moments
