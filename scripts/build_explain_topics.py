@@ -63,6 +63,13 @@ def scan_resources(resources_dir: Path) -> list[TopicEntry]:
             print(f"ERROR: Missing 'description' in frontmatter: {md_file}", file=sys.stderr)
             sys.exit(1)
         entries.append(TopicEntry(topic=topic, description=description, group=group, body=body.strip()))
+    # Check for duplicate topic names
+    seen: set[str] = set()
+    for entry in entries:
+        if entry.topic in seen:
+            print(f"ERROR: Duplicate topic '{entry.topic}' declared in multiple files", file=sys.stderr)
+            sys.exit(1)
+        seen.add(entry.topic)
     # Sort: flat topics (no group) first, then grouped by group name then topic
     entries.sort(key=lambda e: (e.group is not None, e.group or "", e.topic))
     return entries

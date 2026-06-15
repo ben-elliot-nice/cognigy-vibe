@@ -17,9 +17,9 @@ def test_explain_dev_no_args_returns_orientation(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["explain_dev"]({})
     text = result[0].text
-    assert "code-node-patterns" in text
-    assert "xapp" in text
     assert "Topics" in text
+    for topic in DEV_TOPICS:
+        assert topic in text, f"Topic '{topic}' missing from orientation index"
 
 
 def test_explain_dev_known_topic_returns_content(mock_client, state, cache):
