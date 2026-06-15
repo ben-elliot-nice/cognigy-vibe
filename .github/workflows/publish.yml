@@ -43,10 +43,6 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Generate explain topics
-        if: steps.check.outputs.skip == 'false'
-        run: uv run scripts/build_explain_topics.py
-
       - name: Build package
         if: steps.check.outputs.skip == 'false'
         run: |
