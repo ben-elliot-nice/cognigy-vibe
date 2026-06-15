@@ -70,7 +70,10 @@ If `which gh` succeeded, run:
 gh issue create \
   --repo ben-elliot-nice/cognigy-claude-plugin \
   --title "<title>" \
-  --body "<body>"
+  --body "$(cat <<'EOF'
+<body>
+EOF
+)"
 ```
 
 Report the created issue URL to the user.
@@ -79,16 +82,17 @@ Report the created issue URL to the user.
 
 If `which gh` failed, tell the user:
 
-> `gh` CLI is not installed. To file this issue manually:
->
-> 1. Open: https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/new
-> 2. Copy and paste this title:
+`gh` CLI is not installed. To file this issue manually:
+
+1. Open: https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/new
+
+2. Copy and paste this title:
 
 ```
 <title>
 ```
 
-> 3. Copy and paste this body:
+3. Copy and paste this body:
 
 ```markdown
 <body>
