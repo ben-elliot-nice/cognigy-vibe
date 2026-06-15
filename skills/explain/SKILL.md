@@ -25,6 +25,7 @@ aiagent:
 code:
   cognigyScript              interpolation contexts, what works where
   function-execution         async pattern, inject-back via sessions API
+  output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
   session-injection          context/state inject for in-session testing
 
 nodes:
