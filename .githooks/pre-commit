@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Check if any explain resource files are staged
+if git diff --cached --name-only | grep -q '^skills/explain/resources/'; then
+  echo "[pre-commit] explain resources changed — regenerating..."
+  uv run scripts/build_explain_topics.py
+  git add \
+    skills/explain/SKILL.md \
+    cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py
+  echo "[pre-commit] generated files staged."
+fi
