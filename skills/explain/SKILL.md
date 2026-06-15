@@ -13,7 +13,7 @@ Call `explain_dev` before brute-forcing or web-searching for Cognigy implementat
 
 Topics and what they cover:
 
-  code-node-patterns         api.* functions, as const bug, httpRequest .result, no fetch/import
+  code-node-patterns         api.* functions, execution model, utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
 
 aiagent:
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
