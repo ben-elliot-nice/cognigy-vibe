@@ -178,13 +178,32 @@ This exercises both flat and nested organisation in a single POC.
 
 ## Build / Publish Workflow
 
-Before cutting a PyPI release:
+### Local (before committing topic changes)
 
 ```bash
 uv run scripts/build_explain_topics.py
 git add skills/explain/SKILL.md cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py
 git commit -m "chore: regenerate explain topics"
-uv build
 ```
 
-This is documented in the repo but not yet enforced by CI (deferred to migration issue).
+The generated files are committed to the repo so diffs are reviewable in PRs.
+
+### GitHub Actions
+
+The build script runs automatically in the existing `publish.yml` workflow, before the `uv build` step. This ensures the published wheel always contains up-to-date generated content regardless of whether local generation was run before commit.
+
+**Change to `.github/workflows/publish.yml`** — add a step between the `setup-uv` action and `Build package`:
+
+```yaml
+- name: Generate explain topics
+  if: steps.check.outputs.skip == 'false'
+  run: uv run scripts/build_explain_topics.py
+```
+
+The script runs from the repo root (where `skills/` and `cognigy-mcp/` both live). The existing `cd cognigy-mcp` in the `Build package` step is unaffected — the generated Python file is already in place at `cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py` when `uv build` runs.
+
+`uv` is already available at this point via the `setup-uv` step. No additional setup required.
+
+### Staleness check (deferred)
+
+CI does not currently validate that committed generated files match what the script would produce. Adding a `git diff --exit-code` check after the script is a follow-on for the migration issue — it would fail the build if someone edits a `.md` file without regenerating.
