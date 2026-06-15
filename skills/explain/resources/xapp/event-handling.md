@@ -109,8 +109,16 @@ SDK script path: use the relative path served by the xApp environment.
     // render buttons calling submitChoice(...)
   </script>
 
-Submitted payload arrives as input.data:
-  { "selectedOption": "choice-value" }
+When sdk.submit({selectedOption: "choice-value"}) fires, the full input.data structure is:
+  {
+    "_cognigy": {
+      "_app": {
+        "payload": { "selectedOption": "choice-value" },
+        "type": "submit"
+      }
+    }
+  }
+Access the submitted values via: input.data._cognigy._app.payload.<field>
 
 ---
 
@@ -187,13 +195,17 @@ Injected payload arrives as input.data.paymentResult (or whatever field you choo
 
 Choose a discriminating field that ONLY appears in submit/inject payloads, never in a regular turn.
 
-Variant A: input.data.selectedOption exists
-Variant B: input.data.paymentResult exists  (or your chosen field)
+Variant A (SDK.submit): input.data._cognigy._app.payload.<field> neq ""
+
+  Example: input.data._cognigy._app.payload.selectedOption neq ""
+
+Variant B (webhook inject): input.data.paymentResult exists  (or your chosen field)
 
 ### Then branch — extract and store for next turn
 
 Variant A:
-  context.shortTermMemory.selectedOption = input.data.selectedOption;
+  var payload = input.data._cognigy._app.payload;
+  context.shortTermMemory.selectedOption = payload.selectedOption;
 
 Variant B (watch for string booleans — external APIs often return "true"/"false" not true/false):
   var result = input.data.paymentResult;

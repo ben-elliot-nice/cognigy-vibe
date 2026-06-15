@@ -63,3 +63,16 @@ def test_existing_explain_tool_unchanged(mock_client, state, cache):
     text = result[0].text
     assert "append" in text
     assert "Unknown topic" not in text
+
+
+def test_xapp_event_handling_variant_a_correct_payload_path(mock_client, state, cache):
+    """issue #40: Variant A payload is at input.data._cognigy._app.payload, not input.data directly."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain_dev"]({"topic": "xapp-event-handling"})
+    text = result[0].text
+    assert "input.data._cognigy._app.payload" in text, \
+        "Variant A IF condition must use _cognigy._app.payload path"
+    assert '"_cognigy"' in text, \
+        "Must show the full input.data structure with _cognigy nesting"
+    assert "input.data.selectedOption" not in text, \
+        "Old flat path input.data.selectedOption must be gone"
