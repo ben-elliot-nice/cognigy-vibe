@@ -60,7 +60,7 @@ jobs:
       - name: Notify marketplace to update submodule
         if: steps.check.outputs.skip == 'false'
         run: |
-          curl -s -X POST \
+          curl -sf -X POST \
             -H "Authorization: Bearer ${{ secrets.MARKETPLACE_PAT }}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/ben-elliot-nice/nice-claude-marketplace/dispatches \

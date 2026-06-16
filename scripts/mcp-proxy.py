@@ -82,11 +82,14 @@ class HotReloadProxy:
         print("[mcp-proxy] reloading inner server...", file=sys.stderr)
         if self._child:
             self._child.kill()
-        child = self._spawn()
-        self._handshake(child)
-        self._child = child
-        self._start_reader(child)
-        print("[mcp-proxy] reload complete.", file=sys.stderr)
+        try:
+            child = self._spawn()
+            self._handshake(child)
+            self._child = child
+            self._start_reader(child)
+            print("[mcp-proxy] reload complete.", file=sys.stderr)
+        except Exception as exc:
+            print(f"[mcp-proxy] reload failed: {exc}", file=sys.stderr)
 
     # ------------------------------------------------------------------ run
 
