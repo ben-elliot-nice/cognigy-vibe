@@ -91,6 +91,8 @@ async def _run() -> None:
 
 
 def main() -> None:
+    import truststore
+    truststore.inject_into_ssl()
     load_dotenv()
     asyncio.run(_run())
 
