@@ -1,12 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check if any explain resource files are staged
-if git diff --cached --name-only | grep -q '^skills/explain/resources/'; then
+# If explain resources or build script changed, regenerate and stage generated files
+if git diff --cached --name-only | grep -qE '^(skills/explain/resources/|scripts/build_explain_topics\.py)'; then
   echo "[pre-commit] explain resources changed — regenerating..."
   uv run scripts/build_explain_topics.py
   git add \
     skills/explain/SKILL.md \
     cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py
   echo "[pre-commit] generated files staged."
+fi
+
+# Block if generated explain files are staged without the corresponding resources/build script,
+# or vice versa — keeps local and CI checks in sync
+STAGED_RESOURCES=$(git diff --cached --name-only | grep -cE '^(skills/explain/resources/|scripts/build_explain_topics\.py)' || true)
+STAGED_GENERATED=$(git diff --cached --name-only | grep -c '_explain_topics_generated\.py' || true)
+if [ "$STAGED_RESOURCES" -gt 0 ] && [ "$STAGED_GENERATED" -eq 0 ]; then
+  echo ""
+  echo "[pre-commit] ERROR: explain resources staged but generated files are missing."
+  echo "  Run:   uv run scripts/build_explain_topics.py"
+  echo "  Stage: git add skills/explain/SKILL.md cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py"
+  exit 1
+fi
+
+# Block if uv.lock has unstaged modifications — stage or discard explicitly
+if ! git diff --quiet cognigy-mcp/uv.lock; then
+  echo ""
+  echo "[pre-commit] ERROR: cognigy-mcp/uv.lock has unstaged changes."
+  echo "  Stage it:    git add cognigy-mcp/uv.lock"
+  echo "  Discard it:  git checkout cognigy-mcp/uv.lock"
+  exit 1
 fi

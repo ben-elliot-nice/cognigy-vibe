@@ -56,3 +56,19 @@ jobs:
           uv publish
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
+
+      - name: Notify marketplace to update submodule
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MARKETPLACE_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ben-elliot-nice/nice-claude-marketplace/dispatches \
+            -d '{
+              "event_type": "submodule-updated",
+              "client_payload": {
+                "plugin": "cognigy",
+                "submodule_path": "plugins/cognigy",
+                "version": "${{ steps.check.outputs.version }}"
+              }
+            }'

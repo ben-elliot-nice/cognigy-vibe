@@ -1,0 +1,7 @@
+{
+  "enableAllProjectMcpServers": true,
+  "enabledPlugins": {
+    "superpowers@superpowers-dev": true,
+    "cognigy@nice": true
+  }
+}
