@@ -10,3 +10,8 @@ if git diff --cached --name-only | grep -q '^skills/explain/resources/'; then
     cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py
   echo "[pre-commit] generated files staged."
 fi
+
+# Always stage uv.lock if modified — uv run may update it as a side effect
+if ! git diff --quiet cognigy-mcp/uv.lock || ! git diff --cached --quiet cognigy-mcp/uv.lock; then
+  git add cognigy-mcp/uv.lock
+fi
