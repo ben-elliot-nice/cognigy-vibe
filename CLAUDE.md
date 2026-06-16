@@ -6,6 +6,68 @@ Read `docs/architecture.md` at the start of every new session. **Note: architect
 
 Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude Code location — do not create worktrees under `.worktrees/`.
 
+## Development Workflow
+
+1. **Feature arrives** — clarify scope if ambiguous before any code work.
+
+2. **Sync from remote**
+   ```bash
+   git fetch origin main
+   ```
+   Do NOT `git pull` — protects against pulling broken state on main.
+
+3. **Create branch or worktree from remote main** (not local main)
+   ```bash
+   git checkout -b feat/<name> origin/main
+   # or, using the using-git-worktrees skill:
+   git worktree add .claude/worktrees/<name> -b feat/<name> origin/main
+   ```
+
+4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written.
+
+5. **Commit the spec/plan** after user approval. The plan file lives in the repo; commit it as a standalone commit before any implementation.
+
+6. **Implement using `superpowers:subagent-driven-development`**
+   - Read the plan; extract all tasks upfront; create a TodoWrite list.
+   - Dispatch one fresh implementer subagent per task (never in parallel).
+   - After each task: spec-compliance review → code-quality review → mark complete.
+   - After all tasks: dispatch a final code-quality reviewer, then proceed to step 7.
+
+7. **Finish the branch using `superpowers:finishing-a-development-branch`**
+   - The skill presents 4 options. **Always choose option 2 (Push and create PR).**
+   - The skill will `git push -u origin <branch>` and run `gh pr create`.
+
+8. **Verify PR and check for conflicts**
+   ```bash
+   gh pr view --json url,mergeable,mergeStateStatus
+   ```
+   - If `mergeable` is `CONFLICTING`: rebase the branch on current remote main, then force-push.
+     ```bash
+     git fetch origin main
+     git rebase origin/main
+     git push --force-with-lease
+     ```
+
+9. **Get merge Actions run IDs**
+   ```bash
+   gh run list --branch <branch> --json databaseId,name,status
+   ```
+   Note the `databaseId` values for the CI runs triggered by the PR.
+
+10. **Poll until CI completes** (every 30 seconds)
+    ```bash
+    while true; do
+      STATUS=$(gh run list --branch <branch> --json databaseId,status,conclusion \
+        --jq '.[] | select(.databaseId == <run-id>) | .status + "/" + .conclusion')
+      echo "$(date +%H:%M:%S) $STATUS"
+      [[ "$STATUS" == "completed/"* ]] && break
+      sleep 30
+    done
+    ```
+    Alternatively: `gh run watch <run-id>` (streams live; exits on completion).
+
+11. **Report to user** — final CI status (`success` / `failure`), PR URL, and any actions taken (rebases, force-pushes, re-runs).
+
 ## Rules
 
 - **Composite skills call atomic skills** (`cognigy:get`, `cognigy:create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.
