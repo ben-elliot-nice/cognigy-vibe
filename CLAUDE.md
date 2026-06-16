@@ -28,6 +28,12 @@ This content is distinct from the `docs/` directory, which covers plugin develop
 
 ## Local Development Testing
 
+First time in a new clone, trust the mise config:
+
+```bash
+mise trust
+```
+
 `.mcp.json` is configured to run `cognigy-vibe-mcp` from the local `cognigy-mcp/` source tree via `uv run`. To pick up code changes in-session:
 
 ```bash
