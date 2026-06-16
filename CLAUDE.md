@@ -30,7 +30,7 @@ This content is distinct from the `docs/` directory, which covers plugin develop
 bash scripts/restart-mcp.sh   # kill server so Claude Code respawns with updated code
 ```
 
-No install step required. Credentials (`COGNIGY_BASE_URL`, `COGNIGY_API_KEY`, `COGNIGY_PROJECT_ID`) must be present in the shell environment — source `.env` before starting Claude (see below).
+No install step required. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
 
 ## TODO
 
