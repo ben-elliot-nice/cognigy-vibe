@@ -4,7 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'cognigy-mcp/**'
+      - 'cognigy-mcp/cognigy_mcp/**'
+      - 'cognigy-mcp/pyproject.toml'
       - 'skills/**'
       - '.claude-plugin/plugin.json'
 
@@ -16,6 +17,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Fetch main for comparison
+        run: git fetch origin main
 
       - name: Check version bump
         run: |
