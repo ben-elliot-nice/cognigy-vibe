@@ -1,0 +1,33 @@
+name: Notify marketplace
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    name: Update marketplace submodule
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get current version
+        id: version
+        run: |
+          VERSION=$(grep '^version = ' cognigy-mcp/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch submodule update
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.MARKETPLACE_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ben-elliot-nice/nice-claude-marketplace/dispatches \
+            -d '{
+              "event_type": "submodule-updated",
+              "client_payload": {
+                "plugin": "cognigy",
+                "submodule_path": "plugins/cognigy",
+                "version": "${{ steps.version.outputs.version }}"
+              }
+            }'

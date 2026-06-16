@@ -1,26 +1,23 @@
 name: Publish to PyPI
 
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types: [completed]
-    branches: [main]
+  release:
+    types: [created]
   workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check version is stable (not pre-release)
+      - name: Check version is stable and not yet on PyPI
         id: check
         run: |
           pip install packaging --quiet
           python3 << 'PYEOF'
-          import re, sys, os
+          import re, sys, os, urllib.request, urllib.error
           from packaging.version import Version
 
           text = open("cognigy-mcp/pyproject.toml").read()
@@ -31,10 +28,24 @@ jobs:
 
           version = m.group(1)
           v = Version(version)
-          is_pre = "true" if v.is_prerelease else "false"
-          print(f"Version: {version}  pre-release: {is_pre}")
+
+          skip = "false"
+          if v.is_prerelease:
+              print(f"Version {version} is a pre-release — skipping publish.")
+              skip = "true"
+          else:
+              try:
+                  urllib.request.urlopen(f"https://pypi.org/pypi/cognigy-vibe-mcp/{version}/json")
+                  print(f"Version {version} already exists on PyPI — skipping publish.")
+                  skip = "true"
+              except urllib.error.HTTPError as e:
+                  if e.code == 404:
+                      print(f"Version {version} not on PyPI — will publish.")
+                  else:
+                      raise
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"skip={is_pre}\n")
+              f.write(f"skip={skip}\n")
               f.write(f"version={version}\n")
           PYEOF
 
@@ -56,19 +67,3 @@ jobs:
           uv publish
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
-
-      - name: Notify marketplace to update submodule
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          curl -sf -X POST \
-            -H "Authorization: Bearer ${{ secrets.MARKETPLACE_PAT }}" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/ben-elliot-nice/nice-claude-marketplace/dispatches \
-            -d '{
-              "event_type": "submodule-updated",
-              "client_payload": {
-                "plugin": "cognigy",
-                "submodule_path": "plugins/cognigy",
-                "version": "${{ steps.check.outputs.version }}"
-              }
-            }'
