@@ -108,13 +108,17 @@ First time in a new clone, trust the mise config:
 mise trust
 ```
 
-`.mcp.json` is configured to run `cognigy-vibe-mcp` from the local `cognigy-mcp/` source tree via `uv run`. To pick up code changes in-session:
+`.mcp.json` is configured to run `cognigy-vibe-mcp` from the local `cognigy-mcp/` source tree via `uv run`. No install step required. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
+
+### Hot-reload loop
+
+Edit source → save → restart → next MCP call picks up the change:
 
 ```bash
-bash scripts/restart-mcp.sh   # kill server so Claude Code respawns with updated code
+bash scripts/restart-mcp.sh
 ```
 
-No install step required. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
+**Limitation:** this only works when the server is still running at kill time. If the server disconnects mid-session (e.g. crashed after a file edit), Claude Code evicts the tool schema and won't respawn automatically. In that case, run `/mcp` in the Claude Code prompt to reconnect, or restart the session.
 
 ## TODO
 
