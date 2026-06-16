@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cognigy-vibe": {
+      "command": "uv",
+      "args": ["run", "--directory", "cognigy-mcp", "cognigy-vibe-mcp"]
+    }
+  }
+}

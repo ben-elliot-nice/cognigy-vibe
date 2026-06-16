@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 # Kill the cognigy-vibe-mcp server process so Claude Code restarts it on the next MCP call.
-# Use after making and saving changes to cognigy-mcp/ — requires dev-install first (see below).
-#
-# Full dev loop:
-#   bash scripts/dev-install.sh   # one-time: install local source as editable uv tool
-#   <make code changes>
-#   bash scripts/restart-mcp.sh   # reload: kill server so Claude Code picks up changes
-#   bash scripts/dev-uninstall.sh # revert: restore published uvx version
+# Use after saving changes to cognigy-mcp/ to pick up updated code in-session.
+# .mcp.json runs the server from local source — no install step needed.
 
 set -e
 

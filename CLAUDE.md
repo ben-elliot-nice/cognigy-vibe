@@ -24,15 +24,13 @@ This content is distinct from the `docs/` directory, which covers plugin develop
 
 ## Local Development Testing
 
-To test MCP server changes in-session without publishing to PyPI:
+`.mcp.json` is configured to run `cognigy-vibe-mcp` from the local `cognigy-mcp/` source tree via `uv run`. To pick up code changes in-session:
 
 ```bash
-bash scripts/dev-install.sh   # one-time: install local source as editable uv tool + restart
-bash scripts/restart-mcp.sh   # after each change: kill server so Claude Code picks up new code
-bash scripts/dev-uninstall.sh # revert: restore published uvx version
+bash scripts/restart-mcp.sh   # kill server so Claude Code respawns with updated code
 ```
 
-After `dev-install.sh`, `cognigy-vibe-mcp` runs from the local `cognigy-mcp/` source tree. Kill + restart is all that's needed between changes — no config file edits required.
+No install step required. Credentials (`COGNIGY_BASE_URL`, `COGNIGY_API_KEY`, `COGNIGY_PROJECT_ID`) must be present in the shell environment — source `.env` before starting Claude (see below).
 
 ## TODO
 
