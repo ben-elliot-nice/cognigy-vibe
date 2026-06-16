@@ -124,10 +124,7 @@ The script sends `SIGUSR1` to the proxy, which kills the inner server, respawns 
 
 The following items are tracked but not currently in scope. If you ask Claude to work on this project, Claude may ask whether these TODOs are in scope for the current session before proceeding.
 
-1. **Update `docs/architecture.md`** — Significantly out of date. Reflect current MCP tools, skills, and project structure.
-2. **Integrate 3x docs into MCP explain topics** — Move `cognigy-api-reference.md`, `cognigy-output-formats.md`, `cognigy-code-conventions.md` content into the MCP server's `explain` tool topics so they're accessible at runtime.
-3. **Extricate explain topics to markdown + build-time process** — All MCP explain topic content should live as markdown files in the repo, with a build step that generates the in-server topic registry. Makes topics reviewable, versionable, and editable without redeploying the server.
-4. **GitHub Actions: auto-update marketplace parent repo** — When this plugin is committed and pushed, the parent repo (`nice-claude-marketplace`) should automatically pull the submodule update via CI instead of manual command above.
+1. **GitHub Actions: auto-update marketplace parent repo** — When this plugin is committed and pushed, the parent repo (`nice-claude-marketplace`) should automatically pull the submodule update via CI instead of manual command above.
 
 ## After every commit + push
 
