@@ -3,11 +3,6 @@ name: Check version bump
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'cognigy-mcp/cognigy_mcp/**'
-      - 'cognigy-mcp/pyproject.toml'
-      - 'skills/**'
-      - '.claude-plugin/plugin.json'
 
 jobs:
   version-check:
@@ -24,6 +19,23 @@ jobs:
       - name: Check version bump
         run: |
           set -e
+
+          # Determine which files changed vs main
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+
+          # Only enforce version bump for source code and skills changes
+          SOURCE_CHANGED=$(echo "$CHANGED" | grep -E \
+            '^(cognigy-mcp/cognigy_mcp/|cognigy-mcp/pyproject\.toml|skills/|\.claude-plugin/plugin\.json)' \
+            || true)
+
+          if [ -z "$SOURCE_CHANGED" ]; then
+            echo "No source or skill changes detected — version bump not required."
+            exit 0
+          fi
+
+          echo "Source changes detected:"
+          echo "$SOURCE_CHANGED"
+          echo ""
 
           CURRENT=$(grep '^version = ' cognigy-mcp/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           MAIN=$(git show origin/main:cognigy-mcp/pyproject.toml | grep '^version = ' | sed 's/version = "\(.*\)"/\1/')
