@@ -10,11 +10,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 1. **Feature arrives** — clarify scope if ambiguous before any code work.
 
-2. **Sync from remote**
-   ```bash
-   git fetch origin main
-   ```
-   Do NOT `git pull` — protects against pulling broken state on main.
+2. **Sync from remote** — if working tree is clean, `git pull` is preferred. Use `git fetch origin main` only if you have uncommitted changes and don't want to switch branches first.
 
 3. **Create branch or worktree from remote main** (not local main)
    ```bash
