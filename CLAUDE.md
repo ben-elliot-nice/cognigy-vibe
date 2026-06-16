@@ -84,6 +84,22 @@ The `runtime-reference/` directory contains usage documentation for the MCP serv
 
 This content is distinct from the `docs/` directory, which covers plugin development (architecture, shared design patterns, design specs/plans).
 
+## Required Plugins
+
+This project uses two Claude Code plugins. `.claude/settings.json` enables them — you need both marketplaces installed locally.
+
+**Superpowers** (`superpowers@superpowers-dev`) — workflow skills (brainstorming, planning, TDD, etc.):
+```bash
+claude marketplace add superpowers-dev github:obra/superpowers
+claude plugin install superpowers@superpowers-dev
+```
+
+**Cognigy** (`cognigy@nice`) — Cognigy-specific skills. Installed from the NICE Claude Marketplace, which is the parent repo of this plugin. If you have `nice-claude-marketplace` checked out:
+```bash
+claude marketplace add nice directory:/path/to/nice-claude-marketplace
+claude plugin install cognigy@nice
+```
+
 ## Local Development Testing
 
 First time in a new clone, trust the mise config:

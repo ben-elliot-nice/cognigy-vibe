@@ -48,7 +48,7 @@ jobs:
             exit 1
           fi
 
-          PLUGIN=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          PLUGIN=$(jq -r '.version' .claude-plugin/plugin.json)
           if [ "$CURRENT" != "$PLUGIN" ]; then
             echo "::error::Version mismatch: pyproject.toml ($CURRENT) ≠ plugin.json ($PLUGIN). Both must match."
             exit 1
