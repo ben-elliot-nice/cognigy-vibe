@@ -1,6 +1,5 @@
 .DS_Store
 node_modules/
 .env
-.worktrees/
 .claude/settings.local.json
 .claude/worktrees/
