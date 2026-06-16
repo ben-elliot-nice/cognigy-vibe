@@ -5,7 +5,7 @@ Read `docs/architecture.md` at the start of every new session. **Note: architect
 ## Rules
 
 - **Composite skills call atomic skills** (`cognigy:get`, `cognigy:create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.
-- **After any change to `cli/` or `skills/`**, increment both `cli/package.json` and `.claude-plugin/plugin.json` versions. Always patch increment unless directed otherwise (e.g. `1.1.9` → `1.1.10`).
+- **After any change to `cognigy-mcp/` or `skills/`**, increment both `cognigy-mcp/pyproject.toml` and `.claude-plugin/plugin.json` versions. Always patch increment unless directed otherwise (e.g. `1.1.9` → `1.1.10`). CI enforces this on PRs to main.
 - **Shell commands:** if Claude is constructing the command, run each step as a separate Bash call. If a compound command is explicitly defined in a CLAUDE.md, run it as written.
 
 ## OpenAPI Spec
@@ -21,6 +21,18 @@ The Cognigy OpenAPI spec is available per environment (not vendored):
 The `runtime-reference/` directory contains usage documentation for the MCP server and skills (Cognigy API runtime objects, channel output formats, code conventions). These reference docs are consumed at runtime — skills instruct Claude to read them before writing code.
 
 This content is distinct from the `docs/` directory, which covers plugin development (architecture, shared design patterns, design specs/plans).
+
+## Local Development Testing
+
+To test MCP server changes in-session without publishing to PyPI:
+
+```bash
+bash scripts/dev-install.sh   # one-time: install local source as editable uv tool + restart
+bash scripts/restart-mcp.sh   # after each change: kill server so Claude Code picks up new code
+bash scripts/dev-uninstall.sh # revert: restore published uvx version
+```
+
+After `dev-install.sh`, `cognigy-vibe-mcp` runs from the local `cognigy-mcp/` source tree. Kill + restart is all that's needed between changes — no config file edits required.
 
 ## TODO
 
