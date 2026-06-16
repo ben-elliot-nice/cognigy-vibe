@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Kill the cognigy-vibe-mcp server process so Claude Code restarts it on the next MCP call.
-# Use after saving changes to cognigy-mcp/ to pick up updated code in-session.
-# .mcp.json runs the server from local source — no install step needed.
+# Hot-reload the cognigy-vibe-mcp server without disconnecting Claude Code.
+# Sends SIGUSR1 to mcp-proxy.py, which respawns the inner server and replays
+# the MCP handshake internally. The Claude Code session continues uninterrupted.
 
 set -e
 
-SERVER="cognigy-vibe-mcp"
+PROXY="mcp-proxy.py"
 
-if pgrep -f "$SERVER" > /dev/null 2>&1; then
-    pkill -f "$SERVER"
-    echo "Killed $SERVER — Claude Code will restart it on the next MCP call."
+if pgrep -f "$PROXY" > /dev/null 2>&1; then
+    pkill -USR1 -f "$PROXY"
+    echo "Reload signal sent — next MCP call will use updated source."
 else
-    echo "$SERVER is not currently running."
+    echo "Proxy not running. Start Claude Code to launch it."
 fi

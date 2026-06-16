@@ -112,13 +112,13 @@ mise trust
 
 ### Hot-reload loop
 
-Edit source → save → restart → next MCP call picks up the change:
+`scripts/mcp-proxy.py` sits between Claude Code and the actual server. The proxy process stays alive permanently — Claude Code never sees a disconnect. To reload the inner server after source changes:
 
 ```bash
 bash scripts/restart-mcp.sh
 ```
 
-**Limitation:** this only works when the server is still running at kill time. If the server disconnects mid-session (e.g. crashed after a file edit), Claude Code evicts the tool schema and won't respawn automatically. In that case, run `/mcp` in the Claude Code prompt to reconnect, or restart the session.
+The script sends `SIGUSR1` to the proxy, which kills the inner server, respawns it via `uv run`, replays the MCP handshake internally, and resumes forwarding. The Claude Code session continues uninterrupted.
 
 ## TODO
 
