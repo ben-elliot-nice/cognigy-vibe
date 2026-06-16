@@ -128,6 +128,4 @@ The following items are tracked but not currently in scope. If you ask Claude to
 
 ## After every commit + push
 
-```bash
-cd /Users/Ben.Elliot/repos/claude-marketplace/nice-claude-marketplace && git submodule update --remote && git add plugins && git commit -m "Further cognigy plugins revisions" && git push
-```
+On merge to main, the release pipeline automatically notifies `nice-claude-marketplace` to update its submodule reference. No manual step required.
