@@ -309,6 +309,7 @@ def test_push_agent_tool_update(mock_client, state, cache, tmp_path):
     patch_body = mock_client.patch.call_args[0][1]
     assert patch_body["config"]["description"] == "Updated description."
     assert patch_body["config"]["debugMessage"] is True
+    assert patch_body["config"]["condition"] == ""
 
 
 def test_push_agent_tool_update_parameters_serialized(mock_client, state, cache, tmp_path):
@@ -324,6 +325,26 @@ def test_push_agent_tool_update_parameters_serialized(mock_client, state, cache,
     patch_body = mock_client.patch.call_args[0][1]
     assert isinstance(patch_body["config"]["parameters"], str)
     assert patch_body["config"]["useParameters"] is True
+
+
+def test_push_agent_tool_update_with_condition(mock_client, state, cache, tmp_path):
+    tool_file = tmp_path / "tool.tool.json"
+    tool_file.write_text(json.dumps({
+        "toolId": "sensitive_tool",
+        "description": "Sensitive operation.",
+        "condition": "context.authVerified",
+    }))
+    mock_client.patch.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_tool"]({
+        "tool_file": str(tool_file),
+        "flow_id": "flow-1",
+        "node_id": "tool-node-existing",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    patch_body = mock_client.patch.call_args[0][1]
+    assert patch_body["config"]["condition"] == "context.authVerified"
 
 
 def test_push_agent_tool_file_not_found(mock_client, state, cache):
