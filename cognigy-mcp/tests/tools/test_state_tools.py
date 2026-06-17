@@ -123,8 +123,9 @@ def test_cognigy_list_uses_projectId_query_param(mock_client, state, cache):
     assert call_kwargs.get("projectId") == "proj-1"
 
 
-def test_sync_no_project_id_lists_projects(mock_client, state, cache):
+def test_sync_no_project_id_lists_projects(mock_client, state, cache, monkeypatch):
     """Missing project_id should list projects and return helpful error."""
+    monkeypatch.delenv("COGNIGY_PROJECT_ID", raising=False)
     mock_client.get.return_value = {"items": [{"_id": "p1", "name": "Demo Project"}]}
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["sync_remote_state"]({})
