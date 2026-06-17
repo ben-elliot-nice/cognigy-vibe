@@ -115,22 +115,11 @@ Write the file to the user's current working directory (not the plugin root):
 {
   "toolId": "<toolId>",
   "label": "<tool label>",
-  "description": "<tool description>",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "<paramName>": {
-        "type": "<string|number|boolean>",
-        "description": "<param description>"
-      }
-    },
-    "required": ["<paramName>"],
-    "additionalProperties": false
-  }
+  "description": "<tool description>"
 }
 ```
 
-Omit `parameters` entirely for tools where `useParameters` is false.
+Include a `parameters` key (full JSON Schema object) if the tool has parameters — use the `useParameters` flag from Step 3 to decide. Omit it entirely for parameter-free tools.
 
 Then call `push_agent_tool` with:
 - `tool_file`: absolute path to the written `.tool.json` file
@@ -162,5 +151,5 @@ Present a summary table of all created resources:
 - Tool nodes are created via push_agent_tool (not cognigy_create directly) — cognigy_create is blocked for aiAgentJobTool type.
 - push_agent_tool always uses mode: appendChild — no need to specify it.
 - The `aiAgent` config field takes the agent's `referenceId` (UUID), not `_id`.
-- All node operations require `flow_id` to be passed to `cognigy_create`.
+- All `cognigy_create` and `push_agent_tool` node operations require `flow_id`.
 - The MCP server auto-injects the correct extension for `aiAgentJob` and `aiAgentJobTool` nodes — do not include an `extension` field in the body.
