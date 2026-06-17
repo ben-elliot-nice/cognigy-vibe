@@ -57,7 +57,7 @@ TOOLS: list[Tool] = [
         description="POST to create a new Cognigy resource. Auto-saves name→ID to .state.json. "
                     "For nodes, body must include: "
                     "type (e.g. 'say', 'code', 'once', 'httpRequest', 'aiAgentJob'), "
-                    "mode — one of: 'appendChild' (add as child of container, used for aiAgentJobTool only), "
+                    "mode — one of: 'appendChild' (add as child of container node — use push_agent_tool for aiAgentJobTool nodes), "
                     "'append' (add as sibling after target — also the correct mode for Once/IF branch insertion: "
                     "target the branch marker _id, not the parent Once/IF node), "
                     "'insertAfter' or 'insertBefore' (may return 500 on AU1 — use append instead), "
