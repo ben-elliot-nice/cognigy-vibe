@@ -407,6 +407,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                     "To create a new code node: push_code_node(script_file=..., flow_id=..., mode=..., target=...). "
                     'See explain("tool-selection") for guidance.'
                 )})
+            if body.get("type") == "aiAgentJobTool":
+                return _ok({"error": (
+                    "AI Agent tool nodes must be created via push_agent_tool "
+                    "(file-backed, maps .tool.json spec to Cognigy config). "
+                    "To create a new tool: push_agent_tool(tool_file=..., flow_id=..., job_node_id=...). "
+                    'See explain("tool-selection") for guidance.'
+                )})
             valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}
             if "mode" in body and body["mode"] not in valid_modes:
                 return _ok({
