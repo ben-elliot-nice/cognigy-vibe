@@ -7,15 +7,20 @@ group: aiagent
 ## tool-conditions — Controlling Tool Visibility
 
 ### What conditions do
-The condition field on an aiAgentJobTool is a CognigyScript expression.
+The condition field on an aiAgentJobTool is a CognigyScript expression stored in `config.condition`.
 When falsy → tool is hidden from the LLM. LLM cannot call what it cannot see.
 This is more reliable than code guards (LLM can ignore code; can't call hidden tool).
 
 ### Setting a condition
-  cognigy_update(resource_type="node", resource_id=<toolNodeId>,
-    merge_config=False,   # condition is top-level, not in config
-    body={"condition": "!context.authVerified"}
+Use push_agent_tool with condition set in the .tool.json file (see explain("agent-tool-json")).
+Or update directly:
+  cognigy_update(resource_type="node", resource_id=<toolNodeId>, flow_id=<flowId>,
+    merge_config=False,
+    body={"config": {"condition": "!context.authVerified"}}
   )
+
+**Important:** condition is inside `config`, NOT a top-level field. Sending it top-level
+returns HTTP 400: "Field 'condition' is not allowed."
 
 ### Condition examples
   "!context.authVerified"                    // show authenticate_caller only before auth
@@ -23,7 +28,7 @@ This is more reliable than code guards (LLM can ignore code; can't call hidden t
   "context.shortTermMemory.policyLoaded"     // show after policy is loaded
 
 ### Removing a condition (always show)
-  body={"condition": ""}  or  body={"condition": null}
+  body={"config": {"condition": ""}}  or  body={"config": {"condition": null}}
 
 ### CognigyScript in conditions
 - Use context.* variables (set by code nodes or Set Context nodes)

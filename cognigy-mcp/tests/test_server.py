@@ -15,7 +15,7 @@ def test_server_creates_without_error(monkeypatch, tmp_path):
     assert "push_code_node" in tool_names
     assert "talk_to_agent" in tool_names
     assert "sync_remote_state" in tool_names
-    assert len(all_tools) == 14
+    assert len(all_tools) == 15
 
 
 def test_server_boots_without_project_id(monkeypatch, tmp_path):
@@ -25,4 +25,4 @@ def test_server_boots_without_project_id(monkeypatch, tmp_path):
     monkeypatch.delenv("COGNIGY_PROJECT_ID", raising=False)
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     server, all_tools = create_server()
-    assert len(all_tools) == 14
+    assert len(all_tools) == 15

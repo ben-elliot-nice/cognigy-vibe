@@ -285,20 +285,6 @@ def test_aiagentjob_extension_is_basic_nodes(mock_client, state, cache):
     assert call_body["extension"] == "@cognigy/basic-nodes"
 
 
-def test_aiagentjobtool_extension_is_basic_nodes(mock_client, state, cache):
-    """aiAgentJobTool must map to @cognigy/basic-nodes."""
-    mock_client.post.return_value = {"_id": "tool-1", "type": "aiAgentJobTool"}
-    handlers = make_handlers(mock_client, state, cache)
-    handlers["cognigy_create"]({
-        "resource_type": "node",
-        "flow_id": "flow-1",
-        "body": {"type": "aiAgentJobTool", "mode": "appendChild", "target": "job-1",
-                 "label": "My Tool", "config": {}},
-    })
-    call_body = mock_client.post.call_args[0][1]
-    assert call_body["extension"] == "@cognigy/basic-nodes"
-
-
 def test_aiagenttooltanswer_extension_is_basic_nodes(mock_client, state, cache):
     """aiAgentToolAnswer must map to @cognigy/basic-nodes."""
     mock_client.post.return_value = {"_id": "answer-1", "type": "aiAgentToolAnswer"}
@@ -494,3 +480,17 @@ def test_cognigy_create_description_documents_branch_marker_pattern():
     tool = next(t for t in TOOLS if t.name == "cognigy_create")
     assert "branch marker" in tool.description, \
         "cognigy_create description must mention 'branch marker' pattern for Once/IF branch insertion"
+
+
+def test_cognigy_create_aiagentjobtool_blocked(mock_client, state, cache):
+    """cognigy_create must redirect aiAgentJobTool to push_agent_tool."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentJobTool", "mode": "appendChild", "target": "job-1", "config": {}},
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "push_agent_tool" in data["error"]
+    mock_client.post.assert_not_called()

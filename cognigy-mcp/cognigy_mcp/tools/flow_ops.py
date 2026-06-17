@@ -57,7 +57,7 @@ TOOLS: list[Tool] = [
         description="POST to create a new Cognigy resource. Auto-saves name→ID to .state.json. "
                     "For nodes, body must include: "
                     "type (e.g. 'say', 'code', 'once', 'httpRequest', 'aiAgentJob'), "
-                    "mode — one of: 'appendChild' (add as child of container, used for aiAgentJobTool only), "
+                    "mode — one of: 'appendChild' (add as child of container node — use push_agent_tool for aiAgentJobTool nodes), "
                     "'append' (add as sibling after target — also the correct mode for Once/IF branch insertion: "
                     "target the branch marker _id, not the parent Once/IF node), "
                     "'insertAfter' or 'insertBefore' (may return 500 on AU1 — use append instead), "
@@ -405,6 +405,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                     "Code nodes must be created via push_code_node "
                     "(provides file-backed conflict detection). "
                     "To create a new code node: push_code_node(script_file=..., flow_id=..., mode=..., target=...). "
+                    'See explain("tool-selection") for guidance.'
+                )})
+            if body.get("type") == "aiAgentJobTool":
+                return _ok({"error": (
+                    "AI Agent tool nodes must be created via push_agent_tool "
+                    "(file-backed, maps .tool.json spec to Cognigy config). "
+                    "To create a new tool: push_agent_tool(tool_file=..., flow_id=..., job_node_id=...). "
                     'See explain("tool-selection") for guidance.'
                 )})
             valid_modes = {"appendChild", "append", "insertAfter", "insertBefore"}

@@ -107,52 +107,26 @@ Capture: `jobNodeId` (the `_id` from the response)
 
 ## Step 6: Create Tool Nodes
 
-For each tool gathered in Step 3, call `cognigy_create` with:
-- `resource_type: 'node'`
-- `flow_id: <flowId>`
+For each tool gathered in Step 3, first write a `.tool.json` file for it (see explain("agent-tool-json")), then call `push_agent_tool`.
 
-For tools with `useParameters: false`, use this body:
+Write the file to the user's current working directory (not the plugin root):
+
 ```json
 {
-  "type": "aiAgentJobTool",
+  "toolId": "<toolId>",
   "label": "<tool label>",
-  "target": "<jobNodeId>",
-  "mode": "appendChild",
-  "config": {
-    "toolId": "<toolId>",
-    "description": "<tool description>",
-    "useParameters": false
-  }
+  "description": "<tool description>"
 }
 ```
 
-For tools with `useParameters: true`, use this body:
-```json
-{
-  "type": "aiAgentJobTool",
-  "label": "<tool label>",
-  "target": "<jobNodeId>",
-  "mode": "appendChild",
-  "config": {
-    "toolId": "<toolId>",
-    "description": "<tool description>",
-    "useParameters": true,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "<paramName>": {
-          "type": "<string|number|boolean>",
-          "description": "<param description>"
-        }
-      },
-      "required": ["<paramName>"],
-      "additionalProperties": false
-    }
-  }
-}
-```
+Include a `parameters` key (full JSON Schema object) if the tool has parameters — use the `useParameters` flag from Step 3 to decide. Omit it entirely for parameter-free tools.
 
-The extension field is omitted for tool nodes — the MCP server auto-injects the correct extension.
+Then call `push_agent_tool` with:
+- `tool_file`: absolute path to the written `.tool.json` file
+- `flow_id`: `<flowId>`
+- `job_node_id`: `<jobNodeId>`
+
+Capture: tool `_id` from the response as `<toolNodeId>`.
 
 If any tool creation fails, stop immediately and report which tools were successfully created and which failed — do not continue to the next tool.
 
@@ -174,7 +148,8 @@ Present a summary table of all created resources:
 ## Notes
 
 - `mode: append` MUST be used for the job node. `insertAfter` returns a 500 from the Cognigy API.
-- `mode: appendChild` MUST be used for tool nodes — they are children of the job node.
+- Tool nodes are created via push_agent_tool (not cognigy_create directly) — cognigy_create is blocked for aiAgentJobTool type.
+- push_agent_tool always uses mode: appendChild — no need to specify it.
 - The `aiAgent` config field takes the agent's `referenceId` (UUID), not `_id`.
-- All node operations require `flow_id` to be passed to `cognigy_create`.
+- All `cognigy_create` and `push_agent_tool` node operations require `flow_id`.
 - The MCP server auto-injects the correct extension for `aiAgentJob` and `aiAgentJobTool` nodes — do not include an `extension` field in the body.
