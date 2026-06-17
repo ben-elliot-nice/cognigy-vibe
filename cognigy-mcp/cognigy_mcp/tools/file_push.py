@@ -184,6 +184,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         except json.JSONDecodeError as e:
             return _ok({"error": f"Invalid JSON in {path}: {e}"})
 
+        if not isinstance(tool_spec, dict):
+            return _ok({"error": f"tool.json must be a JSON object, got {type(tool_spec).__name__}"})
+
         missing = [f for f in ("toolId", "description") if not tool_spec.get(f)]
         if missing:
             return _ok({"error": f"Missing required fields in tool file: {', '.join(missing)}"})
