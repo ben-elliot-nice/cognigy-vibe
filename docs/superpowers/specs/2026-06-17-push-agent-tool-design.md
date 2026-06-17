@@ -90,21 +90,25 @@ File path is caller-supplied (absolute path, any name). Convention: `.tool.json`
        "toolId": "<toolId>",
        "description": "<description>",
        "useParameters": <bool>,
-       "parameters": <parameters or omitted>
+       "parameters": "<json.dumps(parameters) or omitted>",
+       "debugMessage": true,
+       "condition": "<condition or empty string>"
      }
    }
    ```
+   **Validated:** `parameters` must be serialized to a JSON string before sending — API stores and expects a string, not an object.
+   **Validated:** `condition` lives inside `config`, not top-level. API returns HTTP 400 if sent as a top-level field.
+   **Validated:** `debugMessage: true` should always be sent explicitly.
 4. Save `{id, flowId}` to state keyed by `toolId`
 5. Return `{success: true, node_id: <_id>, created: true}`
-
-If `condition` is present, include it as a top-level field in the POST body alongside `config`. If the API rejects top-level fields on POST, fall back to a follow-up PATCH. API Test 4 resolves which path is correct.
 
 ### Update Mode
 
 1. Read and parse `tool_file`
-2. Derive `useParameters`
-3. `PATCH /v2.0/flows/{flow_id}/chart/nodes/{node_id}` with updated config
-4. If `condition` present in file, patch it as a top-level field in the same call
+2. Derive `useParameters`, serialize `parameters` to JSON string
+3. `PATCH /v2.0/flows/{flow_id}/chart/nodes/{node_id}` with full config from file
+
+   **Validated:** PATCH on `aiAgentJobTool` is additive on `config` — omitted fields are preserved. Sending full file config is safe and authoritative. `merge_config` is not needed.
 
 No conflict detection on update — tool config is the file of record. (Code body conflict detection remains `push_code_node`'s responsibility.)
 
@@ -140,6 +144,10 @@ Add to decision tree:
 
 Remove stale `push_tool_from_file` note; replace with pointer to `push_agent_tool`.
 
+### `tool-conditions.md`
+
+**Correction required.** Current topic incorrectly states `condition` is a top-level node field. Validated via live API: `condition` must be inside `config`. Top-level `condition` returns HTTP 400. Update all examples to use `config.condition`.
+
 ### `agent-tool-branch.md`
 
 Rewrite Steps 1–2 to use `push_agent_tool` instead of the raw `cognigy_create` + `cognigy_update` pair. The topic becomes the canonical end-to-end sequence:
@@ -162,16 +170,21 @@ The explain topics must collectively document the complete sequence from `push_a
 
 ---
 
-## 4. Live API Tests
+## 4. Live API Tests — Results
 
-Run before implementation to verify exact config shape. Results feed into: the `.tool.json` schema definition, `push_agent_tool` mapping logic, and any corrections to `agent-tool-branch.md`.
+All tests run against "Tool Selection Test" flow and "Sammy — Guest Services" flow (AU1). UI-verified by user.
 
-**Test 1 — Bare minimum create:** `aiAgentJobTool` with only `toolId` and `description`, no `parameters`, no `condition`. Confirms truly required fields.
+**Test 1 — Bare minimum create: ✅ PASSED**
+`toolId` + `description` + `useParameters: false` is sufficient. API auto-sets `debugMessage: true` and `condition: ""`. `parameters` field appears even when not sent (API fills with a default string) but is inert when `useParameters: false`.
 
-**Test 2 — Full create with parameters:** `aiAgentJobTool` with all fields including full JSON Schema `parameters` and a `condition`. Confirms accepted shape and storage format.
+**Test 2 — Full create with parameters: ✅ PASSED**
+All fields accepted. `parameters` as a JSON string round-tripped correctly. `condition` stored inside `config` and visible in UI as expected. Both `account_id` and `amount` parameters appeared correctly in the UI.
 
-**Test 3 — PATCH behaviour:** patch an existing `aiAgentJobTool` — change description, add/remove a parameter. Confirms whether PATCH is full-replace on `config` (requiring careful handling) or additive.
+**Test 3 — PATCH is additive on config: ✅ PASSED**
+Sending only `{"config": {"description": "..."}}` left all other config fields intact. PATCH on `aiAgentJobTool` merges config — it is NOT full-replace. `merge_config` flag is irrelevant for this node type.
 
-**Test 4 — `condition` as top-level field:** confirm `condition` is patched at the node root, not inside `config`. Verify it is correctly excluded from the LLM when falsy.
+**Test 4 — `condition` is inside `config`, not top-level: ✅ PASSED**
+`{"condition": "..."}` at the top-level body returns HTTP 400: "Field 'condition' is not allowed." `{"config": {"condition": "..."}}` accepted and visible in UI. `tool-conditions.md` is incorrect and must be fixed.
 
-**Test 5 — `add-aiagent-job` skill alignment:** the skill currently creates `aiAgentJobTool` with config inline in the create body. Confirm this is equivalent to create-then-patch, and flag whether the skill should be updated to use `push_agent_tool` once available.
+**Test 5 — `add-aiagent-job` skill alignment:**
+Skill creates `aiAgentJobTool` inline in POST body — confirmed equivalent to the tested create path. Skill does not pass `debugMessage: true` explicitly (API sets it anyway). Skill should be updated to use `push_agent_tool` once available.
