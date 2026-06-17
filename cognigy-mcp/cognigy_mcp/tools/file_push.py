@@ -43,6 +43,28 @@ TOOLS: list[Tool] = [
             "required": ["html_file", "node_id", "flow_id"],
         },
     ),
+    Tool(
+        name="push_agent_tool",
+        description=(
+            "Read a local .tool.json file and push its definition to a Cognigy aiAgentJobTool node. "
+            "Two modes: "
+            "(1) UPDATE — provide node_id to update an existing aiAgentJobTool node. "
+            "(2) CREATE — omit node_id and provide job_node_id to create a new tool node as a child of an aiAgentJob node. "
+            "The .tool.json file must contain toolId and description. "
+            "parameters (JSON Schema object) and condition (CognigyScript) are optional. "
+            "See explain('agent-tool-json') for the .tool.json file convention."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "tool_file": {"type": "string", "description": "Absolute path to .tool.json file"},
+                "flow_id": {"type": "string"},
+                "node_id": {"type": "string", "description": "ID of an existing aiAgentJobTool node to update. Omit to create."},
+                "job_node_id": {"type": "string", "description": "Required when creating: ID of the parent aiAgentJob node"},
+            },
+            "required": ["tool_file", "flow_id"],
+        },
+    ),
 ]
 
 
@@ -149,7 +171,64 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         cache.set("nodes", node_id, result)
         return _ok({"success": True, "node_id": node_id, "bytes": len(html)})
 
+    def _push_agent_tool(args: dict) -> list[TextContent]:
+        path = Path(args["tool_file"])
+        node_id = args.get("node_id")
+        flow_id = args["flow_id"]
+
+        if not path.exists():
+            return _ok({"error": f"File not found: {path}"})
+
+        try:
+            tool_spec = json.loads(path.read_text())
+        except json.JSONDecodeError as e:
+            return _ok({"error": f"Invalid JSON in {path}: {e}"})
+
+        missing = [f for f in ("toolId", "description") if not tool_spec.get(f)]
+        if missing:
+            return _ok({"error": f"Missing required fields in tool file: {', '.join(missing)}"})
+
+        parameters = tool_spec.get("parameters")
+        use_parameters = parameters is not None
+
+        config: dict = {
+            "toolId": tool_spec["toolId"],
+            "description": tool_spec["description"],
+            "useParameters": use_parameters,
+            "debugMessage": True,
+            "condition": tool_spec.get("condition", ""),
+        }
+        if use_parameters:
+            config["parameters"] = json.dumps(parameters, separators=(",", ":"))
+
+        if not node_id:
+            job_node_id = args.get("job_node_id")
+            if not job_node_id:
+                return _ok({"error": "Provide node_id to update an existing tool node, or job_node_id to create a new one"})
+            body = {
+                "type": "aiAgentJobTool",
+                "extension": "@cognigy/basic-nodes",
+                "label": tool_spec.get("label", tool_spec["toolId"]),
+                "mode": "appendChild",
+                "target": job_node_id,
+                "config": config,
+            }
+            try:
+                result = client.post(f"/v2.0/flows/{flow_id}/chart/nodes", body)
+            except Exception as e:
+                return _ok({"error": f"Failed to create tool node: {e}"})
+            new_node_id = result["_id"]
+            state.set("nodes", tool_spec["toolId"], value={"id": new_node_id, "flowId": flow_id})
+            return _ok({"success": True, "node_id": new_node_id, "created": True})
+
+        try:
+            client.patch(f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}", {"config": config})
+        except Exception as e:
+            return _ok({"error": f"Failed to update tool node: {e}"})
+        return _ok({"success": True, "node_id": node_id, "updated": True})
+
     return {
         "push_code_node": _push_code_node,
         "push_html_node": _push_html_node,
+        "push_agent_tool": _push_agent_tool,
     }
