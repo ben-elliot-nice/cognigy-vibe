@@ -17,6 +17,7 @@ Topics and what they cover:
 
 aiagent:
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
+  agent-tool-json            .tool.json convention for defining AI agent tools locally
   tool-conditions            CognigyScript condition field, hiding tools from LLM
   tool-selection             when to use push_code_node vs cognigy_create vs cognigy_update
   turn-structure             Once/OnFirstTime/Afterwards, input.execution, context reset prevention, child branch API patterns
