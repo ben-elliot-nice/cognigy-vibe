@@ -598,7 +598,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 **Only runs if `{Customer}-agent-interfaces.md` names xApp scenes.** Skip otherwise — most voice-only builds have no xApp content.
 
-**Recommended pattern: conditional push via `ifThenElse` guard** (per plugin `explain("xapp-delivery")`). One `setHTMLAppState` node lives per scene type, gated behind an `ifThenElse` that checks a `context.xappTrigger` flag. Tool branches that fire that scene set the flag in their Code mock; tool branches that don't, leave the flag false. This avoids redundant `setHTMLAppState` nodes propagated through every tool branch.
+**Recommended pattern: conditional push via `if` gate** (per plugin `explain("xapp-delivery")`). One `setHTMLAppState` node lives per scene type, gated behind an `if` node (type `"if"`, NOT `"ifThenElse"`) that checks a `context.xappTrigger` flag. Tool branches that fire that scene set the flag in their Code mock; tool branches that don't, leave the flag false. This avoids redundant `setHTMLAppState` nodes propagated through every tool branch.
 
 **Why this pattern:** direct insertion of `setHTMLAppState` into every host tool branch produces multiple identical scene definitions across the flow — drifty, hard to maintain, and noisy when the scene HTML needs editing (have to track down every copy). Conditional push centralises one scene definition + lets many tool branches fire it.
 
@@ -607,7 +607,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 ```
 (somewhere in the main flow, after init chain, before AI Agent)
   └─ [Code: "Reset xApp triggers"]   // context.xappTrigger = false at session start
-       └─ [ifThenElse: context.xappTrigger === true]
+       └─ [if: context.xappTrigger === true]   // type "if", NOT "ifThenElse"
             ├─ true branch
             │    └─ [setHTMLAppState: "xApp — <scene_name>"]
             │         └─ [Code: "Clear xApp trigger"]  // context.xappTrigger = false
@@ -619,21 +619,40 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
-2. **Create the `ifThenElse` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>" }` and look for an `ifThenElse` (`type: "if"`) node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")` (v1.4.0), an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker; if not, build it from scratch:
+2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")` (v1.4.0), an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — two calls:
    ```
+   // Step 2a — create the IF gate node
+   cognigy_create {
+     resource_type: "node",
+     flow_id: "<flowId>",
+     body: {
+       type: "if",
+       mode: "append",
+       target: "<resetXappTriggersCodeNodeId>",
+       label: "xApp trigger gate",
+       config: { conditions: [{ type: "cognigyScript", condition: "context.xappTrigger === true" }] }
+     }
+   }
+   → returns { _id: "<ifNodeId>" }
+
+   // Step 2b — read the branch-marker IDs the IF node auto-created
+   get_flow_chart { flow_id: "<flowId>", format: "raw" }
+   // Find the node with _id === "<ifNodeId>"; read childIds[0] (Then branch marker)
+
+   // Step 2c — create the setHTMLAppState node inside the Then branch
    cognigy_create {
      resource_type: "node",
      flow_id: "<flowId>",
      body: {
        type: "setHTMLAppState",
        mode: "append",
-       target: "<ifThenElse.childIds[0] — the Then branch marker>",
+       target: "<ifNodeId.childIds[0] — the Then branch marker>",
        label: "xApp — <scene_name>",
        config: {}
      }
    }
    ```
-   Extension is auto-injected (`cxone-utils`). **Do NOT use `insertAfter` / `insertBefore`** — broken on AU1 (return 500); `append` against the branch marker is the only reliable mode.
+   Extension is auto-injected (`@cognigy/basic-nodes` for `if`; `cxone-utils` for `setHTMLAppState`). **Do NOT use `insertAfter` / `insertBefore`** — broken on AU1 (return 500); `append` against the branch marker is the only reliable mode.
 
 3. **Push the HTML body:**
    ```
