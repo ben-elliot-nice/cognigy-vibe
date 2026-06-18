@@ -15,9 +15,16 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ### Marketplace (recommended)
 
-1. Clone [`nice-claude-marketplace`](https://github.com/ben-elliot-nice/nice-claude-marketplace) and register it as a marketplace source:
+1. Add the NiCE marketplace:
+
+   **In your terminal:**
    ```bash
-   claude marketplace add nice directory:/path/to/nice-claude-marketplace
+   claude marketplace add ben-elliot-nice/nice-claude-marketplace
+   ```
+
+   **From within a Claude Code session:**
+   ```
+   ! claude marketplace add ben-elliot-nice/nice-claude-marketplace
    ```
 2. Install the plugin:
    ```bash
