@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "cognigy-vibe": {
-      "command": "python3",
-      "args": ["scripts/mcp-proxy.py"]
+      "command": "uvx",
+      "args": ["cognigy-vibe-mcp"]
     }
   }
 }

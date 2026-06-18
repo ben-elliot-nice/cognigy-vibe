@@ -108,17 +108,31 @@ First time in a new clone, trust the mise config:
 mise trust
 ```
 
-`.mcp.json` is configured to run `cognigy-vibe-mcp` from the local `cognigy-mcp/` source tree via `uv run`. No install step required. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
+`.mcp.json` uses `uvx cognigy-vibe-mcp` (the published package) — same as an installed user. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
 
-### Hot-reload loop
+### Hot-reload loop (server contributors only)
 
-`scripts/mcp-proxy.py` sits between Claude Code and the actual server. The proxy process stays alive permanently — Claude Code never sees a disconnect. To reload the inner server after source changes:
+If you are modifying the MCP server source in `cognigy-mcp/`, switch to the hot-reload proxy so changes take effect without restarting Claude Code:
 
-```bash
-bash scripts/restart-mcp.sh
-```
+1. Add an entry to `~/.claude/settings.json` under `mcpServers` — this overrides the plugin's `uvx` config for your local session:
+   ```json
+   {
+     "mcpServers": {
+       "cognigy-vibe": {
+         "command": "python3",
+         "args": ["/absolute/path/to/cognigy-claude-plugin/scripts/mcp-proxy.py"]
+       }
+     }
+   }
+   ```
+2. Restart Claude Code. The proxy spawns the inner server via `uv run --directory cognigy-mcp`.
+3. After source changes, reload the inner server without disconnecting:
+   ```bash
+   bash scripts/restart-mcp.sh
+   ```
+   The script sends `SIGUSR1` to the proxy, which kills the inner server, respawns it, replays the MCP handshake, and resumes forwarding — the Claude Code session continues uninterrupted.
 
-The script sends `SIGUSR1` to the proxy, which kills the inner server, respawns it via `uv run`, replays the MCP handshake internally, and resumes forwarding. The Claude Code session continues uninterrupted.
+Remove the `~/.claude/settings.json` override when you are done to return to the published package.
 
 ## TODO
 

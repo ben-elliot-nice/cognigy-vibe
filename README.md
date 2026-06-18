@@ -15,17 +15,15 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ### Marketplace (recommended)
 
+**Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed — the plugin uses `uvx` to run the MCP server.
+
 1. Add the NiCE marketplace and install the plugin:
    ```bash
    claude marketplace add ben-elliot-nice/nice-claude-marketplace
    claude plugin install cognigy@nice
    ```
-3. Install the MCP server:
-   ```bash
-   uv tool install cognigy-vibe-mcp
-   ```
-4. In your demo project directory, run the `cognigy:init-mcp` skill to wire up state, cache, and the MCP entry.
-5. Restart Claude Code, then ask: *"Build me a Cognigy demo for \<customer\>."*
+2. In your demo project directory, run the `cognigy:init-mcp` skill to wire up state, cache, and the MCP entry.
+3. Restart Claude Code, then ask: *"Build me a Cognigy demo for \<customer\>."*
 
 ### Clone + local dev
 
@@ -120,15 +118,11 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 
 ### Dev setup
 
-The repo runs `cognigy-vibe-mcp` from source via a hot-reload proxy — no install step needed.
+**Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed.
 
 1. `mise trust` (once per clone).
 2. `cp .env.example .env` and fill in your Cognigy credentials.
-3. [`.mcp.json`](.mcp.json) is pre-configured to run the server via `uv run`.
-4. After source changes to `cognigy-mcp/`, reload the inner server without disconnecting Claude Code:
-   ```bash
-   bash scripts/restart-mcp.sh
-   ```
+3. [`.mcp.json`](.mcp.json) uses `uvx cognigy-vibe-mcp` (same as installed users). If you are modifying the MCP server source and need hot-reload, see the CLAUDE.md hot-reload setup.
 
 ### Contributing
 
