@@ -862,21 +862,21 @@ cognigy_create {
 
 **This step is mandatory.** It closes the most common rework gap: as-built docs that describe intent rather than what's deployed. The flow-chart is the source of truth; the doc reads it back.
 
-The primary source of truth is now `get_flow_chart`, which returns the live flow structure with a relations array + readable hierarchy string. The exported package zip is kept as a backup artifact (restore / handoff), not as the parser input.
+The primary source of truth is now `get_flow_chart { format: "both" }`, which returns the live flow structure with a `nodes` array, a `relations` array, and a readable `hierarchy` string. The exported package zip is kept as a backup artifact (restore / handoff), not as the parser input.
 
 After all build steps land:
 
 1. **Read the live flow structure.**
    ```
-   get_flow_chart { flow_id: "<flow.id>" }
-   → returns { nodes: [...], relations: [...], hierarchyString: "..." }
+   get_flow_chart { flow_id: "<flow.id>", format: "both" }
+   → returns { nodes: [...], relations: [...], hierarchy: "..." }
    ```
-   This is the source of truth.
+   Pass `format: "both"` to get the node/relation arrays AND the readable hierarchy string in one call. (`format: "hierarchy"` — the default — returns only `{ hierarchy: "..." }`; `format: "raw"` returns only `{ nodes, relations }`.) This is the source of truth.
 
 2. **Read each node's full config via `cognigy_get`** as needed for verbatim Code-body / Say-text capture. Iterate over `nodes` from step 1.
 
 3. **Generate `[CUSTOMER]_FLOW_INSERTS.md`** from the hierarchy string + relations + per-node `cognigy_get` reads. Required sections:
-   1. Architecture diagram (ASCII) — derived from `hierarchyString`
+   1. Architecture diagram (ASCII) — derived from `hierarchy`
    2. Demo run path — Cognigy Interaction Panel (primary) or VG webrtcDemoUrl
    3. Project / agent / endpoint IDs (from §1.1 / §1.0)
    4. LLM / TTS / STT / toolChoice settings (verbatim from the patched Job Node — `cognigy_get`)
@@ -965,8 +965,9 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
 
 1. **Read the live chart.**
    ```
-   get_flow_chart { flow_id: "<flowId>" }
+   get_flow_chart { flow_id: "<flowId>", format: "raw" }
    ```
+   Use `format: "raw"` here — Phase A walks node IDs and relation chains, not the human-readable hierarchy string.
 
 2. **Assert init-chain and tool-branch shape.** Walk the chart and confirm each item below. Each failing assertion → loop back to the named §1.5 / §1.4 / §5 step, create the missing node per the canonical spec, then re-run Phase A from step 1. Do not proceed until every item is GREEN.
 
@@ -1617,7 +1618,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **v1.4.0: two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
 | cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for §1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (§1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (§6 Step 4). No `aiAgentId` param. |
-| cognigy-vibe | `get_flow_chart` | Returns `nodes`, `relations` array, and a readable `hierarchyString`. Primary source for as-built generation (§1.6). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
+| cognigy-vibe | `get_flow_chart` | Returns shape depends on `format` param: `"hierarchy"` (default) → `{ hierarchy: "..." }` only; `"raw"` → `{ nodes: [...], relations: [...] }` only; `"both"` → all three fields. Key is `hierarchy`, NOT `hierarchyString`. Use `format: "both"` for as-built generation (§1.6); use `format: "raw"` when walking node IDs (§1.7 Phase A). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
 | NiCE | `delete_resource` | `resourceType: "tool"` + `id: <aiAgentJobToolNodeId>` + `aiAgentId`. Use to clean up duplicate tools at the resource level. For individual node-level cleanup, prefer cognigy-vibe `cognigy_delete`. |
 | NiCE | `manage_packages` | Two-call export: `operation: "list_exportable"` to discover resource IDs, then `operation: "export"` with `resourceIds` + `outputPath` (absolute path) + `waitForCompletion: true`. `includeDependencies` defaults true. Returns `{ savedPath }`. As of this refactor, the package zip is a **backup artifact** — as-built generation runs off `get_flow_chart`, not the zip. See §1.6. |
 | NiCE | `manage_knowledge` | Cognigy built-in Knowledge AI (§1.8). `operation: "create_store"` with `projectId` + `agentId` + `name` + `sources: [{ name, text }]` (ingest local `knowledge/<slug>.md` bodies). Pair with `manage_settings { operation: "set_knowledge_ai", enabled: true, knowledgeStoreId }`. No CXone Expert publishing — that belongs in a future `knowledge@nice` skill. |
