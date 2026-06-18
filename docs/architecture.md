@@ -159,11 +159,7 @@ The onboarding gate fires before any `cognigy-vibe` tool call. On the first call
 
 | File | Purpose |
 |---|---|
-| `docs/cognigy-agent-patterns.md` | Tool design patterns, two-pass confirmation, context schema |
-| `docs/agent-prompting-guide.md` | Persona field purposes, outcome-based framing, tool descriptions as contracts |
-| `docs/superpowers/specs/` | Brainstorming design specs |
-| `docs/superpowers/plans/` | Implementation plans |
-| `docs/test-reports/` | Exploratory testing reports |
+| `docs/architecture.md` | System architecture overview |
 
 ---
 

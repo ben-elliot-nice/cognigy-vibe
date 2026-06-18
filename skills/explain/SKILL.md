@@ -13,17 +13,22 @@ Call `explain_dev` before brute-forcing or web-searching for Cognigy implementat
 
 Topics and what they cover:
 
-  code-node-patterns         api.* functions, execution model, utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
 
 aiagent:
+  agent-behavioral-rules     Silent tool execution, outcome-based framing, compliance rules in tool descriptions
+  agent-handover             Escalation to human pattern and handover context artefact design (two-consumer model)
+  agent-persona-authoring    AI Agent description and instructions field authoring — structure, constraints, speaking style
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
   agent-tool-json            .tool.json convention for defining AI agent tools locally
+  agent-tool-patterns        Tool granularity options (granular/consolidated/action-parameterized) and context.toolResponse channel
+  multi-agent-architecture   Concierge + Specialists pattern, specialist job types, routing, context schema, stub agent
   tool-conditions            CognigyScript condition field, hiding tools from LLM
   tool-selection             when to use push_agent_tool vs push_code_node vs cognigy_create vs cognigy_update
   turn-structure             Once/OnFirstTime/Afterwards, input.execution, context reset prevention, child branch API patterns
   two-pass-confirm           inter-turn flag management, STOP gate wording
 
 code:
+  code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
   cognigyScript              interpolation contexts, what works where
   function-execution         async pattern, inject-back via sessions API
   output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card

@@ -41,7 +41,8 @@ Tool Branch
 
 Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-contracts/`) and read:
 
-- `docs/cognigy-agent-patterns.md` — toolResponse channel, handover context pattern
+- `explain("agent-tool-patterns")` — toolResponse channel
+- `explain("agent-handover")` — handover context pattern
 
 ---
 

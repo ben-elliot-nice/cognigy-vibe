@@ -15,7 +15,8 @@ Use this skill to design everything the agent touches outside the chat or voice 
 
 Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-interfaces/`) and read:
 
-- `docs/cognigy-agent-patterns.md` — Handover Context Pattern, xApp notes in Specialist Job Patterns
+- `explain("multi-agent-architecture")` — xApp notes in Specialist Job Patterns
+- `explain("agent-handover")` — handover context artefact
 
 ---
 
@@ -81,7 +82,7 @@ Design the live agent handover package:
 3. **Data sources** — For each field, where does the data live in context?
 4. **Timing** — When is `context.handoverContext` built? (at escalation tool call, or maintained throughout conversation)
 
-Reference `docs/cognigy-agent-patterns.md` Handover Context Pattern for the implementation template.
+Reference `explain("agent-handover")` for the implementation template.
 
 ---
 
