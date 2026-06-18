@@ -15,7 +15,8 @@ Use this skill to design the AI Agent resource's identity layer — the `descrip
 
 Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-persona/`) and read:
 
-- `docs/agent-prompting-guide.md` — Field purposes, silent execution, outcome-based framing, tool descriptions as contracts, speaking style fields
+- `explain("agent-persona-authoring")` — field purposes, description/instructions structure, speaking style fields
+- `explain("agent-behavioral-rules")` — silent execution, outcome-based framing, tool descriptions as contracts
 
 ---
 
@@ -44,7 +45,7 @@ Work through these questions collaboratively. Do not generate outputs yet.
 7. **Auth scope** — Does this agent authenticate users? If so — when does auth happen, what does it unlock, and does it persist across the conversation?
 8. **Universal constraints** — Any firm Always/Never rules that apply across every interaction, regardless of which job is active?
 
-Read `docs/agent-prompting-guide.md` before drafting. Apply outcome-based framing — see "Outcome-Based Framing" section.
+Read `explain("agent-persona-authoring")` and `explain("agent-behavioral-rules")` before drafting.
 
 **When generating `instructions`, always include:**
 - `LOCALISATION` block (currency, dates, spelling, phone format for the market)

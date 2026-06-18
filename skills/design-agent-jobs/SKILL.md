@@ -15,8 +15,10 @@ Use this skill to design the specialist job layer — what each job does, how jo
 
 Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-jobs/`) and read:
 
-- `docs/agent-prompting-guide.md` — Tool descriptions as compliance contracts, outcome-based framing
-- `docs/cognigy-agent-patterns.md` — Concierge + Specialists pattern, tool granularity, action-parameterized pattern, toolResponse channel, handover context pattern
+- `explain("agent-behavioral-rules")` — silent execution, outcome-based framing, tool descriptions as contracts
+- `explain("multi-agent-architecture")` — Concierge + Specialists, specialist job types, context schema
+- `explain("agent-tool-patterns")` — tool granularity options, toolResponse channel
+- `explain("agent-handover")` — escalation pattern, handover context artefact
 
 ---
 
@@ -40,10 +42,10 @@ For each job:
 3. **Instructions** — What outcome should this job achieve? What should it always do / never do within its scope? Keep outcome-based, not rule-heavy. Max ~500 chars.
 4. **Tools** — What can this job do? List as plain-English actions (e.g. "look up policy details", "process cancellation", "return to concierge"). For each tool, ask:
    - Does it take parameters?
-   - Are there compliance rules that only apply at the moment this tool is called? (If yes, these go in the tool description — see `docs/agent-prompting-guide.md`)
+   - Are there compliance rules that only apply at the moment this tool is called? (If yes, these go in the tool description — see `explain("agent-behavioral-rules")`)
    - Is this action irreversible or high-stakes? If yes → how is it staged? What does the customer see before committing? What happens if they say no?
 5. **Knowledge** — Does this job need a dedicated knowledge store? If so, what content?
-6. **Tool granularity preference** — Granular (one tool per action), consolidated (one tool, LLM synthesises), or action-parameterized (one tool, action parameter, shared guards)? See `docs/cognigy-agent-patterns.md` for trade-offs.
+6. **Tool granularity preference** — Granular (one tool per action), consolidated (one tool, LLM synthesises), or action-parameterized (one tool, action parameter, shared guards)? See `explain("agent-tool-patterns")` for trade-offs.
 
 Present a summary table for confirmation before proceeding:
 
@@ -71,7 +73,7 @@ Present a routing intent map for confirmation:
 | {e.g. "I need to make a claim"} | Claims Specialist |
 | {e.g. customer requests human} | Human Agent Escalation |
 
-Also confirm escalation handover: what structured data should the live agent receive? Reference `docs/cognigy-agent-patterns.md` Handover Context Pattern for the design pattern.
+Also confirm escalation handover: what structured data should the live agent receive? Reference `explain("agent-handover")` for the design pattern.
 
 ---
 
@@ -82,7 +84,7 @@ Design what data flows through the conversation:
 1. **Concierge captures** — What does the concierge gather before routing? (identity, auth state, reason for contact, policy details)
 2. **Specialist state** — What does each specialist need to store temporarily during its job? (selected product, confirmation flags, dispute reference)
 3. **Shared session memory** — What should the LLM be able to "remember" across the conversation? (`context.shortTermMemory.*` fields)
-4. **toolResponse** — Confirm the standard pattern: every tool branch writes its result to `context.toolResponse` before Resolve Tool Action. (Reference `docs/cognigy-agent-patterns.md`)
+4. **toolResponse** — Confirm the standard pattern: every tool branch writes its result to `context.toolResponse` before Resolve Tool Action. (Reference `explain("agent-tool-patterns")`)
 5. **Handover context** — Design the `context.handoverContext` object — what fields, which consumer (ACD vs Agent Assist)
 
 Present context schema in plain English (variable paths + descriptions) for confirmation:
@@ -124,7 +126,7 @@ Sections:
 
 - This skill produces design documents only — no Cognigy resources are created
 - Write output to the user's working directory, not the plugin directory
-- Tool descriptions from Step 1 should carry compliance rules at point-of-use (see `docs/agent-prompting-guide.md`)
+- Tool descriptions from Step 1 should carry compliance rules at point-of-use (see `explain("agent-behavioral-rules")`)
 - For xApp, website triggers, and handover interface → `cognigy:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy:design-agent-contracts`
 - Mermaid diagrams use `graph TD` format
