@@ -15,19 +15,9 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ### Marketplace (recommended)
 
-1. Add the NiCE marketplace:
-
-   **In your terminal:**
+1. Add the NiCE marketplace and install the plugin:
    ```bash
    claude marketplace add ben-elliot-nice/nice-claude-marketplace
-   ```
-
-   **From within a Claude Code session:**
-   ```
-   ! claude marketplace add ben-elliot-nice/nice-claude-marketplace
-   ```
-2. Install the plugin:
-   ```bash
    claude plugin install cognigy@nice
    ```
 3. Install the MCP server:
