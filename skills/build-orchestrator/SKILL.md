@@ -308,7 +308,7 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 | Tool | What it does |
 |---|---|
 | `cognigy_get` | GET any resource, cache-first |
-| `cognigy_list` | List resources. `resource_type` must be **plural** (`projects`, `flows`, `tools`, etc.) — singular gives 404. See §7 cheatsheet. |
+| `cognigy_list` | List resources. `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars. Prefer plural to match the Cognigy API directly. See §7 cheatsheet. |
 | `cognigy_create` | POST resource; extension auto-injected, Say config auto-normalised. Required for node types NiCE doesn't support: `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `wait`, `hangup` |
 | `cognigy_update` | PATCH with always-fresh GET + optional deep merge — use `merge_config: true` and patch deltas only |
 | `cognigy_delete` | DELETE any resource including nodes — use for §8 collision cleanup |
@@ -1619,7 +1619,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | MCP | Tool | Gotcha |
 |---|---|---|
 | NiCE | `list_resources` | `resourceType` is **singular** (`project`, `agent`, `flow`, `endpoint`, `llm_model`, `knowledge_store`, `extension`, `function`, `tool`, `conversation`). |
-| cognigy-vibe | `cognigy_list` | `resource_type` is **plural** (`projects`, `flows`, `endpoints`, `connections`, `large-language-models`, `tools`). Singular gives 404. |
+| cognigy-vibe | `cognigy_list` | `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars to their plural form. Prefer plural to match the Cognigy API directly. |
 | NiCE | `create_ai_agent` | Returns `endpointUrl` with wrong subdomain — `cognigy-api-au1.nicecxone.com` 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>`. |
 | NiCE | `create_ai_agent` | Accepts ONLY `{ name, description, projectId?, knowledgeStoreReferenceId? }`. Agent rename + guardrails (1B) + ALL job fields (jobDescription/jobInstructions/LLM/temperature/maxTokens) go via `update_ai_agent` (§1.1 Step 3). `memoryContextInjection` + `toolChoice` are reachable by neither agent tool → §1.2 node patch. `locale` has no agent-tool home → §1.5(c). |
 | NiCE | `create_tool` | **Alternative path (§1.3)** — canonical is cognigy-vibe `push_agent_tool`. Auto-pairs the answer node; always *creates* (NOT create-or-update). Requires `aiAgentId` + `toolType` + `config`. `config.parameters` is **stringified JSON**, not an object. `config.toolId` is the LLM-facing snake_case ID. Cannot set a visibility `condition`. Don't mix with the §6 `push_agent_tool` recipe in one branch. |
