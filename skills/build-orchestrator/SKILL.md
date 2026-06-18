@@ -1,11 +1,11 @@
 ---
 name: build-orchestrator
-description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome → Wait) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by §0.5; if opened, wired via `knowledge:init` + `knowledge:create` + `cognigy_invoke inject` in §1.8. Smoke test runs in §1.7 before hand-back — Phase A structural verification against `get_flow_chart` (12 assertions, incl. a ≤1000-char agent-field cap) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant §1.5 / §1.4 / §5 step; only hands back when both phases are green.
+description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome → Wait) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by §0.5; if opened, wired via Cognigy's built-in Knowledge AI (`manage_knowledge` + `manage_settings`) in §1.8. Smoke test runs in §1.7 before hand-back — Phase A structural verification against `get_flow_chart` (12 assertions, incl. a ≤1000-char agent-field cap) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant §1.5 / §1.4 / §5 step; only hands back when both phases are green.
 ---
 
 # Build Orchestrator — end-to-end Cognigy AI Agent demo builder
 
-> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:fork-existing-agent`, `cognigy:init-mcp`, and the `knowledge@nice` plugin for `knowledge:init` / `knowledge:create`. The orchestrator delegates to these by name; it does not vendor their content.
+> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:init-mcp`. The orchestrator delegates to these by name; it does not vendor their content.
 >
 > **`cognigy-vibe-mcp` install.** Use latest: `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after). Floor is now **1.4.2** — this skill version depends on v1.4.0+ features: **file-backed tool authoring via `push_agent_tool`** (the canonical §1.3/§6 path — added in plugin **1.4.2** via PR #54; on < 1.4.2 the tool is absent and `cognigy_create` still accepts `aiAgentJobTool`), `push_code_node` CREATE mode (single-call create+position+push — §1.5(b), §6), IF/Once branch-marker insertion (§1.4b — `explain("node-positioning")`), the corrected say-node string-array + `generativeAI_customInputs: []` shape (§1.5(d) — `explain("say-node")`), the xApp inbound event path (§1.4b / §1.7 — `explain("xapp-event-handling")`), and the `explain()` topics `project-snapshots` / `voice-silence-timeout` / `output-formats` / `knowledge-store` referenced throughout. On < 1.4.0 these instructions fail (e.g. `push_code_node` still requires a pre-existing `node_id`; the cited topics 404). Earlier versions also miss AU1 stability fixes (extension mapping for `aiAgentJob` → `@cognigy/basic-nodes` and `aiAgentToolAnswer` extension coverage, safe `nodeId` fallback in `_build_hierarchy`, 204 No Content handling in `patch()`, `sync_remote_state` direct-endpoint fallback) and the project-binding refactor (`ProjectState.bind_project()`, server boots without `COGNIGY_PROJECT_ID`, `sync_remote_state` binds project in-session) that §1.1.5 depends on. Anything ≥ floor is fine; the latest published version is always the recommended target. Each tagged release of this skill records the exact plugin version it was validated against in its annotated tag message — that's the pin if you need to roll back.
 
@@ -17,7 +17,7 @@ This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Ag
 
 - **`cognigy:scope-demo`** → produces `{Customer}-demo-plan.md` (12 facts, design conversation, demo plan)
 - **`cognigy:design-agent`** → orchestrates four sub-skills that produce persona, architecture + context schema, interfaces, and contracts docs
-- **`knowledge:init` + `knowledge:create`** → only if §0.5 gate opens, publishes Expert pages and wires them via `cognigy_invoke inject`
+- **`manage_knowledge` + `manage_settings`** → only if §0.5 gate opens, ingests locally-authored FAQ bodies into a Cognigy knowledge store and enables built-in Knowledge AI on the agent (§1.8)
 
 Voice-preview provisioning is explicitly **out of scope** — that happens manually in the Cognigy UI. `talk_to_agent` smoke testing is **in scope** as of v4 — §1.7 runs Phase A structural + Phase B 3-turn runtime verification automatically before hand-back.
 
@@ -82,7 +82,7 @@ Then it produces the **final build recap**, which shows:
 
 **This is a decision step. Execution moves to §1.8.**
 
-**This build path has ZERO knowledge by default.** No knowledge store, no Expert pages, no `.ctxt` files, no `manage_settings { set_knowledge_ai }`, no `search_*_faqs` tool, no `manage_knowledge` / `knowledge:create` / `cognigy_invoke inject` calls of any kind.
+**This build path has ZERO knowledge by default.** No knowledge store, no `.ctxt` files, no `manage_settings { set_knowledge_ai }`, no `search_*_faqs` tool, no `manage_knowledge` calls of any kind.
 
 **Adding knowledge is only allowed if the user has EXPLICITLY confirmed it in the current session.** Explicit confirmation means one of:
 
@@ -98,12 +98,11 @@ Then it produces the **final build recap**, which shows:
   | # | Question | Header | Required |
   |---|---|---|---|
   | K1 | Topic title (one short noun phrase, e.g. "Cancelling your policy") | Topic title | Yes |
-  | K2 | Body content — short markdown FAQ text (heading + a few paragraphs). Will be written to `knowledge/<slug>.md` for §1.8 publication. | Body | Yes |
-  | K3 | Target Expert parent path — where the page lives in the Expert tree. **Use literal "not needed"** if Expert is not yet configured for this user; the body file is still written to disk for later publish, but §1.8 Step 3 (Expert publish) will skip this topic. | Parent path | Yes |
+  | K2 | Body content — short markdown FAQ text (heading + a few paragraphs). Will be written to `knowledge/<slug>.md` and ingested into the Cognigy knowledge store in §1.8. | Body | Yes |
 
-  Repeat the K1–K3 batch until the user says "done". All topic specs land in memory until §1.8. Defer all knowledge execution to **§1.8**, which runs after the core build via `knowledge:init` + `knowledge:create` (conditional on K3 ≠ "not needed") + `manage_settings { set_knowledge_ai: true }`.
+  Repeat the K1–K2 batch until the user says "done". All topic specs land in memory until §1.8. Defer all knowledge execution to **§1.8**, which runs after the core build and wires Cognigy's built-in Knowledge AI via `manage_knowledge` (create store + ingest the local bodies) + `manage_settings { set_knowledge_ai: true }`.
 
-**Why this gate exists:** knowledge adds an Expert publishing step, an async ingestion wait, a `knowledgeSearchModelId` cross-project ref dependency, and a `search_*_faqs` tool that needs persona wiring. Every prior demo where knowledge was added "to be helpful" cost 15–30 minutes of rework. Default-off keeps builds fast; the gate keeps assumptions explicit.
+**Why this gate exists:** knowledge adds a store-ingestion step, an async ingestion wait, a `knowledgeSearchModelId` cross-project ref dependency, and retrieval wiring on the Job Node. Every prior demo where knowledge was added "to be helpful" cost 15–30 minutes of rework. Default-off keeps builds fast; the gate keeps assumptions explicit.
 
 ---
 
@@ -253,17 +252,11 @@ If field names diverge, the build skill is the source of truth — flag the mism
 
 ---
 
-## §1.0 — Fork lane (optional — delegated)
+## §1.0 — Fork lane (not yet implemented)
 
-If Q13 named a reusable prior project AND `cognigy:scope-demo` Phase 1 Fact #11 confirmed it as a viable fork, **delegate to `cognigy:fork-existing-agent`**. That sub-skill clones the source project, audits and reconciles tools against this customer's §1.3 derived set, swaps the cloned init-chain content (Init Session CRM body, Say Welcome variants, Set Session Config `sttHints`), and returns the cloned `projectId` / `agentId` / `flowId` / `endpointId` plus the final tool list.
+> **Fork support is not yet implemented in this plugin.** The `cognigy:fork-existing-agent` sub-skill that would drive this lane has not shipped. **Regardless of how Q13 is answered, skip this section and proceed to §1.1** as a normal from-scratch build. Do not attempt to delegate to a fork sub-skill — it does not exist yet.
 
-After `cognigy:fork-existing-agent` returns:
-- **Skip §1.1** (`create_ai_agent`) — clone already created the agent.
-- **Skip §1.5** (init chain build) — clone already has it; the sub-skill swapped the customer-specific content.
-- **Run §1.2** (Job Node patch) against the cloned agent with the final persona content (the sub-skill returns a final tool list — persona's routing tree must reference that set). If the routing tree drifts from the final tool list, **reconcile it**: edit the `## Job Instructions` ROUTING DECISION TREE in `{Customer}-agent-persona.md` to match the final set and re-run §1.2. Only re-run `cognigy:design-agent-persona` if the routing *logic itself* needs redesigning — not for a tool-name delta.
-- **Continue from §1.4** onwards as a normal layered build. Tool branches are built fresh under any newly-added tools (sub-skill flags these in its return). Retained cloned tools already have their branches.
-
-If Q13 was empty or no fork candidate exists, skip this section entirely and proceed to §1.1.
+When the fork sub-skill ships, this lane will: clone the source project, audit and reconcile tools against this customer's §1.3 derived set, swap the cloned init-chain content (Init Session CRM body, Say Welcome variants, Set Session Config `sttHints`), and return the cloned `projectId` / `agentId` / `flowId` / `endpointId` plus the final tool list — letting the orchestrator skip §1.1 and §1.5. Until then, every build runs the full §1.1 path.
 
 ---
 
@@ -459,7 +452,7 @@ cognigy_update {
 
 ### 1.3 Author tools as `.tool.json` files, then push (cognigy-vibe `push_agent_tool`)
 
-**Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `Demo Builds/<customer>-demo/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). the userefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (§6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)
+**Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `Demo Builds/<customer>-demo/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). The benefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (§6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)
 
 **Sources for tool list:**
 - Use-case tools — from `{Customer}-agent-architecture.md` (the Specialist table — each tool listed under each specialist)
@@ -645,9 +638,9 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 3. **Push the HTML body:**
    ```
    push_html_node {
-     flowId: "<flowId>",
-     nodeId: "<setHTMLAppStateNodeId>",
-     file: "Demo Builds/<customer>-demo/xapp/<scene_name>.html"
+     flow_id:   "<flowId>",
+     node_id:   "<setHTMLAppStateNodeId>",
+     html_file: "Demo Builds/<customer>-demo/xapp/<scene_name>.html"
    }
    ```
 
@@ -891,7 +884,7 @@ After all build steps land:
    6. Init chain — Initialize Session Code body (verbatim), Set Session Config table, Say Welcome variants (verbatim)
    7. Tools — for each: source JSON path under `tools/`, description, parameters, Filler Say text, Code mock body, xApp scene reference (if any). Mark transfer / end-call / no-match patterns explicitly. **Include node IDs.**
    8. xApp scenes — for each: source HTML path under `xapp/`, host tool, data payload, fallback (if any)
-   9. Knowledge wiring — present only if §1.8 ran; lists Expert pages created + wiring mechanism (see §1.8)
+   9. Knowledge wiring — present only if §1.8 ran; lists the Cognigy knowledge store + topics ingested + wiring mechanism (see §1.8)
    10. Demo run-through suggested script
    11. Known gaps / next steps (Voice Preview not configured; "knowledge not configured" only if §0.5 gate was NO; "smoke test partial" only if §1.7 auto-loop couldn't fix a failed assertion — list the specific failure)
 
@@ -953,7 +946,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 **⚪ CONDITIONAL — only check if the precondition holds**
 
 - **`xapp/*.html` files exist** for every xApp scene named in `{Customer}-agent-interfaces.md` — only check if interfaces.md named scenes. Skip if no scenes.
-- **Knowledge wiring** — only if §0.5 returned `knowledgeRequested: true`. Expert page IDs listed, wiring mechanism documented in §1.8 Step 5. Skip if §0.5 returned NO.
+- **Knowledge wiring** — only if §0.5 returned `knowledgeRequested: true`. Knowledge store ID + topics ingested listed, wiring mechanism documented in §1.8 Step 3. Skip if §0.5 returned NO.
 
 If any BLOCKING item is missing, the build is incomplete — go back and fix the flow before handing back. Do not soften the bar to ship faster; the cross-check exists because shipped-but-broken patterns are harder to debug than rework-before-handover. **§1.7 is the programmatic enforcer of this list — passing §1.6's paper check without §1.7's runtime check is how Acenda_Demo_BH (2026-06-10) shipped missing `Once`, `Set Session Config`, and `Wait` despite §1.5 spelling them out. Do not skip §1.7.**
 
@@ -1094,54 +1087,26 @@ if (knowledgeRequested !== true) { skip §1.8 entirely; proceed to §1.9 }
 
 **Skip this entire section if §0.5 returned `knowledgeRequested: false`.**
 
-If §0.5 returned YES, the user gave a list of FAQ topic specs. Publish each as a CXone Expert page and wire the knowledge store into the agent.
+If §0.5 returned YES, the user gave a list of FAQ topic specs. **This section wires Cognigy's built-in Knowledge AI only** — author the FAQ bodies locally, then ingest them into a Cognigy knowledge store. There is no CXone Expert publishing step here: Expert publishing belongs in a future `knowledge@nice` skill and is out of scope for this orchestrator. Do not add an Expert escape hatch until that skill ships.
 
 **Working directory:** stay in `Demo Builds/<customer>-demo/`.
 
-**Step 1 — Expert credentials.** Check for `.env` in the demo folder with `EXPERT_BASE_URL`, `EXPERT_KEY`, `EXPERT_SECRET`. If missing:
+**Step 1 — Author one markdown body per topic.** Write each FAQ topic from §0.5 to `Demo Builds/<customer>-demo/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 2, and they stay version-controlled in the demo folder.
 
-```
-invoke skill: knowledge:init
-```
+**Step 2 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
 
-`knowledge:init` will prompt the user for Base URL / Key / Secret and write `.env`. After it completes, confirm `.env` is in `.gitignore` (the sub-skill handles this).
-
-**Step 2 — Author one markdown body per topic.** Write each FAQ topic from §0.5 to `Demo Builds/<customer>-demo/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files become the `--body` input to `knowledge:create`.
-
-**Step 3 — Publish each topic to Expert** via the `knowledge:create` CLI. **Skip topics where K3 (parent path) = "not needed"** — for those, the body file in `knowledge/<slug>.md` stays on disk only, ready to be published later when Expert is configured. Type selection rule:
-
-| FAQ shape | `--type` |
-|---|---|
-| Procedural / step-by-step ("how do I lodge a claim?") | `howto` |
-| Lookup / specification ("what's covered under plan X?") | `reference` |
-| General topical ("what is hardship support?") | `topic` |
-
-For each topic where K3 ≠ "not needed":
-```bash
-npx tsx <plugin-root>/cli/src/index.ts create pages \
-  --parent "<K3 parent path>" \
-  --title "<K1 topic title>" \
-  --type <howto | reference | topic> \
-  --body "Demo Builds/<customer>-demo/knowledge/<topic-slug>.md"
-```
-
-Exit code 0 + `{ created: true, path, id, type }` → capture `path` and `id` for the as-built. Exit code 0 + `{ skipped: true }` → page already exists; capture the existing `path` and `id`. Exit code 2 → no `.env`; re-run Step 1.
-
-**If ALL topics have K3 = "not needed"**, skip Step 3 entirely — body files are already on disk from Step 2. Continue to Step 4 with an empty published-page list; Step 4 will wire whatever local knowledge store exists (typically none, in which case Step 4 is a no-op and the as-built notes "knowledge bodies authored locally; Expert publish + store wiring deferred until Expert configured").
-
-**Step 4 — Enable Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
-
-a. **Attach the knowledge store to the agent** via NiCE `manage_knowledge`:
+a. **Create the knowledge store on the agent** via NiCE `manage_knowledge`, then ingest each local markdown body from Step 1 as a source/chunk:
    ```
    manage_knowledge {
      operation: "create_store",
      projectId: "<projectId>",
      agentId: "<agent.id>",
      name: "<Customer>_Knowledge",
-     sources: [{ type: "expert", path: "<K3 path 1>" }, ...]   // omit if all K3 = "not needed"
+     sources: [{ name: "<topic-slug>", text: "<contents of knowledge/<topic-slug>.md>" }, ...]
    }
    → returns { knowledgeStoreId, ... }
    ```
+   One source entry per local body file. If `manage_knowledge` does not accept inline `sources` in your running MCP, create the store empty and ingest via the cognigy-vibe fallback below.
 
 b. **Enable Knowledge AI on the agent** via NiCE `manage_settings`:
    ```
@@ -1174,20 +1139,16 @@ Resolve `<ksId>` via `resolve_resource { name: "<store name>", resource_type: "k
 
 **Why this approach (vs a separate `search_*_faqs` tool):** built-in Knowledge AI handles retrieval, ranking, and answer-grounding inside the Job Node's response path — no extra tool branch, no Code mock, no `input.result` wiring, no persona routing-tree edit. The LLM gets retrieved context injected automatically alongside its other inputs. Simpler, less to maintain, harder to break.
 
-**Step 5 — Append "Knowledge wired" to as-built.** Add to `[CUSTOMER]_FLOW_INSERTS.md` Section 9:
+**Step 3 — Append "Knowledge wired" to as-built.** Add to `[CUSTOMER]_FLOW_INSERTS.md` Section 9:
 
 ```markdown
 ## 9. Knowledge wiring
 
 - Knowledge AI enabled: <yes / no>
-- Knowledge store ID: <id from Step 4(a)>
-- Expert parent paths: <list, or "none — all topics deferred until Expert configured">
-- Pages published to Expert:
-  - <topic 1>: <path>  (id: <id>, type: <howto|reference|topic>)
-  - <topic 2>: ...
-  - <or "none — published locally only">
+- Knowledge store ID: <id from Step 2(a)>
+- Topics ingested: <count> (sources in the Cognigy knowledge store)
 - Local body files: knowledge/<slug>.md × <count>
-- Wiring mechanism: <manage_knowledge + manage_settings | cognigy_invoke inject | manual UI step>
+- Wiring mechanism: <manage_knowledge + manage_settings | cognigy-vibe knowledge-store API | manual UI step>
 ```
 
 No `search_*_faqs` tool is created and no persona routing-tree edit is performed — built-in Knowledge AI does not require either.
@@ -1652,14 +1613,14 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.resolve` / `api.reject`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Skill-specific shapes (success / no-match / disambiguation) live in §C.2. |
 | cognigy-vibe | `cognigy_update` | Does an **always-fresh GET + deep merge** when `merge_config: true` is set. Patch deltas only; sibling fields stay intact. |
 | cognigy-vibe | `cognigy_delete` | DELETE any resource including individual nodes. Used in §8 collision cleanup. |
-| cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` powers the §1.0 fork lane; `inject` is the preferred §1.8 knowledge-wiring path; `search` for asset discovery (cheaper than `list` + filter). |
+| cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the §1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). §1.8 knowledge wiring uses NiCE `manage_knowledge`, not `inject`. |
 | cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **v1.4.0: two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
-| cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Required for §1.4b xApp scene authoring. |
+| cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for §1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (§1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (§6 Step 4). No `aiAgentId` param. |
 | cognigy-vibe | `get_flow_chart` | Returns `nodes`, `relations` array, and a readable `hierarchyString`. Primary source for as-built generation (§1.6). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
 | NiCE | `delete_resource` | `resourceType: "tool"` + `id: <aiAgentJobToolNodeId>` + `aiAgentId`. Use to clean up duplicate tools at the resource level. For individual node-level cleanup, prefer cognigy-vibe `cognigy_delete`. |
 | NiCE | `manage_packages` | Two-call export: `operation: "list_exportable"` to discover resource IDs, then `operation: "export"` with `resourceIds` + `outputPath` (absolute path) + `waitForCompletion: true`. `includeDependencies` defaults true. Returns `{ savedPath }`. As of this refactor, the package zip is a **backup artifact** — as-built generation runs off `get_flow_chart`, not the zip. See §1.6. |
-| knowledge | `knowledge:create` (CLI) | `npx tsx <plugin-root>/cli/src/index.ts create pages --parent <path> --title <title> --type <howto\|reference\|topic\|topic-guide\|topic-category> [--body <md-path>]`. Exit code 0 → created or skipped (idempotent). Exit code 2 → no `.env`; run `knowledge:init` first. |
+| NiCE | `manage_knowledge` | Cognigy built-in Knowledge AI (§1.8). `operation: "create_store"` with `projectId` + `agentId` + `name` + `sources: [{ name, text }]` (ingest local `knowledge/<slug>.md` bodies). Pair with `manage_settings { operation: "set_knowledge_ai", enabled: true, knowledgeStoreId }`. No CXone Expert publishing — that belongs in a future `knowledge@nice` skill. |
 
 ---
 
