@@ -379,6 +379,49 @@ def test_xapp_event_handling_variant_a_payload_path_via_explain(mock_client, sta
     assert "input.data.selectedOption" not in text
 
 
+# ── Issue #59: Runtime Objects section in code-node-patterns ────────────────
+
+def test_code_node_patterns_input_object_documented(mock_client, state, cache):
+    """code-node-patterns must document the input object property table."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    assert "input.text" in text, "Must document input.text"
+    assert "input.slots" in text, "Must document input.slots"
+    assert "input.sessionId" in text, "Must document input.sessionId"
+    assert "input.userId" in text, "Must document input.userId"
+    assert "input.intentScore" in text, "Must document input.intentScore"
+
+
+def test_code_node_patterns_analyticsdata_documented(mock_client, state, cache):
+    """code-node-patterns must document analyticsdata direct assignment."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    assert "analyticsdata" in text, "Must document analyticsdata object"
+    assert "custom1" in text, "Must document custom1 through custom10 fields"
+
+
+def test_code_node_patterns_last_conversation_entries_documented(mock_client, state, cache):
+    """code-node-patterns must document lastConversationEntries."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    assert "lastConversationEntries" in text, "Must document lastConversationEntries array"
+
+
+def test_code_node_patterns_context_prefers_utils_over_api(mock_client, state, cache):
+    """code-node-patterns must note that setVar/mergeVar are preferred over api.setContext."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    # Must explicitly call out the preference — not just list both equally
+    assert "prefer" in text.lower() or "Prefer" in text, \
+        "Must state preference for setVar/mergeVar over api.setContext"
+    assert "api.setContext" in text, \
+        "Must still document api.setContext (it exists, just not preferred)"
+
+
 def test_explain_dev_tool_removed(mock_client, state, cache):
     """explain_dev was a migration scaffold — it must not exist in TOOLS after promotion."""
     assert not any(t.name == "explain_dev" for t in TOOLS), \

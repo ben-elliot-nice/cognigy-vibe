@@ -1,6 +1,7 @@
 ---
 topic: code-node-patterns
-description: api.* functions, execution model, utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
+description: api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
+group: code
 ---
 
 ## code-node-patterns — Writing Cognigy Code Nodes
@@ -14,6 +15,51 @@ description: api.* functions, execution model, utility functions (getVar/setVar/
 - No `console.log` — use `api.log()` instead
 - Maximum 100 `api.*` calls per node
 - Uncaught errors halt flow execution; timeout errors write to `input.codeNodeError.message`
+
+### Runtime Objects
+
+These objects are available as globals in every code node.
+
+#### `input`
+The incoming message for the current turn. Read-only — use `setVar`/`mergeVar` to write back.
+
+| Property | Description |
+|---|---|
+| `input.text` | Raw user text |
+| `input.data` | Structured payload object |
+| `input.intentScore` | NLU intent confidence (0–1) |
+| `input.intent` | Matched intent name |
+| `input.slots` | Detected NLU slots |
+| `input.sessionId` | Session identifier |
+| `input.userId` | User identifier |
+| `input.flowName` | Name of current flow |
+| `input.codeNodeError.message` | Error message if execution timed out |
+
+#### `context`
+Session-scoped persistent storage. Survives across turns.
+
+Direct read access: `const val = context.myKey`
+
+For writes, prefer `setVar`/`mergeVar` (see Utility Functions) over `api.setContext`. Use `api.addToContext` only when you need array-push semantics (`'array'` mode).
+
+#### `profile`
+Contact profile data (persistent across sessions). Write via `api.updateProfile` or `api.addContactMemory` — no direct mutation equivalent exists yet (tracked in issue #61).
+
+#### `analyticsdata`
+Analytics record for the current execution. Write to capture custom analytics.
+
+```js
+analyticsdata.custom1 = 'value'   // custom1 through custom10 (max 1024 chars each)
+analyticsdata.intent = 'override' // override detected intent in analytics
+analyticsdata.inputText = 'text'
+```
+
+#### `lastConversationEntries`
+Array of the last 10 conversation turns.
+
+```js
+const lastTurn = lastConversationEntries[0] // { user: '...', bot: '...' }
+```
 
 ### NOT available
 
@@ -32,6 +78,7 @@ For channel-specific output (quick replies, buttons, gallery) pass a `_cognigy` 
 See explain('output-formats') for all supported shapes.
 
 #### Context
+Prefer `setVar`/`mergeVar` for writes — see Utility Functions below. Use `api.addToContext` with `'array'` mode when you need array-push semantics.
   api.setContext('key', value)
   api.getContext('key')
   api.addToContext('key', value, 'simple' | 'array')
