@@ -13,9 +13,9 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ## Install
 
-### Marketplace (recommended)
-
 **Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed — the plugin uses `uvx` to run the MCP server.
+
+### Marketplace (recommended)
 
 1. Add the NiCE marketplace and install the plugin:
    ```bash
@@ -117,8 +117,6 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 ## Development
 
 ### Dev setup
-
-**Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed.
 
 1. `mise trust` (once per clone).
 2. `cp .env.example .env` and fill in your Cognigy credentials.
