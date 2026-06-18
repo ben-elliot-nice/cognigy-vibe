@@ -1477,7 +1477,7 @@ Two intent-named tools. The LLM picks reliably between two well-described tools.
 **Description:**
 > Closes the call cleanly when the AI Agent cannot resolve the enquiry in-bot — i.e. after ANY `transfer_to_*` tool fires, OR when the caller's intent is out of scope. Call this IMMEDIATELY after a `transfer_to_*` tool returns; no text reply in between.
 
-**Parameters:** `'{"type":"object","properties":{},"required":[]}'`
+**Parameters:** None — param-free tool. **Omit `parameters` from the `.tool.json` entirely** (per §1.3: "omit `parameters` entirely for param-free tools"). Do not use the stringified `create_tool` format here — this tool is authored via `push_agent_tool` with a `.tool.json` file.
 
 **Branch (Hangup only — NO spoken line):** `end_call` always fires right after a `transfer_to_*` whose branch Say already spoke the hand-off, so re-announcing here would double up. Go straight to Hangup:
 ```
@@ -1506,7 +1506,7 @@ cognigy_create {
 **Description:**
 > Closes the call cleanly when the AI Agent HAS resolved the caller's enquiry in-bot. Proactive — don't wait for "goodbye".
 
-**Parameters:** `'{"type":"object","properties":{},"required":[]}'`
+**Parameters:** None — param-free tool. **Omit `parameters` from the `.tool.json` entirely** (same as `end_call` above).
 
 **Branch:**
 ```
