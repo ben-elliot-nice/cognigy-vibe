@@ -308,7 +308,7 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 | Tool | What it does |
 |---|---|
 | `cognigy_get` | GET any resource, cache-first |
-| `cognigy_list` | List resources. `resource_type` must be **plural** (`projects`, `flows`, `tools`, etc.) — singular gives 404. See §7 cheatsheet. |
+| `cognigy_list` | List resources. `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars. Prefer plural to match the Cognigy API directly. See §7 cheatsheet. |
 | `cognigy_create` | POST resource; extension auto-injected, Say config auto-normalised. Required for node types NiCE doesn't support: `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `wait`, `hangup` |
 | `cognigy_update` | PATCH with always-fresh GET + optional deep merge — use `merge_config: true` and patch deltas only |
 | `cognigy_delete` | DELETE any resource including nodes — use for §8 collision cleanup |
@@ -590,7 +590,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 **Why the Filler Say (transactional):** the plugin's canonical `agent-tool-branch` is `aiAgentJobTool → Code → aiAgentToolAnswer` (three nodes). This skill adds an explicit Filler Say between the tool node and Code — non-canonical but deliberate, because voice channels otherwise produce 0.5–2s of audible dead air during the Code mock. The Filler Say is the only authorised deviation, justified by voice UX. See plugin `explain("agent-tool-branch")`.
 
-**Insertion rule (applies to all three shapes):** use plugin-canonical `mode: "append"` + `target: "<previousNodeId>"` per `explain("node-positioning")`. `append` inserts the new node AFTER target with the chain auto-rewired. **Do NOT use `insertAfter`** — broken on AU1 (returns 500). Extension is auto-injected for `cognigy-ai-agent` / `cxone-utils` / `@cognigy/voicegateway2`.
+**Insertion rule (applies to all three shapes):** use plugin-canonical `mode: "append"` + `target: "<previousNodeId>"` per `explain("node-positioning")`. `append` inserts the new node AFTER target with the chain auto-rewired. **Do NOT use `insertAfter`** — broken on AU1 (returns 500). Extension is auto-injected for `@cognigy/basic-nodes` (AI Agent nodes) / `cxone-utils` / `@cognigy/voicegateway2`.
 
 **Build steps:** see §6 for the per-shape step-by-step recipe (which node type to append first, what to push via `push_code_node`, how the `aiAgentToolAnswer` terminal is appended last in Step 4 — it is NOT auto-paired). Do not re-derive the steps here — §6 is the single source.
 
@@ -598,7 +598,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 **Only runs if `{Customer}-agent-interfaces.md` names xApp scenes.** Skip otherwise — most voice-only builds have no xApp content.
 
-**Recommended pattern: conditional push via `ifThenElse` guard** (per plugin `explain("xapp-delivery")`). One `setHTMLAppState` node lives per scene type, gated behind an `ifThenElse` that checks a `context.xappTrigger` flag. Tool branches that fire that scene set the flag in their Code mock; tool branches that don't, leave the flag false. This avoids redundant `setHTMLAppState` nodes propagated through every tool branch.
+**Recommended pattern: conditional push via `if` gate** (per plugin `explain("xapp-delivery")`). One `setHTMLAppState` node lives per scene type, gated behind an `if` node (type `"if"`, NOT `"ifThenElse"`) that checks a `context.xappTrigger` flag. Tool branches that fire that scene set the flag in their Code mock; tool branches that don't, leave the flag false. This avoids redundant `setHTMLAppState` nodes propagated through every tool branch.
 
 **Why this pattern:** direct insertion of `setHTMLAppState` into every host tool branch produces multiple identical scene definitions across the flow — drifty, hard to maintain, and noisy when the scene HTML needs editing (have to track down every copy). Conditional push centralises one scene definition + lets many tool branches fire it.
 
@@ -607,7 +607,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 ```
 (somewhere in the main flow, after init chain, before AI Agent)
   └─ [Code: "Reset xApp triggers"]   // context.xappTrigger = false at session start
-       └─ [ifThenElse: context.xappTrigger === true]
+       └─ [if: context.xappTrigger === true]   // type "if", NOT "ifThenElse"
             ├─ true branch
             │    └─ [setHTMLAppState: "xApp — <scene_name>"]
             │         └─ [Code: "Clear xApp trigger"]  // context.xappTrigger = false
@@ -619,21 +619,40 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
-2. **Create the `ifThenElse` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>" }` and look for an `ifThenElse` (`type: "if"`) node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")` (v1.4.0), an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker; if not, build it from scratch:
+2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")` (v1.4.0), an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
    ```
+   // Step 2a — create the IF gate node
+   cognigy_create {
+     resource_type: "node",
+     flow_id: "<flowId>",
+     body: {
+       type: "if",
+       mode: "append",
+       target: "<resetXappTriggersCodeNodeId>",
+       label: "xApp trigger gate",
+       config: { conditions: [{ type: "cognigyScript", condition: "context.xappTrigger === true" }] }
+     }
+   }
+   → returns { _id: "<ifNodeId>" }
+
+   // Step 2b — read the branch-marker IDs the IF node auto-created
+   get_flow_chart { flow_id: "<flowId>", format: "raw" }
+   // Find the node with _id === "<ifNodeId>"; read childIds[0] (Then branch marker)
+
+   // Step 2c — create the setHTMLAppState node inside the Then branch
    cognigy_create {
      resource_type: "node",
      flow_id: "<flowId>",
      body: {
        type: "setHTMLAppState",
        mode: "append",
-       target: "<ifThenElse.childIds[0] — the Then branch marker>",
+       target: "<ifNodeId.childIds[0] — the Then branch marker>",
        label: "xApp — <scene_name>",
        config: {}
      }
    }
    ```
-   Extension is auto-injected (`cxone-utils`). **Do NOT use `insertAfter` / `insertBefore`** — broken on AU1 (return 500); `append` against the branch marker is the only reliable mode.
+   Extension is auto-injected (`@cognigy/basic-nodes` for `if`; `cxone-utils` for `setHTMLAppState`). **Do NOT use `insertAfter` / `insertBefore`** — broken on AU1 (return 500); `append` against the branch marker is the only reliable mode.
 
 3. **Push the HTML body:**
    ```
@@ -653,11 +672,11 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
    api.resolve();
    ```
 
-5. **Reset the trigger after the scene fires** — the Code node downstream of `setHTMLAppState` (in the ifThenElse true branch) resets `context.xappTrigger = false` so subsequent turns don't re-fire.
+5. **Reset the trigger after the scene fires** — the Code node downstream of `setHTMLAppState` (in the `if` true branch) resets `context.xappTrigger = false` so subsequent turns don't re-fire.
 
 **Fallback** (per interfaces-doc rule): if the channel doesn't support xApp (e.g. pure voice with no SMS link), the interfaces doc names a fallback (e.g. "spoken summary read by the agent"). Bake the fallback as a normal Say node in the host tool branch — do not push HTML for that scene.
 
-**Cross-tool-branch reuse:** if two tools fire the same scene, both set `context.xappTrigger = true` — the single `setHTMLAppState` handles both. If two tools fire *different* scenes, route inside the ifThenElse true branch using `context.xappScene` to pick which scene renders.
+**Cross-tool-branch reuse:** if two tools fire the same scene, both set `context.xappTrigger = true` — the single `setHTMLAppState` handles both. If two tools fire *different* scenes, route inside the `if` true branch using `context.xappScene` to pick which scene renders.
 
 **Inbound xApp submits — the return path (per plugin `explain("xapp-event-handling")`).** Everything above *delivers* a scene; when the user acts inside the xApp (submits a form, taps a card) the result returns to the flow as an event. The submit payload arrives at **`input.data._cognigy._app.payload`**. Handle it with an `ifThenElse` near the top of the flow (before the AI Agent Job) that intercepts the submit, writes the result to `context.toolResponse`, and `api.resolve()`s into an `aiAgentToolAnswer` — the non-blocking two-turn async pattern (variant A = `sdk.submit()`; variant B = webhook inject). Do NOT re-derive the event shapes here — `explain("xapp-event-handling")` is the source. (This is the half the skill previously omitted: it covered delivery but not the return path.)
 
@@ -862,21 +881,21 @@ cognigy_create {
 
 **This step is mandatory.** It closes the most common rework gap: as-built docs that describe intent rather than what's deployed. The flow-chart is the source of truth; the doc reads it back.
 
-The primary source of truth is now `get_flow_chart`, which returns the live flow structure with a relations array + readable hierarchy string. The exported package zip is kept as a backup artifact (restore / handoff), not as the parser input.
+The primary source of truth is now `get_flow_chart { format: "both" }`, which returns the live flow structure with a `nodes` array, a `relations` array, and a readable `hierarchy` string. The exported package zip is kept as a backup artifact (restore / handoff), not as the parser input.
 
 After all build steps land:
 
 1. **Read the live flow structure.**
    ```
-   get_flow_chart { flow_id: "<flow.id>" }
-   → returns { nodes: [...], relations: [...], hierarchyString: "..." }
+   get_flow_chart { flow_id: "<flow.id>", format: "both" }
+   → returns { nodes: [...], relations: [...], hierarchy: "..." }
    ```
-   This is the source of truth.
+   Pass `format: "both"` to get the node/relation arrays AND the readable hierarchy string in one call. (`format: "hierarchy"` — the default — returns only `{ hierarchy: "..." }`; `format: "raw"` returns only `{ nodes, relations }`.) This is the source of truth.
 
 2. **Read each node's full config via `cognigy_get`** as needed for verbatim Code-body / Say-text capture. Iterate over `nodes` from step 1.
 
 3. **Generate `[CUSTOMER]_FLOW_INSERTS.md`** from the hierarchy string + relations + per-node `cognigy_get` reads. Required sections:
-   1. Architecture diagram (ASCII) — derived from `hierarchyString`
+   1. Architecture diagram (ASCII) — derived from `hierarchy`
    2. Demo run path — Cognigy Interaction Panel (primary) or VG webrtcDemoUrl
    3. Project / agent / endpoint IDs (from §1.1 / §1.0)
    4. LLM / TTS / STT / toolChoice settings (verbatim from the patched Job Node — `cognigy_get`)
@@ -965,8 +984,9 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
 
 1. **Read the live chart.**
    ```
-   get_flow_chart { flow_id: "<flowId>" }
+   get_flow_chart { flow_id: "<flowId>", format: "raw" }
    ```
+   Use `format: "raw"` here — Phase A walks node IDs and relation chains, not the human-readable hierarchy string.
 
 2. **Assert init-chain and tool-branch shape.** Walk the chart and confirm each item below. Each failing assertion → loop back to the named §1.5 / §1.4 / §5 step, create the missing node per the canonical spec, then re-run Phase A from step 1. Do not proceed until every item is GREEN.
 
@@ -1457,7 +1477,7 @@ Two intent-named tools. The LLM picks reliably between two well-described tools.
 **Description:**
 > Closes the call cleanly when the AI Agent cannot resolve the enquiry in-bot — i.e. after ANY `transfer_to_*` tool fires, OR when the caller's intent is out of scope. Call this IMMEDIATELY after a `transfer_to_*` tool returns; no text reply in between.
 
-**Parameters:** `'{"type":"object","properties":{},"required":[]}'`
+**Parameters:** None — param-free tool. **Omit `parameters` from the `.tool.json` entirely** (per §1.3: "omit `parameters` entirely for param-free tools"). Do not use the stringified `create_tool` format here — this tool is authored via `push_agent_tool` with a `.tool.json` file.
 
 **Branch (Hangup only — NO spoken line):** `end_call` always fires right after a `transfer_to_*` whose branch Say already spoke the hand-off, so re-announcing here would double up. Go straight to Hangup:
 ```
@@ -1486,7 +1506,7 @@ cognigy_create {
 **Description:**
 > Closes the call cleanly when the AI Agent HAS resolved the caller's enquiry in-bot. Proactive — don't wait for "goodbye".
 
-**Parameters:** `'{"type":"object","properties":{},"required":[]}'`
+**Parameters:** None — param-free tool. **Omit `parameters` from the `.tool.json` entirely** (same as `end_call` above).
 
 **Branch:**
 ```
@@ -1599,13 +1619,13 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | MCP | Tool | Gotcha |
 |---|---|---|
 | NiCE | `list_resources` | `resourceType` is **singular** (`project`, `agent`, `flow`, `endpoint`, `llm_model`, `knowledge_store`, `extension`, `function`, `tool`, `conversation`). |
-| cognigy-vibe | `cognigy_list` | `resource_type` is **plural** (`projects`, `flows`, `endpoints`, `connections`, `large-language-models`, `tools`). Singular gives 404. |
+| cognigy-vibe | `cognigy_list` | `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars to their plural form. Prefer plural to match the Cognigy API directly. |
 | NiCE | `create_ai_agent` | Returns `endpointUrl` with wrong subdomain — `cognigy-api-au1.nicecxone.com` 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>`. |
 | NiCE | `create_ai_agent` | Accepts ONLY `{ name, description, projectId?, knowledgeStoreReferenceId? }`. Agent rename + guardrails (1B) + ALL job fields (jobDescription/jobInstructions/LLM/temperature/maxTokens) go via `update_ai_agent` (§1.1 Step 3). `memoryContextInjection` + `toolChoice` are reachable by neither agent tool → §1.2 node patch. `locale` has no agent-tool home → §1.5(c). |
 | NiCE | `create_tool` | **Alternative path (§1.3)** — canonical is cognigy-vibe `push_agent_tool`. Auto-pairs the answer node; always *creates* (NOT create-or-update). Requires `aiAgentId` + `toolType` + `config`. `config.parameters` is **stringified JSON**, not an object. `config.toolId` is the LLM-facing snake_case ID. Cannot set a visibility `condition`. Don't mix with the §6 `push_agent_tool` recipe in one branch. |
 | NiCE | `manage_flow_nodes` | Supports `say`, `question`, `ifThenElse`, `lookup`, `setSessionContext`, `code`, `goTo`, `sleep`, `httpRequest`. NOT `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `wait`, `hangup`. |
 | NiCE | `manage_flow_nodes` | Say nodes: text is direct: `config: { text: "..." }`. Different from `cognigy_create`. |
-| cognigy-vibe | `cognigy_create` | **Extension is auto-injected** for all known node types (`@cognigy/voicegateway2` for `setSessionConfig`/`hangup`, `cxone-utils` for `setHTMLAppState`/`initAppSession`, `cognigy-ai-agent` for `aiAgentJobTool`/`aiAgentToolAnswer`/`aiAgentJob`). You can omit `extension` in the body. Spelling it out also works. |
+| cognigy-vibe | `cognigy_create` | **Extension is auto-injected** for all known node types (`@cognigy/voicegateway2` for `setSessionConfig`/`hangup`, `cxone-utils` for `setHTMLAppState`/`initAppSession`, `@cognigy/basic-nodes` for `aiAgentJobTool`/`aiAgentToolAnswer`/`aiAgentJob`). You can omit `extension` in the body. Spelling it out also works. |
 | cognigy-vibe | `cognigy_create` | **Insertion mode: use `mode: "append"` + `target: "<previousNodeId>"`** — inserts the new node AFTER target and auto-rewires the chain. `mode: "appendChild"` is for putting `aiAgentJobTool` as a child of `aiAgentJob`. **`insertAfter` / `insertBefore` are BROKEN on AU1** (return 500 "Error while reading ChartData"). See plugin `explain("node-positioning")`. |
 | cognigy-vibe | `cognigy_create` | **`resource_type` is `"node"`** (plus a separate `flow_id` param) — NOT the path-form `"flows/<flowId>/chart/nodes"`. Path-form may work but is non-canonical. |
 | cognigy-vibe | `cognigy_create` | Say config is **auto-normalised** — the tool accepts either flat `config.text` or nested `config.say.text` (array). |
@@ -1617,7 +1637,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **v1.4.0: two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
 | cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for §1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (§1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (§6 Step 4). No `aiAgentId` param. |
-| cognigy-vibe | `get_flow_chart` | Returns `nodes`, `relations` array, and a readable `hierarchyString`. Primary source for as-built generation (§1.6). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
+| cognigy-vibe | `get_flow_chart` | Returns shape depends on `format` param: `"hierarchy"` (default) → `{ hierarchy: "..." }` only; `"raw"` → `{ nodes: [...], relations: [...] }` only; `"both"` → all three fields. Key is `hierarchy`, NOT `hierarchyString`. Use `format: "both"` for as-built generation (§1.6); use `format: "raw"` when walking node IDs (§1.7 Phase A). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
 | NiCE | `delete_resource` | `resourceType: "tool"` + `id: <aiAgentJobToolNodeId>` + `aiAgentId`. Use to clean up duplicate tools at the resource level. For individual node-level cleanup, prefer cognigy-vibe `cognigy_delete`. |
 | NiCE | `manage_packages` | Two-call export: `operation: "list_exportable"` to discover resource IDs, then `operation: "export"` with `resourceIds` + `outputPath` (absolute path) + `waitForCompletion: true`. `includeDependencies` defaults true. Returns `{ savedPath }`. As of this refactor, the package zip is a **backup artifact** — as-built generation runs off `get_flow_chart`, not the zip. See §1.6. |
 | NiCE | `manage_knowledge` | Cognigy built-in Knowledge AI (§1.8). `operation: "create_store"` with `projectId` + `agentId` + `name` + `sources: [{ name, text }]` (ingest local `knowledge/<slug>.md` bodies). Pair with `manage_settings { operation: "set_knowledge_ai", enabled: true, knowledgeStoreId }`. No CXone Expert publishing — that belongs in a future `knowledge@nice` skill. |
