@@ -14,7 +14,7 @@
 - Build command: `uv run scripts/build_explain_topics.py` from repo root
 - Test command: `uv run pytest cognigy-mcp/tests/ -q` from repo root
 - Baseline: 35 tests passing before any changes
-- Version bump required on every PR touching `cognigy-mcp/` or `skills/`: patch increment in both `cognigy-mcp/pyproject.toml` and `.claude-plugin/plugin.json` (current: `1.4.2` → `1.4.3`)
+- No version bump — this branch targets `feat/build-orchestrator-skill`, not `main`. CI version enforcement only runs on PRs to main.
 - Working directory: `.claude/worktrees/issue-58-explain-docs-migration`
 
 ---
@@ -787,13 +787,11 @@ git commit -m "feat: update design skills to use explain() topics instead of doc
 
 ---
 
-### Task 8: Delete source docs, version bump, final verification
+### Task 8: Delete source docs and final verification
 
 **Files:**
 - Delete: `docs/agent-prompting-guide.md`
 - Delete: `docs/cognigy-agent-patterns.md`
-- Modify: `cognigy-mcp/pyproject.toml` (version `1.4.2` → `1.4.3`)
-- Modify: `.claude-plugin/plugin.json` (version `1.4.2` → `1.4.3`)
 
 - [ ] **Step 1: Delete the source docs files**
 
@@ -801,41 +799,20 @@ git commit -m "feat: update design skills to use explain() topics instead of doc
 git rm docs/agent-prompting-guide.md docs/cognigy-agent-patterns.md
 ```
 
-- [ ] **Step 2: Bump versions**
-
-In `cognigy-mcp/pyproject.toml`, change:
-```
-version = "1.4.2"
-```
-to:
-```
-version = "1.4.3"
-```
-
-In `.claude-plugin/plugin.json`, change:
-```
-"version": "1.4.2",
-```
-to:
-```
-"version": "1.4.3",
-```
-
-- [ ] **Step 3: Run full test suite**
+- [ ] **Step 2: Run full test suite**
 
 Run: `uv run pytest cognigy-mcp/tests/ -q`
 
 Expected: 40 tests passing, 0 failures
 
-- [ ] **Step 4: Confirm docs files are gone and no dangling references remain**
+- [ ] **Step 3: Confirm docs files are gone and no dangling references remain**
 
 Run: `grep -r "docs/agent-prompting-guide\|docs/cognigy-agent-patterns" . --include="*.md" --exclude-dir=".git"`
 
 Expected: no output (spec/plan files in docs/superpowers/ referencing them are historical — acceptable)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add cognigy-mcp/pyproject.toml .claude-plugin/plugin.json
-git commit -m "chore: bump to 1.4.3 — agent docs migrated to explain topics, source docs removed (issue #58)"
+git commit -m "chore: remove source docs — content migrated to explain topics (issue #58)"
 ```
