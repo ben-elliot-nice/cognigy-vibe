@@ -159,9 +159,7 @@ The onboarding gate fires before any `cognigy-vibe` tool call. On the first call
 
 | File | Purpose |
 |---|---|
-| `docs/superpowers/specs/` | Brainstorming design specs |
-| `docs/superpowers/plans/` | Implementation plans |
-| `docs/test-reports/` | Exploratory testing reports |
+| `docs/architecture.md` | System architecture overview |
 
 ---
 
