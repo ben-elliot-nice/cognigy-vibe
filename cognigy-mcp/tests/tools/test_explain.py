@@ -383,3 +383,50 @@ def test_explain_dev_tool_removed(mock_client, state, cache):
     """explain_dev was a migration scaffold — it must not exist in TOOLS after promotion."""
     assert not any(t.name == "explain_dev" for t in TOOLS), \
         "explain_dev must be removed from TOOLS after full migration"
+
+
+# ── Issue #58: agent docs migration ─────────────────────────────────────────
+
+def test_agent_persona_authoring_has_field_purposes(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "agent-persona-authoring"})
+    text = result[0].text
+    assert "description" in text
+    assert "instructions" in text
+    assert "speakingStyle" in text
+
+
+def test_agent_behavioral_rules_has_silent_execution(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "agent-behavioral-rules"})
+    text = result[0].text
+    assert "silently" in text
+    assert "escalate_to_human" in text
+    assert "outcome" in text.lower()
+
+
+def test_multi_agent_architecture_has_concierge_pattern(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "multi-agent-architecture"})
+    text = result[0].text
+    assert "return_to_concierge" in text
+    assert "shortTermMemory" in text
+    assert "toolResponse" in text
+
+
+def test_agent_tool_patterns_has_granularity_options(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "agent-tool-patterns"})
+    text = result[0].text
+    assert "action-parameterized" in text.lower() or "action_parameterized" in text.lower() or "Action-parameterized" in text
+    assert "context.toolResponse" in text
+    assert "Granular" in text or "granular" in text
+
+
+def test_agent_handover_has_two_consumer_model(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "agent-handover"})
+    text = result[0].text
+    assert "escalate_to_human" in text
+    assert "handoverContext" in text
+    assert "handoverSummary" in text
