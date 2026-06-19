@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Any
 from dotenv import load_dotenv
 from mcp.server import Server
@@ -10,8 +11,7 @@ import mcp.types as types
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
-from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain
-from cognigy_mcp.tools import init_tool, dev_tools
+from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain, dev_tools
 
 
 def _env_configured() -> bool:
@@ -25,22 +25,39 @@ def create_server() -> tuple[Server, list[types.Tool]]:
 
 
 def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
+    # Expose the full tool surface so the session tool list is identical to full mode.
+    # Tool calls are intercepted by the orchestrator before reaching here; this fallback
+    # handler covers any edge case where a call slips through.
+    all_tools = (
+        state_tools.TOOLS
+        + flow_ops.TOOLS
+        + file_push.TOOLS
+        + testing.TOOLS
+        + explain.TOOLS
+    )
+    env_path = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd()))) / ".env"
     server = Server("cognigy-vibe")
-    tools = init_tool.TOOLS
-    handlers = init_tool.make_handlers()
 
     @server.list_tools()
     async def list_tools() -> list[types.Tool]:
-        return tools
+        return all_tools
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-        handler = handlers.get(name)
-        if not handler:
-            return [types.TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
-        return handler(arguments or {})
+        return [types.TextContent(type="text", text=(
+            f"cognigy-vibe-mcp is not configured.\n\n"
+            f"Create a .env file at:\n  {env_path}\n\n"
+            f"  COGNIGY_BASE_URL=<your-api-base-url>\n"
+            f"  COGNIGY_API_KEY=<your-api-key>\n"
+            f"  COGNIGY_PROJECT_ID=<your-project-id>  # optional\n\n"
+            f"COGNIGY_BASE_URL is the API endpoint — not the UI URL.\n"
+            f"  CXone: https://cognigy-api-au1.nicecxone.com  (cognigy-api-*, not cognigy-*)\n"
+            f"  Trial: https://api-trial.cognigy.ai  (api-trial.*, not trial.*)\n\n"
+            f"Get your API key in Cognigy: My Profile → API Keys → +\n\n"
+            f"Once saved, retry this tool call — credentials will load automatically."
+        ))]
 
-    return server, tools
+    return server, all_tools
 
 
 def _create_full_server() -> tuple[Server, list[types.Tool]]:

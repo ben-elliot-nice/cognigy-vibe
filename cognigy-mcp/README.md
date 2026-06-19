@@ -17,7 +17,7 @@ In your demo project directory, run the `cognigy:init-mcp` skill in Claude Code.
 1. Create `~/.config/cognigy-mcp/<project-id>/` for state and cache
 2. Write the MCP server entry to `.mcp.json`
 
-Restart Claude Code. If credentials aren't configured yet, the server starts in degraded mode and surfaces only the `init` tool — use it to write your `.env` and the full tool set loads automatically without restarting.
+Restart Claude Code. If credentials aren't configured yet, the server starts in degraded mode — all tools are visible but every call returns setup guidance until you create a `.env`. Once the file exists, retry the same tool call and it executes immediately without restarting.
 
 Once connected, call `sync_remote_state` to populate state from your Cognigy project.
 
@@ -36,7 +36,7 @@ Add to `.mcp.json` at your project root:
 }
 ```
 
-Credentials are read from a `.env` file in the project root (see Environment variables below). If no `.env` exists, the server starts in degraded mode with an `init` tool that guides you through creating one.
+Credentials are read from a `.env` file in the project root (see Environment variables below). If no `.env` exists, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are configured.
 
 ## Environment variables
 
@@ -56,20 +56,15 @@ The server selects a mode at startup based on the `.env` file in the project roo
 
 | Condition | Mode | Tools available |
 |---|---|---|
-| `COGNIGY_BASE_URL` or `COGNIGY_API_KEY` missing | Degraded | `init` only |
+| `COGNIGY_BASE_URL` or `COGNIGY_API_KEY` missing | Degraded | Full tool set (calls return setup guidance) |
 | Both present, `COGNIGY_VIBE_DEV` absent | Production | Full tool set |
 | Both present, `COGNIGY_VIBE_DEV=1` | Dev | Full tool set + `reload_mcp` |
 
-In degraded mode, the `init` tool writes credentials to `.env` and the server reloads automatically — no terminal restart required.
+In degraded mode every tool call returns guidance on creating `.env` with the correct credentials. Once the file exists, retry the same call — the server restarts to production mode and returns the real response immediately.
 
 Dev mode spawns the inner server from `COGNIGY_VIBE_SOURCE_DIR` via `uv run`. After editing source files, call `reload_mcp` to respawn from updated code in the same Claude session.
 
 ## Tools
-
-### Setup
-| Tool | Mode | Description |
-|---|---|---|
-| `init` | Degraded only | Write credentials to `.env` and reload the server |
 
 ### State & sync
 | Tool | Description |

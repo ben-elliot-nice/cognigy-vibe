@@ -37,7 +37,7 @@ For contributors running from source — the repo is configured to run the MCP s
    COGNIGY_API_KEY=your-api-key-here
    COGNIGY_PROJECT_ID=your-project-id-here
    ```
-4. [`.mcp.json`](.mcp.json) is pre-configured — Claude Code will pick it up on next start. If you skip filling in `.env`, the server starts in degraded mode with an `init` tool that writes credentials for you.
+4. [`.mcp.json`](.mcp.json) is pre-configured — Claude Code will pick it up on next start. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
 
 See the [Development](#development) section for the full contributor workflow.
 

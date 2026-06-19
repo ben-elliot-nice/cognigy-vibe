@@ -38,7 +38,13 @@ def test_create_server_degraded_when_no_env(monkeypatch):
     importlib.reload(server)
     s, tools = server.create_server()
     tool_names = [t.name for t in tools]
-    assert tool_names == ["init"]
+    # Degraded mode exposes the full tool surface so the session list is identical to full mode.
+    assert "cognigy_get" in tool_names
+    assert "explain" in tool_names
+    assert "sync_remote_state" in tool_names
+    assert "init" not in tool_names
+    assert "reload_mcp" not in tool_names
+    assert len(tools) == 15
 
 
 def test_create_server_degraded_when_missing_key(monkeypatch):
@@ -48,7 +54,9 @@ def test_create_server_degraded_when_missing_key(monkeypatch):
     import importlib
     importlib.reload(server)
     s, tools = server.create_server()
-    assert tools[0].name == "init"
+    tool_names = [t.name for t in tools]
+    assert "cognigy_get" in tool_names
+    assert "init" not in tool_names
 
 
 def test_create_server_full_when_env_set(monkeypatch, tmp_path, respx_mock):
@@ -89,5 +97,6 @@ def test_create_server_dev_flag_ignored_without_credentials(monkeypatch):
     importlib.reload(server)
     s, tools = server.create_server()
     tool_names = [t.name for t in tools]
-    assert tool_names == ["init"]
+    assert "cognigy_get" in tool_names
     assert "reload_mcp" not in tool_names
+    assert "init" not in tool_names
