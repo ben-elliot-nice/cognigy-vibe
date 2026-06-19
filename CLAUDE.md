@@ -110,29 +110,16 @@ mise trust
 
 `.mcp.json` uses `uvx cognigy-vibe-mcp` (the published package) — same as an installed user. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
 
-### Hot-reload loop (server contributors only)
+### Dev mode (server contributors only)
 
-If you are modifying the MCP server source in `cognigy-mcp/`, switch to the hot-reload proxy so changes take effect without restarting Claude Code:
+To develop against local MCP source instead of the published package, add these vars to your project `.env` (credentials must already be configured):
 
-1. Add an entry to `~/.claude/settings.json` under `mcpServers` — this overrides the plugin's `uvx` config for your local session:
-   ```json
-   {
-     "mcpServers": {
-       "cognigy-vibe": {
-         "command": "python3",
-         "args": ["/absolute/path/to/cognigy-claude-plugin/scripts/mcp-proxy.py"]
-       }
-     }
-   }
-   ```
-2. Restart Claude Code. The proxy spawns the inner server via `uv run --directory cognigy-mcp`.
-3. After source changes, reload the inner server without disconnecting:
-   ```bash
-   bash scripts/restart-mcp.sh
-   ```
-   The script sends `SIGUSR1` to the proxy, which kills the inner server, respawns it, replays the MCP handshake, and resumes forwarding — the Claude Code session continues uninterrupted.
+```env
+COGNIGY_VIBE_DEV=1
+COGNIGY_VIBE_SOURCE_DIR=/absolute/path/to/cognigy-claude-plugin/cognigy-mcp
+```
 
-Remove the `~/.claude/settings.json` override when you are done to return to the published package.
+The orchestrator detects these on startup and spawns from local source via `uv run`. After editing source files, ask Claude to call the `reload_mcp` tool — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
 
 ## TODO
 
