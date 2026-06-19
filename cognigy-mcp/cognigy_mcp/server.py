@@ -11,9 +11,39 @@ from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain
+from cognigy_mcp.tools import init_tool, dev_tools
+
+
+def _env_configured() -> bool:
+    return bool(os.environ.get("COGNIGY_BASE_URL")) and bool(os.environ.get("COGNIGY_API_KEY"))
 
 
 def create_server() -> tuple[Server, list[types.Tool]]:
+    if not _env_configured():
+        return _create_degraded_server()
+    return _create_full_server()
+
+
+def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
+    server = Server("cognigy-vibe")
+    tools = init_tool.TOOLS
+    handlers = init_tool.make_handlers()
+
+    @server.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        return tools
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+        handler = handlers.get(name)
+        if not handler:
+            return [types.TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
+        return handler(arguments or {})
+
+    return server, tools
+
+
+def _create_full_server() -> tuple[Server, list[types.Tool]]:
     client = CognigyClient(
         base_url=os.environ["COGNIGY_BASE_URL"],
         api_key=os.environ["COGNIGY_API_KEY"],
@@ -34,7 +64,6 @@ def create_server() -> tuple[Server, list[types.Tool]]:
         + testing.TOOLS
         + explain.TOOLS
     )
-
     all_handlers: dict[str, Any] = {
         **state_tools.make_handlers(client, state, cache),
         **flow_ops.make_handlers(client, state, cache),
@@ -42,6 +71,10 @@ def create_server() -> tuple[Server, list[types.Tool]]:
         **testing.make_handlers(client, state, cache),
         **explain.make_handlers(client, state, cache),
     }
+
+    if os.environ.get("COGNIGY_VIBE_DEV") == "1":
+        all_tools = all_tools + dev_tools.TOOLS
+        all_handlers.update(dev_tools.make_handlers())
 
     server = Server("cognigy-vibe")
 
@@ -58,7 +91,7 @@ def create_server() -> tuple[Server, list[types.Tool]]:
                 sync_handler({"project_id": state.project_id})
                 auto_synced = True
             except Exception:
-                pass  # auto-resync failed; continue with stale state
+                pass
 
         handler = all_handlers.get(name)
         if not handler:
@@ -68,7 +101,6 @@ def create_server() -> tuple[Server, list[types.Tool]]:
             )]
 
         state.touch_interaction()
-
         result = handler(arguments or {})
 
         if auto_synced and result:
@@ -77,7 +109,7 @@ def create_server() -> tuple[Server, list[types.Tool]]:
                 first["auto_synced"] = True
                 result[0] = types.TextContent(type="text", text=json.dumps(first, indent=2))
             except Exception:
-                pass  # non-JSON response (e.g. explain) — skip injection
+                pass
 
         return result
 
