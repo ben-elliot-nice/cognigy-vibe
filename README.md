@@ -37,7 +37,7 @@ For contributors running from source — the repo is configured to run the MCP s
    COGNIGY_API_KEY=your-api-key-here
    COGNIGY_PROJECT_ID=your-project-id-here
    ```
-4. [`.mcp.json`](.mcp.json) is pre-configured — Claude Code will pick it up on next start.
+4. [`.mcp.json`](.mcp.json) is pre-configured — Claude Code will pick it up on next start. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
 
 See the [Development](#development) section for the full contributor workflow.
 
@@ -120,7 +120,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 
 1. `mise trust` (once per clone).
 2. `cp .env.example .env` and fill in your Cognigy credentials.
-3. [`.mcp.json`](.mcp.json) uses `uvx cognigy-vibe-mcp` (same as installed users). If you are modifying the MCP server source and need hot-reload, see the CLAUDE.md hot-reload setup.
+3. [`.mcp.json`](.mcp.json) uses `uvx cognigy-vibe-mcp` (same as installed users). To develop against local source with hot-reload, see the [Dev mode](CLAUDE.md#dev-mode-server-contributors-only) section in CLAUDE.md.
 
 ### Contributing
 
@@ -142,7 +142,7 @@ cognigy-mcp/                 the cognigy-vibe-mcp Python server (+ tests, own RE
 runtime-reference/           runtime docs skills read before writing code
                              (API reference, code conventions, output formats)
 docs/                        plugin-development docs (architecture, patterns, design specs)
-scripts/                     mcp-proxy.py, restart-mcp.sh, explain-topic build tooling
+scripts/                     explain-topic build tooling
 hooks/ .githooks/            onboarding gate + pre-commit hook
 .github/workflows/           CI: version-bump check, explain-topic check, publish, release
 ```
