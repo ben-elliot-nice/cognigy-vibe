@@ -108,6 +108,9 @@ class _Orchestrator:
         self._monitor_child(self._child)
 
         for raw_line in sys.stdin.buffer:
+            # Two paths trigger restart: the flag is set here when the child has already
+            # exited cleanly before this line arrived; the BrokenPipeError handler below
+            # covers the case where the child exits mid-write (race between exit and write).
             if self._restart_flag.is_set():
                 self._restart_flag.clear()
                 self._do_restart()
@@ -124,7 +127,16 @@ class _Orchestrator:
                 child.stdin.write(raw_line)
                 child.stdin.flush()
             except BrokenPipeError:
-                pass  # child restarted between flag check and write; next iteration handles it
+                # Child exited (exit 42) between the flag check and this write.
+                # If a restart was requested, handle it now and replay this line.
+                if self._restart_flag.is_set():
+                    self._restart_flag.clear()
+                    self._do_restart()
+                    try:
+                        self._child.stdin.write(raw_line)
+                        self._child.stdin.flush()
+                    except BrokenPipeError:
+                        pass  # new child also died — nothing more to do
 
 
 def main() -> None:

@@ -51,10 +51,11 @@ def test_create_server_degraded_when_missing_key(monkeypatch):
     assert tools[0].name == "init"
 
 
-def test_create_server_full_when_env_set(monkeypatch, respx_mock):
+def test_create_server_full_when_env_set(monkeypatch, tmp_path, respx_mock):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://example.com")
     monkeypatch.setenv("COGNIGY_API_KEY", "key")
     monkeypatch.delenv("COGNIGY_VIBE_DEV", raising=False)
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     from cognigy_mcp import server
     import importlib
     importlib.reload(server)
@@ -65,10 +66,11 @@ def test_create_server_full_when_env_set(monkeypatch, respx_mock):
     assert "reload_mcp" not in tool_names
 
 
-def test_create_server_dev_mode_includes_reload_tool(monkeypatch):
+def test_create_server_dev_mode_includes_reload_tool(monkeypatch, tmp_path):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://example.com")
     monkeypatch.setenv("COGNIGY_API_KEY", "key")
     monkeypatch.setenv("COGNIGY_VIBE_DEV", "1")
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     from cognigy_mcp import server
     import importlib
     importlib.reload(server)
