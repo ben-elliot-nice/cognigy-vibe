@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cognigy-vibe-mcp = "cognigy_mcp.server:main"
+cognigy-vibe-mcp = "cognigy_mcp.orchestrator:main"
 
 [project.optional-dependencies]
 dev = [
