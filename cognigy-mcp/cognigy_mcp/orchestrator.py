@@ -57,7 +57,7 @@ class _Orchestrator:
     def _spawn(self) -> subprocess.Popen:
         for key in _ENV_KEYS:
             os.environ.pop(key, None)
-        load_dotenv(override=True)
+        load_dotenv(dotenv_path=Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env", override=True)
         mode = _detect_mode()
         self._mode = mode
         cmd = _inner_command(mode)
@@ -244,6 +244,6 @@ def main() -> None:
     truststore.inject_into_ssl()
     os.environ.setdefault("COGNIGY_PROJECT_ROOT", str(Path.cwd()))
     _log(f"main: start cwd={Path.cwd()} project_root={os.environ.get('COGNIGY_PROJECT_ROOT')}")
-    load_dotenv()
+    load_dotenv(dotenv_path=Path(os.environ["COGNIGY_PROJECT_ROOT"]) / ".env")
     _log(f"main: after load_dotenv mode={_detect_mode()}")
     _Orchestrator().run()
