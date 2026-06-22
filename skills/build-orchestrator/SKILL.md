@@ -252,14 +252,6 @@ If field names diverge, the build skill is the source of truth — flag the mism
 
 ---
 
-## §1.0 — Fork lane (not yet implemented)
-
-> **Fork support is not yet implemented in this plugin.** The `cognigy:fork-existing-agent` sub-skill that would drive this lane has not shipped. **Regardless of how Q13 is answered, skip this section and proceed to §1.1** as a normal from-scratch build. Do not attempt to delegate to a fork sub-skill — it does not exist yet.
-
-When the fork sub-skill ships, this lane will: clone the source project, audit and reconcile tools against this customer's §1.3 derived set, swap the cloned init-chain content (Init Session CRM body, Say Welcome variants, Set Session Config `sttHints`), and return the cloned `projectId` / `agentId` / `flowId` / `endpointId` plus the final tool list — letting the orchestrator skip §1.1 and §1.5. Until then, every build runs the full §1.1 path.
-
----
-
 ## Default build values (NiCE AU1 demo tenant)
 
 These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the user for them mid-build. On a different Cognigy tenant or region, **swap the tenant-specific ones** (LLM, locale, TTS/STT, endpoint host) per the swap note below.
