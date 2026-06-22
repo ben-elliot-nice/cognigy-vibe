@@ -40,8 +40,15 @@ Returns node_id of the new code node.
     "type": "aiAgentToolAnswer",
     "mode": "append",
     "target": <codeNodeId>,
-    "config": {}
+    "config": { "answer": "{{JSON.stringify(context.toolResponse)}}", "maxLoops": 4 }
   })
+
+The `answer` field is REQUIRED and is the whole point of the node — it is the CognigyScript
+the node hands back to the LLM as the tool result. Set it to
+`{{JSON.stringify(context.toolResponse)}}` so the object your code node wrote is surfaced
+verbatim as JSON. **Do NOT leave `config: {}`** — an empty `answer` returns an empty tool
+result and the LLM sees nothing back from the tool (it will stall or hallucinate). `maxLoops`
+(default 4) caps tool-call recursion. (Same form already used in `explain("xapp-event-handling")`.)
 
 ### Reading tool arguments in the code node
 Parameters the LLM collected are available as:
@@ -68,7 +75,9 @@ fields not in the file are preserved. No conflict detection (tool config is the 
 
 ### context.toolResponse
   Code node writes: context.toolResponse = {summary: "...", data: {...}}
-  aiAgentToolAnswer reads context.toolResponse and surfaces it to the LLM.
+  The aiAgentToolAnswer node surfaces this to the LLM via its `answer` field, which MUST be
+  wired to `{{JSON.stringify(context.toolResponse)}}` (see Step 3). The node does NOT
+  auto-read context.toolResponse — if `answer` is empty, the LLM receives an empty tool result.
   toolResponse.summary = what the LLM reads back to the customer naturally.
 
 ### Tool conditions (hide tool from LLM when false)

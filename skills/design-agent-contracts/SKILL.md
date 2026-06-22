@@ -22,7 +22,7 @@ Before starting, understand the execution model:
 1. LLM calls a tool → flow routes to the tool branch
 2. The tool branch executes **synchronously** (LLM waits)
 3. Any sequence of nodes runs: Code Nodes, If Nodes, HTTP Requests, Set Context, Execute Flow
-4. `Resolve Tool Action` sends the result back to the LLM
+4. `Resolve Tool Action` sends the result back to the LLM — wired via the node's `answer` field, which MUST be set to `{{JSON.stringify(context.toolResponse)}}` (an empty `answer` returns nothing; see `explain("agent-tool-branch")`). The success result or structured-refusal string the branch wrote to `context.toolResponse` is what gets surfaced.
 5. LLM resumes — it sees only what `Resolve Tool Action` returned
 
 The LLM cannot bypass or skip the tool branch. A blocked action returns a structured refusal string — the LLM stays coherent and the contract is provably enforced.
