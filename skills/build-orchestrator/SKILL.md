@@ -690,7 +690,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 ### §C.2 — Tool result shapes — three shapes (mandatory)
 
-Every tool branch terminates in an `aiAgentToolAnswer` node (the explicit final append — §6 Step 4; see §1.3 "Naming note"). The aiAgentToolAnswer surfaces the data the LLM sees on the next turn. The preceding Code node populates that data by writing to `context.toolResponse` and calling `api.resolve()`. Plugin canon: see `explain("code-node-patterns")`.
+Every tool branch terminates in an `aiAgentToolAnswer` node (the explicit final append — §6 Step 4; see §1.3 "Naming note"). The aiAgentToolAnswer surfaces the data the LLM sees on the next turn. The preceding Code node populates that data by writing to `context.toolResponse`. **The aiAgentToolAnswer node's `answer` field MUST be set to `{{JSON.stringify(context.toolResponse)}}` (§6 Step 4) — a bare `config: {}` returns an empty tool result and the LLM sees nothing back.** Plugin canon: see `explain("agent-tool-branch")` / `explain("agent-tool-patterns")` / `explain("code-node-patterns")`.
 
 Three result shapes — pick one per tool branch:
 
@@ -1607,9 +1607,10 @@ cognigy_create {
 ```
 cognigy_create {
   resource_type: "node", flow_id: "<flowId>",
-  body: { type: "aiAgentToolAnswer", mode: "append", target: "<lastFunctionalNodeId>", config: {} }
+  body: { type: "aiAgentToolAnswer", mode: "append", target: "<lastFunctionalNodeId>", config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 } }
 }
 ```
+> **The `answer` field is mandatory.** It is the CognigyScript the node hands back to the LLM as the tool result; `{{JSON.stringify(context.toolResponse)}}` surfaces the object the Code node wrote. A bare `config: {}` returns an empty tool result and the LLM sees nothing back — see `explain("agent-tool-branch")` Step 3 / `explain("agent-tool-patterns")`.
 After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentToolAnswer` (transactional/transfer), `aiAgentJobTool → [Hangup] → aiAgentToolAnswer` (`end_call`), or `aiAgentJobTool → [Say] → [Hangup] → aiAgentToolAnswer` (`end_call_resolved`). This is the canonical three-/four-node branch from plugin `explain("agent-tool-branch")`.
 
 ---

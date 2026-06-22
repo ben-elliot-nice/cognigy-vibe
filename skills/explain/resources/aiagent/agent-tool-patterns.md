@@ -54,7 +54,16 @@ When in doubt, ask:
 
 ### context.toolResponse — tool communication channel
 Every tool branch writes its result to `context.toolResponse`.
-The Resolve Tool Action Node surfaces this to the LLM as the tool output.
+The Resolve Tool Action node (`aiAgentToolAnswer`) surfaces this to the LLM as the tool
+output — but ONLY if its `answer` field is wired to it. Set the node config to:
+
+  // Resolve Tool Action (aiAgentToolAnswer) node config:
+  { "answer": "{{JSON.stringify(context.toolResponse)}}", "maxLoops": 4 }
+
+The `answer` field is the CognigyScript handed back to the LLM as the tool result.
+**An empty `answer` (e.g. `config: {}`) returns nothing** — the model sees an empty tool
+result and will stall or hallucinate. This applies to EVERY tool branch (transactional,
+transfer, end-call). See explain("agent-tool-branch") Step 3 for the create call.
 
   // Success:
   context.toolResponse = {
