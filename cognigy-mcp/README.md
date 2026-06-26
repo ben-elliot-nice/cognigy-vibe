@@ -7,7 +7,8 @@ Part of the [cognigy-claude-plugin](https://github.com/ben-elliot-nice/cognigy-c
 ## Installation
 
 ```bash
-uv tool install cognigy-vibe-mcp
+uv tool install cognigy-vibe-mcp                        # stable
+uv tool install cognigy-vibe-mcp --prerelease allow     # latest prerelease
 ```
 
 ## Quick start

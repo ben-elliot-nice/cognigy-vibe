@@ -10,13 +10,13 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 1. **Feature arrives** — clarify scope if ambiguous before any code work.
 
-2. **Sync from remote** — if working tree is clean, `git pull` is preferred. Use `git fetch origin main` only if you have uncommitted changes and don't want to switch branches first.
+2. **Sync from remote** — if working tree is clean, `git pull` is preferred. Use `git fetch origin dev` only if you have uncommitted changes and don't want to switch branches first. (If you are the maintainer cutting a release, sync from `main` instead.)
 
-3. **Create branch or worktree from remote main** (not local main)
+3. **Create branch or worktree from remote dev** (not local dev)
    ```bash
-   git checkout -b feat/<name> origin/main
+   git checkout -b feat/<name> origin/dev
    # or, using the using-git-worktrees skill:
-   git worktree add .claude/worktrees/<name> -b feat/<name> origin/main
+   git worktree add .claude/worktrees/<name> -b feat/<name> origin/dev
    ```
 
 4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written.
@@ -32,15 +32,16 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 7. **Finish the branch using `superpowers:finishing-a-development-branch`**
    - The skill presents 4 options. **Always choose option 2 (Push and create PR).**
    - The skill will `git push -u origin <branch>` and run `gh pr create`.
+   - **PRs target `dev`**, not `main`. The `dev → main` promotion (cutting a stable release) is the maintainer's responsibility and happens separately.
 
 8. **Verify PR and check for conflicts**
    ```bash
    gh pr view --json url,mergeable,mergeStateStatus
    ```
-   - If `mergeable` is `CONFLICTING`: rebase the branch on current remote main, then force-push.
+   - If `mergeable` is `CONFLICTING`: rebase the branch on current remote dev, then force-push.
      ```bash
-     git fetch origin main
-     git rebase origin/main
+     git fetch origin dev
+     git rebase origin/dev
      git push --force-with-lease
      ```
 
@@ -67,7 +68,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 ## Rules
 
 - **Composite skills call atomic skills** (`cognigy:get`, `cognigy:create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.
-- **After any change to `cognigy-mcp/` or `skills/`**, increment both `cognigy-mcp/pyproject.toml` and `.claude-plugin/plugin.json` versions. Always patch increment unless directed otherwise (e.g. `1.1.9` → `1.1.10`). CI enforces this on PRs to main.
+- **Do not bump versions in `dev` PRs.** CI will reject any PR to `dev` that changes the version in `cognigy-mcp/pyproject.toml` or `.claude-plugin/plugin.json`. Version bumps happen only in the `dev → main` release PR, which the maintainer opens. On merge to `dev`, a prerelease is published automatically with a `.devN` suffix.
 - **Shell commands:** if Claude is constructing the command, run each step as a separate Bash call. If a compound command is explicitly defined in a CLAUDE.md, run it as written.
 
 ## OpenAPI Spec
@@ -129,4 +130,10 @@ The following items are tracked but not currently in scope. If you ask Claude to
 
 ## After every commit + push
 
-On merge to main, the release pipeline automatically notifies `nice-claude-marketplace` to update its submodule reference. No manual step required.
+**Merge to `dev`** — a prerelease is automatically built and published to PyPI as `x.y.z.devN` (e.g. `1.5.5.dev47`). No action required. Install with:
+```bash
+uvx cognigy-vibe-mcp==1.5.5.dev47   # specific prerelease
+uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
+```
+
+**Merge to `main`** (stable release only) — the stable version is published to PyPI and the release pipeline notifies `nice-claude-marketplace` to update its submodule reference. No manual step required.
