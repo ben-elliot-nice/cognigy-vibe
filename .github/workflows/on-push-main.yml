@@ -6,6 +6,8 @@ on:
 
 jobs:
   release:
+    permissions:
+      contents: write
     uses: ./.github/workflows/_release.yml
     with:
       prerelease: false
