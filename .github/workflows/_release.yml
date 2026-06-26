@@ -32,7 +32,12 @@ jobs:
           print(m.group(1))
           ")
           if [ "${{ inputs.prerelease }}" = "true" ]; then
-            VERSION="${BASE}.dev${{ github.run_number }}"
+            NEXT=$(python3 -c "
+          parts = '${BASE}'.split('.')
+          parts[-1] = str(int(parts[-1]) + 1)
+          print('.'.join(parts))
+            ")
+            VERSION="${NEXT}.dev${{ github.run_number }}"
           else
             VERSION="$BASE"
           fi
