@@ -27,6 +27,8 @@ jobs:
           BASE=$(python3 -c "
           import re
           m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-mcp/pyproject.toml').read(), re.MULTILINE)
+          if not m:
+              raise SystemExit('Could not parse version from cognigy-mcp/pyproject.toml')
           print(m.group(1))
           ")
           if [ "${{ inputs.prerelease }}" = "true" ]; then
@@ -75,14 +77,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          PRERELEASE_FLAG=""
           if [ "${{ inputs.prerelease }}" = "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Install: \`uvx cognigy-vibe-mcp\`" \
+              --prerelease
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Install: \`uvx cognigy-vibe-mcp\`"
           fi
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "Install: \`uvx cognigy-vibe-mcp\`" \
-            $PRERELEASE_FLAG
 
       - name: Publish to PyPI
         if: steps.check.outputs.skip == 'false'
