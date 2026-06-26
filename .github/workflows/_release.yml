@@ -1,0 +1,93 @@
+# .github/workflows/_release.yml
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      prerelease:
+        type: boolean
+        required: true
+      environment:
+        type: string
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version
+        id: version
+        run: |
+          BASE=$(python3 -c "
+          import re
+          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-mcp/pyproject.toml').read(), re.MULTILINE)
+          print(m.group(1))
+          ")
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            VERSION="${BASE}.dev${{ github.run_number }}"
+          else
+            VERSION="$BASE"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Check tag does not already exist
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.check.outputs.skip == 'false'
+        with:
+          enable-cache: true
+
+      - name: Patch version in pyproject.toml
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" cognigy-mcp/pyproject.toml
+          echo "Patched pyproject.toml to version $VERSION"
+
+      - name: Build
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd cognigy-mcp
+          uv build
+
+      - name: Create GitHub release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Install: \`uvx cognigy-vibe-mcp\`" \
+            $PRERELEASE_FLAG
+
+      - name: Publish to PyPI
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd cognigy-mcp
+          uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
