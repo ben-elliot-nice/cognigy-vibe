@@ -135,7 +135,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
   uvx cognigy-vibe-mcp==1.5.5.dev47         # specific build
   uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
   ```
-  Stable releases are published when the maintainer merges `dev → main`; on that merge the marketplace submodule reference is also updated automatically.
+  Stable releases are published when the maintainer merges `dev → main`. The marketplace submodule reference must be updated manually after a stable release (see TODO item #1 in CLAUDE.md).
 - See [CLAUDE.md](CLAUDE.md) for the full development workflow (planning, subagent-driven implementation, PR + CI flow).
 
 ### Repository layout

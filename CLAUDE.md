@@ -136,4 +136,4 @@ uvx cognigy-vibe-mcp==1.5.5.dev47   # specific prerelease
 uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
 ```
 
-**Merge to `main`** (stable release only) — the stable version is published to PyPI and the release pipeline notifies `nice-claude-marketplace` to update its submodule reference. No manual step required.
+**Merge to `main`** (stable release only) — the stable version is published to PyPI. The marketplace submodule reference must be updated manually (see TODO item #1 — automation not yet implemented).

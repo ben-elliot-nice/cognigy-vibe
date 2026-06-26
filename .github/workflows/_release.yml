@@ -71,23 +71,6 @@ jobs:
           cd cognigy-mcp
           uv build
 
-      - name: Create GitHub release
-        if: steps.check.outputs.skip == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
-            gh release create "$TAG" \
-              --title "$TAG" \
-              --notes "Install: \`uvx cognigy-vibe-mcp\`" \
-              --prerelease
-          else
-            gh release create "$TAG" \
-              --title "$TAG" \
-              --notes "Install: \`uvx cognigy-vibe-mcp\`"
-          fi
-
       - name: Publish to PyPI
         if: steps.check.outputs.skip == 'false'
         run: |
@@ -95,3 +78,21 @@ jobs:
           uv publish
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
+
+      - name: Create GitHub release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Install: \`uvx cognigy-vibe-mcp==${VERSION}\` or \`uv tool install cognigy-vibe-mcp --prerelease allow\`" \
+              --prerelease
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Install: \`uvx cognigy-vibe-mcp\`"
+          fi

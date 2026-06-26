@@ -3,7 +3,6 @@ name: Release (production)
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   release:
