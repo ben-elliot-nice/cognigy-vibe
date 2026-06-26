@@ -1,0 +1,14 @@
+name: Release (production)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  release:
+    uses: ./.github/workflows/_release.yml
+    with:
+      prerelease: false
+      environment: production
+    secrets: inherit

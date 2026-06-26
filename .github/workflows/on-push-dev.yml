@@ -1,0 +1,14 @@
+name: Release (prerelease)
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  release:
+    uses: ./.github/workflows/_release.yml
+    with:
+      prerelease: true
+      environment: development
+    secrets: inherit
