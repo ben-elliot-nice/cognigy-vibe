@@ -79,7 +79,7 @@ This node must run immediately after setHTMLAppState.
     summary: "I've sent that to your screen — complete it when you're ready.",
     data: { xappSent: true }
   };
-  api.resolve();
+  // No api.resolve() — Code node finishes synchronously; flow advances to aiAgentToolAnswer automatically.
 
 #### 5. SMS delivery (voice only)
 Send context.shortTermMemory.xappUrl to the caller via SMS. Skip entirely for digital channels.
