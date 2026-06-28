@@ -124,13 +124,18 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 
 ### Contributing
 
-- Branch from `origin/main` (not local main):
+- Branch from `origin/dev` (not local dev):
   ```bash
-  git checkout -b feat/<name> origin/main
+  git checkout -b feat/<name> origin/dev
   ```
-- After any change to `cognigy-mcp/` or `skills/`, bump the version in **both** [`cognigy-mcp/pyproject.toml`](cognigy-mcp/pyproject.toml) and [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) — patch increment by default (e.g. `1.4.2` → `1.4.3`). CI enforces this on PRs to `main`.
+- **Do not bump versions.** CI will reject any PR to `dev` that changes the version. A prerelease (`x.y.z.devN`) is published automatically on every merge to `dev`. Stable releases are cut by the maintainer via a `dev → main` PR.
 - **Composite skills call atomic MCP tools** (`cognigy_get`, `cognigy_create`, …) — never hardcode `npx tsx` CLI calls in a skill.
-- PR to `main`. On merge, the release pipeline notifies `nice-claude-marketplace` to update its submodule reference automatically.
+- PR to `dev`. On merge, a prerelease is automatically published to PyPI. To install a specific prerelease build for testing:
+  ```bash
+  uvx cognigy-vibe-mcp==1.5.5.dev47         # specific build
+  uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
+  ```
+  Stable releases are published when the maintainer merges `dev → main`. The marketplace submodule reference must be updated manually after a stable release (see TODO item #1 in CLAUDE.md).
 - See [CLAUDE.md](CLAUDE.md) for the full development workflow (planning, subagent-driven implementation, PR + CI flow).
 
 ### Repository layout

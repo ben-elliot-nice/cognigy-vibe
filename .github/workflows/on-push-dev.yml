@@ -1,0 +1,15 @@
+name: Release (prerelease)
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/_release.yml
+    with:
+      prerelease: true
+      environment: development
+    secrets: inherit
