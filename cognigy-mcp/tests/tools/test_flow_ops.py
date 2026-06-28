@@ -299,6 +299,49 @@ def test_aiagenttooltanswer_extension_is_basic_nodes(mock_client, state, cache):
     assert call_body["extension"] == "@cognigy/basic-nodes"
 
 
+def test_aiagenttooltanswer_answer_injected_when_missing(mock_client, state, cache):
+    """Empty config:{} must get the canonical answer field injected."""
+    mock_client.post.return_value = {"_id": "answer-1", "type": "aiAgentToolAnswer"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentToolAnswer", "mode": "append", "target": "code-1",
+                 "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["config"]["answer"] == "{{JSON.stringify(context.toolResponse)}}"
+    assert call_body["config"]["maxLoops"] == 4
+
+
+def test_aiagenttooltanswer_existing_answer_unchanged(mock_client, state, cache):
+    """If answer is already set, normalization must leave it unchanged."""
+    mock_client.post.return_value = {"_id": "answer-1", "type": "aiAgentToolAnswer"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentToolAnswer", "mode": "append", "target": "code-1",
+                 "config": {"answer": "{{JSON.stringify(context.toolResponse)}}", "maxLoops": 8}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["config"]["answer"] == "{{JSON.stringify(context.toolResponse)}}"
+    assert call_body["config"]["maxLoops"] == 8
+
+
+def test_aiagenttooltanswer_no_config_key_unchanged(mock_client, state, cache):
+    """If no config key at all, normalization must not add one (body sent as-is)."""
+    mock_client.post.return_value = {"_id": "answer-1", "type": "aiAgentToolAnswer"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "aiAgentToolAnswer", "mode": "append", "target": "code-1"},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert "config" not in call_body
+
+
 def test_inject_extension_uses_dynamic_map_as_fallback(mock_client, state, cache):
     """A node type unknown to the static map should get its extension from state['extension_map']."""
     state.set("extension_map", value={"myCustomNode": "my-custom-ext"})
