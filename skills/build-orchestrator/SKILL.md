@@ -7,7 +7,7 @@ description: End-to-end Cognigy AI Agent demo builder — the orchestrator that 
 
 > **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:init-mcp`, `cognigy:init-cognigy-vibe`. The orchestrator delegates to these by name; it does not vendor their content. **§0.0 preflight:** loads workspace build defaults from `default-demo-config.json` at the `Demo Builds` root (written by `cognigy:init-cognigy-vibe`); if absent, delegates to that skill first.
 >
-> **`cognigy-vibe-mcp` install.** Use latest: `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after). Floor is now **1.4.2** — this skill version depends on v1.4.0+ features: **file-backed tool authoring via `push_agent_tool`** (the canonical §1.3/§6 path — added in plugin **1.4.2** via PR #54; on < 1.4.2 the tool is absent and `cognigy_create` still accepts `aiAgentJobTool`), `push_code_node` CREATE mode (single-call create+position+push — §1.5(b), §6), IF/Once branch-marker insertion (§1.4b — `explain("node-positioning")`), the corrected say-node string-array + `generativeAI_customInputs: []` shape (§1.5(d) — `explain("say-node")`), the xApp inbound event path (§1.4b / §1.7 — `explain("xapp-event-handling")`), and the `explain()` topics `project-snapshots` / `voice-silence-timeout` / `output-formats` / `knowledge-store` referenced throughout. On < 1.4.0 these instructions fail (e.g. `push_code_node` still requires a pre-existing `node_id`; the cited topics 404). Earlier versions also miss AU1 stability fixes (extension mapping for `aiAgentJob` → `@cognigy/basic-nodes` and `aiAgentToolAnswer` extension coverage, safe `nodeId` fallback in `_build_hierarchy`, 204 No Content handling in `patch()`, `sync_remote_state` direct-endpoint fallback) and the project-binding refactor (`ProjectState.bind_project()`, server boots without `COGNIGY_PROJECT_ID`, `sync_remote_state` binds project in-session) that §1.1.5 depends on. Anything ≥ floor is fine; the latest published version is always the recommended target. Each tagged release of this skill records the exact plugin version it was validated against in its annotated tag message — that's the pin if you need to roll back.
+> **`cognigy-vibe-mcp` install.** `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after) — always run the latest. This skill relies on: file-backed tool authoring via `push_agent_tool` (canonical §1.3/§6 path), `push_code_node` CREATE mode (single-call create+position+push — §1.5(b), §6), IF/Once branch-marker insertion (§1.4b — `explain("node-positioning")`), the say-node string-array + `generativeAI_customInputs: []` shape (§1.5(d) — `explain("say-node")`), the xApp inbound event path (§1.4b / §1.7 — `explain("xapp-event-handling")`), in-session project binding via `sync_remote_state` (§1.1.5), and the `explain()` topics referenced throughout (`project-snapshots`, `voice-silence-timeout`, `output-formats`, `knowledge-store`, `llm-resources`).
 
 This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Agent demo from scratch. It produces a complete build adhering to the patterns documented in this skill body — full init chain, voice config, Shape-B tool branches with the plugin-canonical `aiAgentToolAnswer` terminal, transfer + end-call patterns, deterministic mocks, conditional-push xApp HTML, as-built docs generated from the live flow chart, drift baseline, package zip backup — for any industry, with the CRM shape adapting to the domain.
 
@@ -285,11 +285,9 @@ If field names diverge, the build skill is the source of truth — flag the mism
 
 ---
 
-## §1.0 — Fork lane (not yet implemented)
+## §1.0 — Fork lane
 
-> **Fork support is not yet implemented in this plugin.** The `cognigy:fork-existing-agent` sub-skill that would drive this lane has not shipped. **Regardless of how Q13 is answered, skip this section and proceed to §1.1** as a normal from-scratch build. Do not attempt to delegate to a fork sub-skill — it does not exist yet.
-
-When the fork sub-skill ships, this lane will: clone the source project, audit and reconcile tools against this customer's §1.3 derived set, swap the cloned init-chain content (Init Session CRM body, Say Welcome variants, Set Session Config `sttHints`), and return the cloned `projectId` / `agentId` / `flowId` / `endpointId` plus the final tool list — letting the orchestrator skip §1.1 and §1.5. Until then, every build runs the full §1.1 path.
+> Not yet implemented. Regardless of how Q13 is answered, skip to §1.1 — every build runs the full from-scratch path.
 
 ---
 
@@ -338,7 +336,7 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 
 - `create_ai_agent` — project + agent + stub flow + REST endpoint in one call
 - `create_tool` — aiAgentJobTool + `aiAgentToolAnswer` pair, auto-wired (Cognigy UI calls the answer node "Resolve Tool Action" / "Resolve Tool Answer" — same node). **Alternative path only.** The canonical tool-authoring call is cognigy-vibe `push_agent_tool` (file-first — §1.3). Use `create_tool` only for a quick one-call tool needing no visibility `condition`; it builds a *different* skeleton (auto-pairs the answer node, wrapped/stringified arg shape) — do NOT mix the two recipes in one branch.
-- `manage_flow_nodes` — **fallback only.** Supports `say`, `question`, `ifThenElse`, `lookup`, `setSessionContext`, `code`, `goTo`, `sleep`, `httpRequest`. This skill uses cognigy-vibe `cognigy_create` for all flow-node creation (init chain AND tool branches) because it covers more node types (`once`, `setSessionConfig`, `wait`, `hangup`, AI-agent nodes) and gives uniform `mode: "append"` semantics. Use `manage_flow_nodes` only if cognigy-vibe is unavailable AND the node type is one of the 9 listed above.
+- `manage_flow_nodes` — **fallback only** (use only if cognigy-vibe is unavailable AND the node is one of: `say`, `question`, `ifThenElse`, `lookup`, `setSessionContext`, `code`, `goTo`, `sleep`, `httpRequest`). This skill uses cognigy-vibe `cognigy_create` for all flow-node creation — it covers more node types (`once`, `setSessionConfig`, `wait`, `hangup`, AI-agent nodes) with uniform `mode: "append"` semantics.
 - `list_resources`, `delete_resource`, `update_tool` — discovery + cleanup
 - `manage_packages` — package zip export (backup artifact — see §1.6)
 - `manage_knowledge` — knowledge-store wiring (used in §1.8 if `cognigy_invoke inject` doesn't fit)
@@ -354,7 +352,7 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 | `cognigy_delete` | DELETE any resource including nodes — use for §8 collision cleanup |
 | `cognigy_invoke` | Named operations: **move, clone, train, inject, search** — fork lane (§1.0), knowledge wiring (§1.8), asset discovery |
 | `get_flow_chart` | Chart with relations array + readable hierarchy string — primary source for as-built (§1.6) |
-| `push_code_node` | Push local `.js`/`.ts` to a Code node with conflict detection. **v1.4.0:** also CREATEs+positions the node in one call when `node_id` is omitted (`mode`+`target` provided) |
+| `push_code_node` | Push local `.js`/`.ts` to a Code node with conflict detection. Also CREATEs+positions the node in one call when `node_id` is omitted (`mode`+`target` provided). |
 | `push_html_node` | Push local `.html` to a `setHTMLAppState` node — xApp moments (§1.4b) |
 | `push_agent_tool` | Read a local `.tool.json` → create/update an `aiAgentJobTool` node — **canonical tool-authoring path (§1.3)** (plugin ≥ 1.4.2). CREATE: pass `job_node_id` (the parent `aiAgentJob` node); UPDATE: pass `node_id`. No `aiAgentId`. Creates ONLY the tool node — append `aiAgentToolAnswer` yourself (§6 Step 4). `cognigy_create` is blocked for `aiAgentJobTool` and redirects here. |
 
@@ -401,7 +399,7 @@ Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.
 
 > ⚠️ Returned `endpointUrl` uses host `cognigy-api-au1.nicecxone.com` — that 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>` in the as-built doc.
 
-**Step 2 — LLM gate (per `read_guide { guideId: "agent-creation" }`).** A freshly auto-created project may report `llmStatus: "unknown"`. Before assigning the LLM in Step 3, ensure the project has a working LLM with a non-empty `connectionId` — reuse another project's via `manage_packages` export/import, or `setup_llm`. Do not `talk_to_agent` until a working LLM is confirmed.
+**Step 2 — LLM gate (per `explain("llm-resources")`).** A freshly auto-created project may report `llmStatus: "unknown"`. Before assigning the LLM in Step 3, ensure the project has a working LLM with a non-empty `connectionId` — reuse another project's via `manage_packages` export/import, or `setup_llm`. Do not `talk_to_agent` until a working LLM is confirmed.
 
 **Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the §1.1.5 restart.
 
@@ -669,7 +667,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
-2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")` (v1.4.0), an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
+2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")`, an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
    ```
    // Step 2a — create the IF gate node
    cognigy_create {
@@ -825,7 +823,7 @@ cognigy_create {
 
 Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_flow_chart` after this call.
 
-**(b) Initialize Session — Code node** inside On First Time. As of cognigy-vibe **v1.4.0**, `push_code_node` **creates and positions the Code node in one call** — omit `node_id` and pass `mode` + `target` + `label`. The old two-step (empty `cognigy_create` → `push_code_node`) is no longer needed:
+**(b) Initialize Session — Code node** inside On First Time. `push_code_node` **creates and positions the Code node in one call** — omit `node_id` and pass `mode` + `target` + `label`:
 ```
 push_code_node {
   script_file: "Demo Builds/<customer>-demo/code-nodes/<customer>_initialize_session.js",   // canonical CRM template, industry-shaped — §3
@@ -837,7 +835,7 @@ push_code_node {
 }
 ```
 
-> **v1.4.0 change:** Code nodes no longer need the two-step `cognigy_create` (empty) → `push_code_node`. The single `push_code_node` CREATE call (omit `node_id`, provide `mode`+`target`) does both. To UPDATE an existing Code node instead, pass its `node_id` (conflict-detected). Required params: `script_file`, `flow_id`. See plugin `explain("code-node-patterns")`.
+> The single `push_code_node` CREATE call (omit `node_id`, provide `mode`+`target`) creates, positions, and pushes the body in one step. To UPDATE an existing Code node instead, pass its `node_id` (conflict-detected). Required params: `script_file`, `flow_id`. See plugin `explain("code-node-patterns")`.
 
 **(c) Set Session Config** (extension `@cognigy/voicegateway2` auto-injected):
 ```
@@ -1680,12 +1678,12 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `cognigy_create` | **Insertion mode: use `mode: "append"` + `target: "<previousNodeId>"`** — inserts the new node AFTER target and auto-rewires the chain. `mode: "appendChild"` is for putting `aiAgentJobTool` as a child of `aiAgentJob`. **`insertAfter` / `insertBefore` are BROKEN on AU1** (return 500 "Error while reading ChartData"). See plugin `explain("node-positioning")`. |
 | cognigy-vibe | `cognigy_create` | **`resource_type` is `"node"`** (plus a separate `flow_id` param) — NOT the path-form `"flows/<flowId>/chart/nodes"`. Path-form may work but is non-canonical. |
 | cognigy-vibe | `cognigy_create` | Say config is **auto-normalised** — the tool accepts either flat `config.text` or nested `config.say.text` (array). |
-| cognigy-vibe | `cognigy_create` | Don't author Code-node bodies here. As of v1.4.0, `push_code_node` CREATE mode (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes a Code node in one call — no empty-`cognigy_create` step needed. |
+| cognigy-vibe | `cognigy_create` | Don't author Code-node bodies here. `push_code_node` CREATE mode (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes a Code node in one call. |
 | cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.resolve` / `api.reject`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Skill-specific shapes (success / no-match / disambiguation) live in §C.2. |
 | cognigy-vibe | `cognigy_update` | Does an **always-fresh GET + deep merge** when `merge_config: true` is set. Patch deltas only; sibling fields stay intact. |
 | cognigy-vibe | `cognigy_delete` | DELETE any resource including individual nodes. Used in §8 collision cleanup. |
 | cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the §1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). §1.8 knowledge wiring uses NiCE `manage_knowledge`, not `inject`. |
-| cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **v1.4.0: two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
+| cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **Two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
 | cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for §1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (§1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (§6 Step 4). No `aiAgentId` param. |
 | cognigy-vibe | `get_flow_chart` | Returns shape depends on `format` param: `"hierarchy"` (default) → `{ hierarchy: "..." }` only; `"raw"` → `{ nodes: [...], relations: [...] }` only; `"both"` → all three fields. Key is `hierarchy`, NOT `hierarchyString`. Use `format: "both"` for as-built generation (§1.6); use `format: "raw"` when walking node IDs (§1.7 Phase A). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |

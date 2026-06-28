@@ -122,21 +122,15 @@ Look for `default-demo-config.json` and `.env` at the workspace root.
 
 ### 4. (Optional) discover live resource IDs
 
-If a Cognigy MCP is connected, offer to list real resources so the user picks instead of pasting — most valuable for **LLM referenceIds**. Prefer the **`cognigy-vibe`** server (bundled with this plugin, so it's the one reliably present at setup time); use its `cognigy_list` tool with **snake_case** params:
+If `cognigy-vibe` is connected, offer to list real resources so the user picks instead of pasting — most valuable for **LLM referenceIds**. Use `cognigy_list` (snake_case params); `resource_type` passes straight through to the REST path, so LLM discovery needs **no NiCE MCP dependency**:
 
 ```
 cognigy_list { resource_type: "projects" }
-cognigy_list { resource_type: "largelanguagemodels", project_id: "<id>" }   # label + referenceId + type; resource_type must match the server's collection name — confirm against cognigy_list output
+cognigy_list { resource_type: "largelanguagemodels", project_id: "<id>", full_objects: true }
+# → GET /v2.0/largelanguagemodels?projectId=<id> — each item has name (label), referenceId, modelType, provider
 ```
 
-Alternative, if the **NiCE** Cognigy MCP is the one connected (this is the exact form `build-orchestrator`'s §1.1 LLM gate uses — singular `resourceType`, camelCase, value `llm_model`):
-
-```
-list_resources { resourceType: "project" }
-list_resources { resourceType: "llm_model", projectId: "<id>" }
-```
-
-Present generation LLMs for `llm.options`, embedding models for `llm.embedding`. If no MCP is connected, collect as free text and note they can re-run setup to validate later.
+Match LLMs by `name` (label) and capture each `referenceId` into `llm.options[]`; embedding models likewise into `llm.embedding`. See `explain("llm-resources")` for referenceId resolution and project-scope details. If `cognigy-vibe` isn't connected, collect as free text and note they can re-run setup to validate later.
 
 ### 5. Wizard interview (`AskUserQuestion` batches)
 
