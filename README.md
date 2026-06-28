@@ -88,7 +88,8 @@ The entry point is `cognigy:build-orchestrator` — a single-batch interview tha
 | [`design-agent-interfaces`](skills/design-agent-interfaces/SKILL.md) | Touchpoints outside the chat window — xApp scenes, webchat patterns, live-agent handover. |
 | [`design-agent-contracts`](skills/design-agent-contracts/SKILL.md) | Deterministic enforcement layer — guard sub-flows, obligation state, structured refusals. |
 | [`add-aiagent-job`](skills/add-aiagent-job/SKILL.md) | Add an AI Agent Job node (+ optional tool nodes) to an existing flow. |
-| [`init-mcp`](skills/init-mcp/SKILL.md) | Set up `cognigy-vibe-mcp` for a new demo project. Run once per project. |
+| [`init-cognigy-vibe`](skills/init-cognigy-vibe/SKILL.md) | **First-time setup wizard.** Captures every build variable once (API URL + key, LLM refs, TTS, STT, voice channel, voice preview, naming) → `.env` + `default-demo-config.json` at the `Demo Builds` workspace root. Run before your first build; `build-orchestrator` §0.0 loads it and binds projects with no restart. |
+| [`init-mcp`](skills/init-mcp/SKILL.md) | Legacy per-project `cognigy-vibe-mcp` wiring (restart path). Superseded by `init-cognigy-vibe` for the common case; used only when `cognigy-vibe` is pinned per project. |
 | [`explain`](skills/explain/SKILL.md) | Retrieve implementation guidance for Cognigy topics before brute-forcing or web-searching. |
 | [`submit-issue`](skills/submit-issue/SKILL.md) | File a bug against this plugin (MCP server or a skill). |
 

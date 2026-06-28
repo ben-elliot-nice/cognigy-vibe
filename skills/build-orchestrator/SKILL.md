@@ -1,11 +1,11 @@
 ---
 name: build-orchestrator
-description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome → Wait) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by §0.5; if opened, wired via Cognigy's built-in Knowledge AI (`manage_knowledge` + `manage_settings`) in §1.8. Smoke test runs in §1.7 before hand-back — Phase A structural verification against `get_flow_chart` (12 assertions, incl. a ≤1000-char agent-field cap) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant §1.5 / §1.4 / §5 step; only hands back when both phases are green.
+description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — at §0.0 loads workspace build defaults (LLM/embedding/TTS/STT/channel/voice/tenant/naming) from `default-demo-config.json` at the `Demo Builds` root, written by `cognigy:init-cognigy-vibe` (delegates to it if missing; binds the project in-session with no restart when the workspace `.env` + projectless cognigy-vibe are present), then runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome → Wait) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by §0.5; if opened, wired via Cognigy's built-in Knowledge AI (`manage_knowledge` + `manage_settings`) in §1.8. Smoke test runs in §1.7 before hand-back — Phase A structural verification against `get_flow_chart` (12 assertions, incl. a ≤1000-char agent-field cap) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant §1.5 / §1.4 / §5 step; only hands back when both phases are green.
 ---
 
 # Build Orchestrator — end-to-end Cognigy AI Agent demo builder
 
-> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:init-mcp`. The orchestrator delegates to these by name; it does not vendor their content.
+> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:init-mcp`, `cognigy:init-cognigy-vibe`. The orchestrator delegates to these by name; it does not vendor their content. **§0.0 preflight:** loads workspace build defaults from `default-demo-config.json` at the `Demo Builds` root (written by `cognigy:init-cognigy-vibe`); if absent, delegates to that skill first.
 >
 > **`cognigy-vibe-mcp` install.** Use latest: `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after). Floor is now **1.4.2** — this skill version depends on v1.4.0+ features: **file-backed tool authoring via `push_agent_tool`** (the canonical §1.3/§6 path — added in plugin **1.4.2** via PR #54; on < 1.4.2 the tool is absent and `cognigy_create` still accepts `aiAgentJobTool`), `push_code_node` CREATE mode (single-call create+position+push — §1.5(b), §6), IF/Once branch-marker insertion (§1.4b — `explain("node-positioning")`), the corrected say-node string-array + `generativeAI_customInputs: []` shape (§1.5(d) — `explain("say-node")`), the xApp inbound event path (§1.4b / §1.7 — `explain("xapp-event-handling")`), and the `explain()` topics `project-snapshots` / `voice-silence-timeout` / `output-formats` / `knowledge-store` referenced throughout. On < 1.4.0 these instructions fail (e.g. `push_code_node` still requires a pre-existing `node_id`; the cited topics 404). Earlier versions also miss AU1 stability fixes (extension mapping for `aiAgentJob` → `@cognigy/basic-nodes` and `aiAgentToolAnswer` extension coverage, safe `nodeId` fallback in `_build_hierarchy`, 204 No Content handling in `patch()`, `sync_remote_state` direct-endpoint fallback) and the project-binding refactor (`ProjectState.bind_project()`, server boots without `COGNIGY_PROJECT_ID`, `sync_remote_state` binds project in-session) that §1.1.5 depends on. Anything ≥ floor is fine; the latest published version is always the recommended target. Each tagged release of this skill records the exact plugin version it was validated against in its annotated tag message — that's the pin if you need to roll back.
 
@@ -34,6 +34,34 @@ Trigger phrases (any = load end-to-end):
 - Any brief that names a customer + a role/persona the agent should play
 
 If the user doesn't name a customer, still load — the interview in §0 gets the rest.
+
+---
+
+## §0.0 — Load build config (BLOCKING preflight — runs before the interview)
+
+The tenant build defaults (LLM, embedding, TTS, STT, channel/voice gateway, voice preview, locale, hosts, naming) live in a **workspace-level** config written once by `cognigy:init-cognigy-vibe`: `default-demo-config.json` at the `Demo Builds` root (the folder that holds every `<customer>-demo/` sub-build), with secrets in a sibling `.env`. This is the authoritative source for the values that used to be hardcoded in the "Default build values" table below.
+
+**Step 1 — find + read the config.** Look for `default-demo-config.json` at the workspace root — the `Demo Builds` folder. Check the cwd and walk **up** the parent directories (the session may be launched in `Demo Builds/` or in a `<customer>-demo/` sub-folder); the nearest ancestor that has the file is the workspace root.
+
+```bash
+# from cwd, search self + ancestors for the workspace config
+d="$PWD"; while [ "$d" != "/" ]; do [ -f "$d/default-demo-config.json" ] && { cat "$d/default-demo-config.json"; break; }; d=$(dirname "$d"); done
+```
+
+**Step 2 — branch on what you find:**
+
+- **File missing or unparseable** → the user hasn't run setup yet. Say so and delegate:
+  > "I don't have your workspace build defaults yet (tenant, LLM, voice, etc.). I'll run `cognigy:init-cognigy-vibe` once to capture them at your `Demo Builds` root — after that every build needs zero manual config."
+
+  Delegate to **`cognigy:init-cognigy-vibe`**, then re-read the file and continue. Do **not** silently fall back to the hardcoded AU1 table — those values are workspace config now.
+
+- **File present** → load it into a `buildConfig` object (and note its directory as the **workspace root** — that's where the `.env` is and where new `<customer>-demo/` folders go). These values override the documented defaults in "Default build values" wherever they differ. Surface a compact summary in the §0 recap (Step 3).
+
+**Step 3 — echo + confirm (not re-interview).** In the recap that follows §0.6, show the loaded config as a short table — default generation LLM (label) + any alternates, tenant region, persona temp, TTS voice label, STT label, voice channel, locale, project suffix — and ask the user to **confirm, switch the LLM to a listed alternate, or override for this build only**. A one-build override (e.g. the Azure GPT alternate, NZ English STT for a 2Degrees build, or a male voice) does **not** rewrite the saved file; it just changes `buildConfig` for this run. To change the saved defaults permanently, the user re-runs `cognigy:init-cognigy-vibe`.
+
+> **The live LLM gate (§1.1 Step 2) still runs.** The chosen LLM — `buildConfig.llm.default` (or the alternate the user picked in Step 3), resolved to its `referenceId` via `buildConfig.llm.options[]` — is the *suggested* value; the generation LLM must still be verified to exist in the target project before generation is relied on. A stale referenceId surfaces at the gate, not as a silent empty-output build.
+
+`buildConfig` (or the user's per-build overrides of it) is what feeds §1.1 / §1.2 / §1.5 from here on. Where the "Default build values" table is cited downstream, read the corresponding `buildConfig` field instead.
 
 ---
 
@@ -260,33 +288,40 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 
 ---
 
-## Default build values (NiCE AU1 demo tenant)
+## Default build values (sourced from `buildConfig` — §0.0)
 
-These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the user for them mid-build. On a different Cognigy tenant or region, **swap the tenant-specific ones** (LLM, locale, TTS/STT, endpoint host) per the swap note below.
+> **These values now come from the workspace config loaded in §0.0** (`default-demo-config.json` at the `Demo Builds` root, written by `cognigy:init-cognigy-vibe`). The table below documents the **NiCE AU1 demo-tenant fallback** — the shape of each value and what a working AU1 build uses. At build time, read the matching `buildConfig` field; the table is the reference for what each field means and the AU1 default if the user accepted it unchanged. Don't ask the user for these mid-build — §0.0 already loaded and confirmed them.
 
-| Setting | Value |
-|---|---|
-| LLM (generation) | **Discover per project — do NOT blind-hardcode.** Assign the `referenceId` of an LLM that exists in THIS project (§1.1 Step 3); a fresh project has none and generates empty output until one is wired (reuse-via-`manage_packages` or `setup_llm` — §1.1 Step 2). NiCE AU1 demo-tenant shared global LLM: `a793f9ea-befd-4fdf-8be8-b1c8a8385a91`. |
-| Project name | `[CUSTOMER]_Demo_BH` (preserve original casing; `_BH` is just a build-owner tag — use your own initials/suffix) |
-| Folder convention | lowercase `[customer]-demo/` in `Demo Builds/` |
-| Persona LLM temp | `0.2` voice/transactional (**default**) — set `0.5` ONLY when Q10 channel mix is primarily conversational chat (webchat/WhatsApp). Wired at §1.1 + §1.2 (see note below). |
-| Persona maxTokens | `400` |
-| Persona toolChoice | **`auto`** (lowercase — NOT `required`. See §9) |
-| Locale | `en-AU` |
-| TTS Vendor | ElevenLabs |
-| TTS Voice | `Custom` |
-| TTS Voice ID | `kqVqVtE8vZVRm6uoad9t` |
-| TTS Label | `nexora_elevenlabs` |
-| TTS Model | `eleven_turbo_v2_5` |
-| TTS Language | `en` |
-| STT Vendor | Microsoft |
-| STT Label | `nexora-azure-speech-services-australiaeast` |
-| STT Language | `en-AU` |
-| Barge-in | Disabled |
-| VAD | Disabled |
-| Endpoint host | `https://cognigy-endpoint-au1.nicecxone.com/<token>` (NOT `cognigy-api-au1` — 401s) |
+| `buildConfig` field | Setting | AU1 fallback value |
+|---|---|---|
+| `llm.default` + `llm.options[]` | LLM (generation) | default `global-gpt-4.1-mini` (`a793f9ea-befd-4fdf-8be8-b1c8a8385a91`); alternate `Azure GPT 4.1` (`edaaa112-3f1f-4b09-ba50-67a4285eba2b`). Resolve `default` (or the Step-3 alternate) to its `referenceId` via `options[]`. **Still verified live in the target project at §1.1 Step 2; never blind-hardcode.** A fresh project has no LLM and generates empty output until one is wired (reuse-via-`manage_packages` or `setup_llm`). |
+| `llm.embedding.referenceId` | LLM (embedding) | *(optional — only used if §0.5 knowledge gate opens; empty if unset)* |
+| `conventions.projectNamePattern` | Project name | `[CUSTOMER]_Demo_BH` (`_BH` = `owner.initials` build-owner tag) |
+| `conventions.folderPattern` | Folder convention | lowercase `[customer]-demo/` under the workspace root (`Demo Builds/`) |
+| `llm.temperatureVoice` / `temperatureChat` | Persona LLM temp | `0.2` voice/transactional (**default**); `0.5` ONLY when Q10 channel mix is primarily conversational chat (webchat/WhatsApp). Wired at §1.1 + §1.2. |
+| `llm.maxTokens` | Persona maxTokens | `400` |
+| `llm.toolChoice` | Persona toolChoice | **`auto`** (lowercase — NOT `required`. See §9) |
+| `locale` | Locale | `en-AU` |
+| `tts.vendor` | TTS Vendor | ElevenLabs |
+| `tts.voiceType` | TTS Voice | `Custom` |
+| `tts.voiceId` | TTS Voice ID | `kqVqVtE8vZVRm6uoad9t` |
+| `tts.label` | TTS Label (Synthesizer connection) | `nexora_elevenlabs` |
+| `tts.model` | TTS Model | `eleven_turbo_v2_5` |
+| `tts.language` | TTS Language | `en` |
+| `stt.vendor` | STT Vendor | Microsoft |
+| `stt.label` | STT Label (Recognizer connection) | `nexora-azure-speech-services-australiaeast` |
+| `stt.language` | STT Language | `en-AU` |
+| `stt.hints` / `stt.dynamicHints` | STT Hints + Dynamic Hints | wired into Set Session Config `sttHints` (§1.5c); empty hints + dynamic-hints-on by default |
+| `channel.type` | Channel | `voice-webrtc` (default) |
+| `channel.voiceGateway.endpointName` | VoiceGateway endpoint | `Click-to-Call`, webRTC, bound to the flow (§1.1 / §1.5c). See voice-in-scope note below. |
+| `voicePreview.*` | Voice-preview connection | Microsoft Azure Speech Services; connection `Test`, region `AU` (used for in-UI preview) |
+| `voiceBehaviour.bargeIn` | Barge-in | Disabled |
+| `voiceBehaviour.vad` | VAD | Disabled |
+| `connection.endpointBase` | Endpoint host | `https://cognigy-endpoint-au1.nicecxone.com/<token>` (NOT `cognigy-api-au1` — 401s) |
 
-**On the NiCE AU1 demo tenant these work as-is** — don't regenerate or guess them mid-build. **On a different tenant or region, swap them:** the LLM referenceId per the discovery step above; locale / TTS voice / STT label / endpoint host for your region (e.g. NZ English STT for a 2Degrees build, or a male voice). The voice/region values are demo conveniences, not platform requirements.
+**Voice in scope (config-level).** `channel.voiceGateway` and `voicePreview` capture a webRTC **Click-to-Call** endpoint bound to the flow and the Azure speech-preview connection. The build applies TTS/STT and Set Session Config from `buildConfig` automatically. Whether the VoiceGateway endpoint + speech-preview connection are **created end-to-end without UI** depends on `manage_voice_gateway` MCP capabilities — track via the plugin issues filed with `init-cognigy-vibe`. Where the MCP can't yet create them, the as-built records the one remaining manual UI step; **voice testing itself remains the user's job.**
+
+**Legacy note (pre-§0.0 behaviour):** these were the demo defaults for the **NiCE AU1 demo tenant**, hardcoded here and swapped by hand per tenant/region. With §0.0 in place that swap is captured once in `buildConfig` (`cognigy:init-cognigy-vibe`) instead of edited in this skill body. A one-build override (e.g. the Azure GPT alternate, NZ English STT for a 2Degrees build, or a male voice) changes `buildConfig` for this run only; a permanent change is a `cognigy:init-cognigy-vibe` re-run.
 
 > **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at §1.1 Step 3 `update_ai_agent.jobConfig.temperature` (§1.2 no longer re-sets it — see §1.2). (Previously `0.5` was documented but never wired; it is now.)
 
@@ -390,9 +425,19 @@ The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Ste
 
 > If §1.0 fork lane ran instead, skip §1.1 and proceed to §1.1.5 against the cloned agent (use the cloned `projectId`).
 
-### 1.1.5 — Wire up cognigy-vibe MCP for this project (delegate to `cognigy:init-mcp`)
+### 1.1.5 — Bind cognigy-vibe to the new project
 
-**Why this step exists.** §1.2 onwards uses the `cognigy-vibe` MCP server (cognigy-vibe). That server is loaded by Claude Code **at session start** and reads `COGNIGY_PROJECT_ID` from `.claude/mcp.json`. The projectId only exists after §1.1, so the MCP cannot have been loaded when this session began — and MCP servers cannot be hot-loaded mid-session. **A Claude Code restart is required between §1.1 and §1.2.** Skipping this step is the single most common cause of mid-build failure (cognigy-vibe "not loaded" errors at §1.2).
+§1.2 onwards uses the `cognigy-vibe` MCP server. How you reach it depends on how `cognigy-vibe` is registered — check this first.
+
+**Primary path (no restart) — workspace `.env` + projectless server.** When this plugin is installed, it registers `cognigy-vibe` at **plugin level** (`uvx cognigy-vibe-mcp`, no `COGNIGY_PROJECT_ID`), so the server boots project-agnostic at session start and reads `COGNIGY_BASE_URL` / `COGNIGY_API_KEY` from the `.env` at the session's launch directory — the `Demo Builds` workspace root that `cognigy:init-cognigy-vibe` wrote (§0.0). In this (now-standard) setup there is **no `.claude/mcp.json` per project and no restart**:
+
+1. Confirm `cognigy-vibe` is live: `cognigy_list { resource_type: "projects" }` should succeed (credentials resolved from the workspace `.env`).
+2. Bind the new project in-session: `sync_remote_state({ project_id: "<projectId from §1.1>" })`.
+3. Proceed straight to §1.2 in the **same session**.
+
+If step 1 fails with a "not loaded" / missing-credentials error, the workspace `.env` wasn't found (session launched outside the `Demo Builds` tree, or setup not run) — fix that (re-run `cognigy:init-cognigy-vibe`, or relaunch the session in the workspace root) rather than falling back to the restart path.
+
+**Fallback path (legacy, per-project + restart) — delegate to `cognigy:init-mcp`.** Only when `cognigy-vibe` is **not** registered projectless (e.g. an older setup that pins `COGNIGY_PROJECT_ID` per project in `.claude/mcp.json`). The projectId only exists after §1.1, the server reads it at session start, and MCP servers can't hot-load mid-session — so a restart is required:
 
 **Steps:**
 
@@ -417,7 +462,7 @@ The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Ste
 
 **Do not attempt to continue §1.2 in the same session as §1.1.** The `cognigy_*` tools will not exist yet — the restart is structural, not optional.
 
-> **Restart-free path (gated on setup, not version).** If `cognigy-vibe` is pre-registered at a higher-scope `.claude/mcp.json` (user-level or parent-folder) **without** `COGNIGY_PROJECT_ID` pinned, the server boots project-agnostic and binds in-session via `sync_remote_state`. A single session can then run §1.1 → `sync_remote_state({ project_id: "<new projectId>" })` → §1.2 onwards with no restart. **Not yet validated against this orchestrator's flow end-to-end** — until a real build proves it, treat §1.1.5 restart as mandatory. When the no-restart path is validated, this section gets a fork: "if cognigy-vibe pre-registered without project pin → bind in-session; else → §1.1.5 as written."
+> **The two paths above are a fork, not a sequence.** With this plugin's default projectless `cognigy-vibe` registration + a workspace `.env` (the `cognigy:init-cognigy-vibe` setup), take the **primary no-restart path**: `sync_remote_state` binds the new project in-session and the build continues uninterrupted. Only drop to the fallback (per-project `init-mcp` + restart) when `cognigy-vibe` is registered the legacy way with `COGNIGY_PROJECT_ID` pinned per project. Do not pay the restart cost when the primary path is available.
 
 ### 1.2 Patch the Job Node — the two fields `update_ai_agent` can't reach (cognigy-vibe)
 
