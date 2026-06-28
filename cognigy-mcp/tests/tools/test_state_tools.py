@@ -186,6 +186,48 @@ def test_sync_stores_endpoint_token_from_URLToken_field(mock_client, state, cach
     assert ep["flowReferenceId"] == "flow-ref-1", f"Expected 'flow-ref-1', got '{ep.get('flowReferenceId')}'"
 
 
+def test_get_build_state_config_loaded(mock_client, state, cache):
+    build_config = {
+        "connection": {"region": "au1"},
+        "llm": {"default": "Azure GPT-4o"},
+        "tts": {"label": "ElevenLabs Aria"},
+        "stt": {"label": "Microsoft AU"},
+        "locale": "en-AU",
+    }
+    handlers = make_handlers(mock_client, state, cache, build_config, "/home/user/.config/cognigy-vibe/config.json")
+    result = handlers["get_build_state"]({})
+    data = json.loads(result[0].text)
+    assert data["config_loaded"] is True
+    assert data["config_source"] == "/home/user/.config/cognigy-vibe/config.json"
+    assert data["config_summary"]["region"] == "au1"
+    assert data["config_summary"]["llm_default"] == "Azure GPT-4o"
+    assert data["config_summary"]["tts_label"] == "ElevenLabs Aria"
+    assert data["config_summary"]["stt_label"] == "Microsoft AU"
+    assert data["config_summary"]["locale"] == "en-AU"
+
+
+def test_get_build_state_config_not_loaded(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_build_state"]({})
+    data = json.loads(result[0].text)
+    assert data["config_loaded"] is False
+    assert "config_source" not in data
+    assert "config_summary" not in data
+
+
+def test_get_build_state_filtered_includes_config_fields(mock_client, state, cache):
+    """Config fields appear even when resource_type filter is applied."""
+    build_config = {"connection": {"region": "au1"}, "llm": {"default": "GPT-4o"}, "tts": {"label": "Aria"}, "stt": {"label": "MS-AU"}, "locale": "en-AU"}
+    state.set("flows", "Main", value={"id": "flow-1"})
+    handlers = make_handlers(mock_client, state, cache, build_config, "/some/path/config.json")
+    result = handlers["get_build_state"]({"resource_type": "flows"})
+    data = json.loads(result[0].text)
+    assert "flows" in data
+    assert "agents" not in data
+    assert data["config_loaded"] is True
+    assert data["config_summary"]["region"] == "au1"
+
+
 def test_sync_remote_state_builds_extension_map(mock_client, state, cache, monkeypatch):
     """sync_remote_state must fetch installed extensions and store type→name index in state."""
     monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
