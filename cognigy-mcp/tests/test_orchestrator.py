@@ -1,6 +1,7 @@
 import os
 import sys
 import pytest
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -66,3 +67,49 @@ def test_inner_command_dev_missing_source_dir(monkeypatch):
     from cognigy_mcp.orchestrator import _inner_command
     with pytest.raises(SystemExit):
         _inner_command("dev")
+
+
+from cognigy_mcp.orchestrator import _find_env_file
+
+
+def test_find_env_file_in_start_dir(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("COGNIGY_BASE_URL=https://example.com\n")
+    result = _find_env_file(tmp_path, tmp_path.parent)
+    assert result == env
+
+
+def test_find_env_file_in_parent(tmp_path):
+    child = tmp_path / "project"
+    child.mkdir()
+    env = tmp_path / ".env"
+    env.write_text("COGNIGY_BASE_URL=https://example.com\n")
+    result = _find_env_file(child, tmp_path.parent)
+    assert result == env
+
+
+def test_find_env_file_stops_at_boundary(tmp_path):
+    # boundary is tmp_path itself — .env is above it (in tmp_path.parent), should not be found
+    child = tmp_path / "project"
+    child.mkdir()
+    env = tmp_path.parent / ".env"
+    env.write_text("COGNIGY_BASE_URL=https://example.com\n")
+    result = _find_env_file(child, tmp_path)  # stop at tmp_path, not tmp_path.parent
+    assert result is None
+    env.unlink()  # cleanup — tmp_path.parent is shared
+
+
+def test_find_env_file_not_found(tmp_path):
+    child = tmp_path / "deep" / "project"
+    child.mkdir(parents=True)
+    result = _find_env_file(child, tmp_path)
+    assert result is None
+
+
+def test_find_env_file_grandparent(tmp_path):
+    grandchild = tmp_path / "a" / "b"
+    grandchild.mkdir(parents=True)
+    env = tmp_path / ".env"
+    env.write_text("COGNIGY_API_KEY=key\n")
+    result = _find_env_file(grandchild, tmp_path.parent)
+    assert result == env
