@@ -85,22 +85,23 @@ Call `get_build_state`. Inspect `config_loaded`:
 - **`config_loaded: true`** → show a compact summary table (region, LLM, TTS, STT, locale, source path)
   and ask: **keep as-is / edit / start fresh**.
   - Keep → done (exit the wizard).
-  - Edit → re-run the relevant wizard batches (steps 4–5) with current values pre-filled; user changes only what they want.
-  - Start fresh → proceed to step 4 with blank fields.
-- **`config_loaded: false`** → no config found anywhere in the cascade. Proceed to step 4 (full wizard).
+  - Edit → re-run the relevant wizard batches (steps 3–4) with current values pre-filled; user changes only what they want.
+  - Start fresh → proceed to step 3 with blank fields.
+- **`config_loaded: false`** → no config found anywhere in the cascade. Proceed to step 3 (full wizard).
 
-### 4. (Optional) discover live resource IDs
+### 3. (Optional) discover live resource IDs
 
 If the NiCE Cognigy MCP or `cognigy-vibe` is connected, offer to list real resources so the user picks instead of pasting — most valuable for **LLM referenceIds** and **TTS/STT connection labels**:
 
 ```
-list_resources { resourceType: "project" }
-list_resources { resourceType: "llm_model", projectId: "<id>" }   // label + referenceId + type
+cognigy_list { resource_type: "projects" }
+cognigy_list { resource_type: "largelanguagemodels", project_id: "<id>", full_objects: true }
+  # returns name (label), referenceId, modelType, provider
 ```
 
 Present generation LLMs for `llm.options`, embedding models for `llm.embedding`. If no MCP is connected, collect as free text and note they can re-run setup to validate later.
 
-### 5. Wizard interview (`AskUserQuestion` batches)
+### 4. Wizard interview (`AskUserQuestion` batches)
 
 Collect the schema. Pre-fill each option with sensible defaults so a user on the reference tenant can accept fast; others override. Group into ≤3 batches:
 
@@ -113,14 +114,14 @@ Collect the schema. Pre-fill each option with sensible defaults so a user on the
 
 `maxTokens` (400), `toolChoice` (auto), `voiceBehaviour` (barge-in/VAD off) are written at defaults without a question unless the user asks.
 
-### 6. Write the files
+### 5. Write the files
 
 - Write `.env` with `COGNIGY_BASE_URL` + `COGNIGY_API_KEY` to **cwd** (the project directory this session is open in). Always writes here — no walk-up.
 - Write `default-demo-config.json` (pretty JSON, `$schemaVersion: 2`) to **`~/.config/cognigy-vibe/config.json`** on first-time setup (creating the directory if needed). If the user explicitly requested a workspace override for this project only, write to cwd instead.
 - Ensure `.env` is gitignored if cwd is a git repo: check for `.gitignore`; if `.env` is not listed, append it and tell the user.
 - Re-read both files back and confirm they parse / are well-formed.
 
-### 7. Confirm + next step
+### 6. Confirm + next step
 
 Report:
 - `.env` written to: `<cwd>/.env` (project-local — credentials for this Cognigy project only)
@@ -134,5 +135,5 @@ Then: *"You're set up. Open a new project directory, say 'build a demo for Liber
 
 - `.env` is per-project-directory. New directory = new Cognigy project = new `.env`. The MCP always works in the context of a single project.
 - The global `config.json` at `~/.config/cognigy-vibe/config.json` applies to all projects on the same tenant. Drop a `default-demo-config.json` into any project directory to override for that project only — must be a complete file (no field merging).
-- The live **LLM gate** (`build-orchestrator §1.1 Step 2) still verifies the chosen generation LLM exists in the target project before generation is relied on.
+- The live **LLM gate** (`build-orchestrator` §1.1 Step 2) still verifies the chosen generation LLM exists in the target project before generation is relied on.
 - Voice provisioning details depend on `manage_voice_gateway` capabilities — see the plugin issues filed alongside this skill.
