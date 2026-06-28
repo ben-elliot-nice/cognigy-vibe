@@ -669,7 +669,6 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
    context.xappTrigger = true;
    context.xappScene = "<scene_name>";   // optional — for multi-scene flows, route inside ifThenElse
    context.toolResponse = { ...your tool result };
-   // No api.resolve() — Code nodes finish synchronously; flow advances to aiAgentToolAnswer automatically.
    ```
 
 5. **Reset the trigger after the scene fires** — the Code node downstream of `setHTMLAppState` (in the `if` true branch) resets `context.xappTrigger = false` so subsequent turns don't re-fire.
@@ -738,7 +737,7 @@ context.toolResponse = { error: true, message: "<safe message>", retryable: fals
 Mock tools should almost never need to signal a hard error — prefer structured no-match (Shape 2) or disambiguation (Shape 3).
 
 **Hard rules:**
-- **Do NOT call `api.resolve()` or `api.reject()`** — these methods do not exist in the Cognigy Code-node runtime and will throw `Object has no member 'resolve'` at runtime. Code nodes execute synchronously; the flow advances to `aiAgentToolAnswer` automatically when the node finishes.
+- **Code nodes execute synchronously** — write `context.toolResponse` and let the node finish; the flow advances to `aiAgentToolAnswer` automatically.
 - **Always write the result to `context.toolResponse`** — NOT `input.result` (legacy convention; replaced by plugin-canonical `context.toolResponse`).
 - **Build at least one tool with Shape 2 (no-match) per demo** to prove the persona's negative-path handling works.
 
@@ -1438,7 +1437,6 @@ context.customer = {
   // ... same industry fields as Init Session
 };
 context.toolResponse = context.customer;
-// Code node finishes — no api.resolve() call.
 ```
 
 **HARD RULE — three-way field-name consistency:**
@@ -1567,7 +1565,6 @@ push_code_node {
 where the `.js` body is:
 ```javascript
 context.toolResponse = { transferred: true, team: "<team>", teamLabel: "<Customer> <Team>" };
-// No api.resolve() — Code node finishes; flow advances to the next node automatically.
 ```
 
 **Step 3 — second functional node** (appended onto Step 2's node):
@@ -1582,7 +1579,7 @@ push_code_node {
   label: "<Action> <Domain>"
 }
 ```
-The `.js` body reads args from `input.aiAgent.toolArgs` and writes `context.toolResponse` (Shape 1, 2, or 3 per §C.2). No `api.resolve()` call — the node finishes and flow advances automatically.
+The `.js` body reads args from `input.aiAgent.toolArgs`, writes `context.toolResponse` (Shape 1, 2, or 3 per §C.2), and finishes.
 
 Transfer → `say` (hand-off line):
 ```
@@ -1632,7 +1629,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `cognigy_create` | **`resource_type` is `"node"`** (plus a separate `flow_id` param) — NOT the path-form `"flows/<flowId>/chart/nodes"`. Path-form may work but is non-canonical. |
 | cognigy-vibe | `cognigy_create` | Say config is **auto-normalised** — the tool accepts either flat `config.text` or nested `config.say.text` (array). |
 | cognigy-vibe | `cognigy_create` | Don't author Code-node bodies here. As of v1.4.0, `push_code_node` CREATE mode (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes a Code node in one call — no empty-`cognigy_create` step needed. |
-| cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. **`api.resolve()` / `api.reject()` do not exist** — Code nodes finish synchronously; never call them. Skill-specific shapes (success / no-match / disambiguation) live in §C.2. |
+| cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Code nodes execute synchronously; write `context.toolResponse` and finish. Skill-specific shapes (success / no-match / disambiguation) live in §C.2. |
 | cognigy-vibe | `cognigy_update` | Does an **always-fresh GET + deep merge** when `merge_config: true` is set. Patch deltas only; sibling fields stay intact. |
 | cognigy-vibe | `cognigy_delete` | DELETE any resource including individual nodes. Used in §8 collision cleanup. |
 | cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the §1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). §1.8 knowledge wiring uses NiCE `manage_knowledge`, not `inject`. |
