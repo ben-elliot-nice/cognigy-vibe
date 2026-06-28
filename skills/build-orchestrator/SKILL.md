@@ -37,6 +37,42 @@ If the user doesn't name a customer, still load — the interview in §0 gets th
 
 ---
 
+## §0.0 — Load build config (BLOCKING preflight — runs before the interview)
+
+**Step 1 — Call `get_build_state`.** No filter needed — the config fields are always included.
+
+**Step 2 — Branch on `config_loaded`:**
+
+- **`config_loaded: false`** → delegate to `cognigy:init-cognigy-vibe`:
+  > "I don't have your workspace build defaults yet. I'll run `cognigy:init-cognigy-vibe` once to capture them — after that every build needs zero manual config."
+
+  After the wizard completes, call `get_build_state` once more. If `config_loaded` is still `false` → **hard stop**:
+  > "Config setup did not complete. Please run `cognigy:init-cognigy-vibe` before starting a build."
+
+  Do **not** fall back silently to the hardcoded AU1 values in the "Default build values" table.
+
+- **`config_loaded: true`** → load `config_source` and `config_summary` into `buildConfig`. Proceed to Step 3.
+
+**Step 3 — Echo + confirm.** In the recap that follows §0.6, show a compact table:
+
+| Setting | Value | Source |
+|---------|-------|--------|
+| Region | `<config_summary.region>` | `<config_source>` |
+| LLM | `<config_summary.llm_default>` | (same) |
+| TTS | `<config_summary.tts_label>` | (same) |
+| STT | `<config_summary.stt_label>` | (same) |
+| Locale | `<config_summary.locale>` | (same) |
+
+Ask: *"Proceed with these defaults, switch LLM to a listed alternate (from `buildConfig.llm.options`), or override a field for this build only?"*
+
+Per-build overrides update `buildConfig` in memory for this run only — they do not rewrite the config file. To permanently change defaults, the user re-runs `cognigy:init-cognigy-vibe`.
+
+> **The live LLM gate (§1.1 Step 2) still runs.** The chosen LLM referenceId from `buildConfig.llm.options` is the suggested value; the gate verifies it exists in the target project before generation is relied on.
+
+`buildConfig` (plus any per-build overrides) feeds §1.1 / §1.2 / §1.5. Where the "Default build values" table is cited downstream, read the corresponding `buildConfig` field instead.
+
+---
+
 ## §0 — Interview (one batch via AskUserQuestion)
 
 This single batch collects everything `cognigy:scope-demo` + the four `cognigy:design-agent-*` sub-skills need, so they produce their artifacts in context-provided mode (no re-interview).
