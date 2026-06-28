@@ -1,5 +1,7 @@
+import json
+from pathlib import Path
 import pytest
-from cognigy_mcp.server import create_server
+from cognigy_mcp.server import create_server, _find_config_file
 
 
 def test_server_creates_without_error(monkeypatch, tmp_path):
@@ -100,3 +102,59 @@ def test_create_server_dev_flag_ignored_without_credentials(monkeypatch):
     assert "cognigy_get" in tool_names
     assert "reload_mcp" not in tool_names
     assert "init" not in tool_names
+
+
+# --- _find_config_file tests ---
+
+def test_find_config_file_in_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cfg = {"$schemaVersion": 2, "connection": {"region": "au1"}}
+    (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
+    result, source = _find_config_file()
+    assert result is not None
+    assert result["connection"]["region"] == "au1"
+    assert "default-demo-config.json" in source
+
+
+def test_find_config_file_in_ancestor(tmp_path, monkeypatch):
+    child = tmp_path / "acme-demo"
+    child.mkdir()
+    monkeypatch.chdir(child)
+    cfg = {"$schemaVersion": 2, "connection": {"region": "na1"}}
+    (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
+    result, source = _find_config_file()
+    assert result is not None
+    assert result["connection"]["region"] == "na1"
+
+
+def test_find_config_file_global_fallback(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    global_dir = tmp_path / ".config" / "cognigy-vibe"
+    global_dir.mkdir(parents=True)
+    cfg = {"$schemaVersion": 2, "connection": {"region": "jp1"}}
+    (global_dir / "config.json").write_text(json.dumps(cfg))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    result, source = _find_config_file()
+    assert result is not None
+    assert result["connection"]["region"] == "jp1"
+    assert "config.json" in source
+
+
+def test_find_config_file_not_found(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    result, source = _find_config_file()
+    assert result is None
+    assert source is None
+
+
+def test_find_config_file_cwd_wins_over_ancestor(tmp_path, monkeypatch):
+    child = tmp_path / "acme-demo"
+    child.mkdir()
+    monkeypatch.chdir(child)
+    parent_cfg = {"$schemaVersion": 2, "connection": {"region": "au1"}}
+    child_cfg = {"$schemaVersion": 2, "connection": {"region": "na1"}}
+    (tmp_path / "default-demo-config.json").write_text(json.dumps(parent_cfg))
+    (child / "default-demo-config.json").write_text(json.dumps(child_cfg))
+    result, source = _find_config_file()
+    assert result["connection"]["region"] == "na1"  # child wins
