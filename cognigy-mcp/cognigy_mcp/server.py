@@ -14,6 +14,33 @@ from cognigy_mcp.state import ProjectState
 from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain, dev_tools
 
 
+def _find_config_file() -> "tuple[dict | None, str | None]":
+    """Cascade: cwd → ancestors → ~/.config/cognigy-vibe/config.json. First wins, no merging."""
+    import json
+    home = Path.home()
+    current = Path.cwd().resolve()
+
+    while True:
+        candidate = current / "default-demo-config.json"
+        if candidate.exists():
+            try:
+                return json.loads(candidate.read_text()), str(candidate)
+            except (json.JSONDecodeError, OSError):
+                pass
+        if current == home or current == current.parent:
+            break
+        current = current.parent
+
+    global_config = home / ".config" / "cognigy-vibe" / "config.json"
+    if global_config.exists():
+        try:
+            return json.loads(global_config.read_text()), str(global_config)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    return None, None
+
+
 def _env_configured() -> bool:
     return bool(os.environ.get("COGNIGY_BASE_URL")) and bool(os.environ.get("COGNIGY_API_KEY"))
 
@@ -74,6 +101,8 @@ def _create_full_server() -> tuple[Server, list[types.Tool]]:
         ttl=int(os.getenv("COGNIGY_VIBE_CACHE_TTL", "300")),
     )
 
+    build_config, config_source = _find_config_file()
+
     all_tools = (
         state_tools.TOOLS
         + flow_ops.TOOLS
@@ -82,7 +111,7 @@ def _create_full_server() -> tuple[Server, list[types.Tool]]:
         + explain.TOOLS
     )
     all_handlers: dict[str, Any] = {
-        **state_tools.make_handlers(client, state, cache),
+        **state_tools.make_handlers(client, state, cache, build_config=build_config, config_source=config_source),
         **flow_ops.make_handlers(client, state, cache),
         **file_push.make_handlers(client, state, cache),
         **testing.make_handlers(client, state, cache),

@@ -98,7 +98,7 @@ def _ok(data: dict) -> list[TextContent]:
 
 
 def make_handlers(
-    client: CognigyClient, state: ProjectState, cache: Cache
+    client: CognigyClient, state: ProjectState, cache: Cache, **kwargs
 ) -> dict:
     def _sync_remote_state(args: dict) -> list[TextContent]:
         project_id = args.get("project_id") or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
