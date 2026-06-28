@@ -97,8 +97,22 @@ def _ok(data: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
 
+def _make_config_summary(config: dict) -> dict:
+    return {
+        "region": config.get("connection", {}).get("region", ""),
+        "llm_default": config.get("llm", {}).get("default", ""),
+        "tts_label": config.get("tts", {}).get("label", ""),
+        "stt_label": config.get("stt", {}).get("label", ""),
+        "locale": config.get("locale", ""),
+    }
+
+
 def make_handlers(
-    client: CognigyClient, state: ProjectState, cache: Cache
+    client: CognigyClient,
+    state: ProjectState,
+    cache: Cache,
+    build_config: "dict | None" = None,
+    config_source: "str | None" = None,
 ) -> dict:
     def _sync_remote_state(args: dict) -> list[TextContent]:
         project_id = args.get("project_id") or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
@@ -206,10 +220,16 @@ def make_handlers(
     def _get_build_state(args: dict) -> list[TextContent]:
         resource_type = args.get("resource_type")
         full_state = state.as_dict()
+
+        config_fields: dict = {"config_loaded": build_config is not None}
+        if build_config is not None:
+            config_fields["config_source"] = config_source or ""
+            config_fields["config_summary"] = _make_config_summary(build_config)
+
         if resource_type:
             filtered = full_state.get(resource_type, {})
-            return _ok({resource_type: filtered, "_filtered": True})
-        return _ok({**full_state, "_version": pkg_version("cognigy-vibe-mcp")})
+            return _ok({resource_type: filtered, "_filtered": True, **config_fields})
+        return _ok({**full_state, "_version": pkg_version("cognigy-vibe-mcp"), **config_fields})
 
     def _resolve_resource(args: dict) -> list[TextContent]:
         name = args["name"]

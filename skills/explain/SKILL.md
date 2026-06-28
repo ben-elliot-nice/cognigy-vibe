@@ -45,6 +45,7 @@ platform:
   endpoint-config            referenceId vs _id gotcha, urlToken caching
   extension-map              complete type → extension lookup table
   knowledge-store            chunking, connector run, source management
+  llm-resources              LLM listing by project, referenceId resolution, project-scope vs global, and the largelanguagemodels API path
   mcp-comparison             when to use cognigy-vibe vs NiCE official MCP
   outbound-trigger           6-step CXone trigger, Accept-Encoding: identity requirement
   project-snapshots          create project snapshots for versioning (flow-level versioning does not exist in the API)

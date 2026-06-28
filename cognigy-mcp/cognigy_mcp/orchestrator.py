@@ -27,6 +27,19 @@ _ENV_KEYS = frozenset([
 ])
 
 
+def _find_env_file(start: Path, stop: Path) -> "Path | None":
+    """Walk up from start toward stop looking for .env. Stop is the boundary (exclusive above)."""
+    current = start.resolve()
+    stop = stop.resolve()
+    while True:
+        candidate = current / ".env"
+        if candidate.exists():
+            return candidate
+        if current == stop or current == current.parent:
+            return None
+        current = current.parent
+
+
 def _detect_mode() -> str:
     if not os.environ.get("COGNIGY_BASE_URL") or not os.environ.get("COGNIGY_API_KEY"):
         return "degraded"
@@ -242,8 +255,13 @@ class _Orchestrator:
 def main() -> None:
     import truststore
     truststore.inject_into_ssl()
-    os.environ.setdefault("COGNIGY_PROJECT_ROOT", str(Path.cwd()))
-    _log(f"main: start cwd={Path.cwd()} project_root={os.environ.get('COGNIGY_PROJECT_ROOT')}")
-    load_dotenv(dotenv_path=Path(os.environ["COGNIGY_PROJECT_ROOT"]) / ".env")
+    home = Path.home()
+    cwd = Path.cwd()
+    env_file = _find_env_file(cwd, home)
+    project_root = env_file.parent if env_file else cwd
+    os.environ.setdefault("COGNIGY_PROJECT_ROOT", str(project_root))
+    _log(f"main: start cwd={cwd} project_root={project_root} env_found={env_file is not None}")
+    if env_file:
+        load_dotenv(dotenv_path=env_file)
     _log(f"main: after load_dotenv mode={_detect_mode()}")
     _Orchestrator().run()

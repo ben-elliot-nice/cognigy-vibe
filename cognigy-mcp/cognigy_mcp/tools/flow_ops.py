@@ -160,8 +160,20 @@ def _ok(data: dict) -> list[TextContent]:
 
 
 # ---------------------------------------------------------------------------
-# P1 — Say node config normalisation
+# P1 — Node config normalisation
 # ---------------------------------------------------------------------------
+
+_ANSWER_CANONICAL = "{{JSON.stringify(context.toolResponse)}}"
+_ANSWER_MAX_LOOPS_DEFAULT = 4
+
+
+def _normalise_answer_config(config: dict) -> dict:
+    """Inject the canonical answer field if absent on aiAgentToolAnswer nodes.
+    A bare config:{} returns an empty tool result; the LLM sees nothing back."""
+    if "answer" in config:
+        return config
+    return {"answer": _ANSWER_CANONICAL, "maxLoops": _ANSWER_MAX_LOOPS_DEFAULT, **config}
+
 
 _SAY_CONFIG_DEFAULTS = {
     "handoverOutput": "userAndAgent",
@@ -427,6 +439,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 })
             if body.get("type") == "say" and "config" in body:
                 body = {**body, "config": _normalise_say_config(body["config"])}
+            if body.get("type") == "aiAgentToolAnswer" and "config" in body:
+                body = {**body, "config": _normalise_answer_config(body["config"])}
             body = _inject_extension(body, state.get("extension_map") or {})
             path = f"/v2.0/flows/{flow_id}/chart/nodes"
         else:
