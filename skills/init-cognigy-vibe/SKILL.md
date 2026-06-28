@@ -9,6 +9,15 @@ This is the **front door** for a new Cognigy-Vibe user. It captures, once, every
 
 > **Run order.** Run this **before your first build**, or just start a build — `build-orchestrator` §0.0 auto-delegates here if no workspace config exists. Re-run any time to view or change your defaults.
 
+> **⚠️ Assumptions (pre-design — see [#82](https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/82)).** This skill bakes in a specific workspace layout and discovery model that has **not** yet been through a full design pass. Known assumptions, each tracked in #82:
+> - **Folder name.** The workspace root is assumed to be a folder literally named `Demo Builds` (or `demo-builds`). Users who organise demos under a different name aren't covered yet.
+> - **Single workspace.** One workspace root is assumed. **Multi-tenant** setups (two peer roots, e.g. different Cognigy tenants) aren't handled — the walk-up finds the nearest one, with no way to choose.
+> - **Walk-up boundary.** Ancestor search **stops at `$HOME`** (never walks past it to `/`). If no workspace root is found at or below `$HOME`, setup creates one rather than guessing.
+> - **`demoBuildsRoot`.** Stored as the **absolute path** of the workspace root at write time (a relative `"."` is meaningless when the config is read from a child build folder).
+> - **Creation location.** When no `Demo Builds` folder exists, it is created at the **current working directory** and the path is reported to the user — cwd-dependent, so launch from where you want it.
+>
+> These are acceptable as a v1 shipping default **because they're documented here and called out as pre-design in the PR**; the settled design lands via #82.
+
 ## The end-state this skill creates
 
 ```
@@ -68,18 +77,20 @@ Demo Builds/                         ← workspace root (open your Claude sessio
   },
   "voicePreview": {
     "speechProvider": "Microsoft Azure Speech Services",
-    "connectionName": "Test",
+    "connectionName": "<preview speech-connection name in Cognigy, e.g. Test>",
     "region": "AU",
-    "apiKeyRef": "test"
+    "apiKeyRef": "<api key for that preview connection; a throwaway value like 'test' is fine for a demo speech-preview connection>"
   },
   "voiceBehaviour": { "bargeIn": false, "vad": false },
   "conventions": {
     "projectNamePattern": "[CUSTOMER]_Demo_<initials>",
     "folderPattern": "[customer]-demo",
-    "demoBuildsRoot": "."
+    "demoBuildsRoot": "<absolute path of the workspace root — written at setup time, NOT a relative '.'>"
   }
 }
 ```
+
+> `apiKeyRef` is the API key for the **voice-preview speech connection** in Cognigy (used for the in-UI preview only). It is *not* the Cognigy `COGNIGY_API_KEY` — that lives in `.env`. For a demo preview connection a placeholder like `test` is acceptable. `demoBuildsRoot` is resolved to an **absolute** path when the file is written (Step 6), so the config is unambiguous when read from a child build folder.
 
 `.env` (secret, separate file):
 
@@ -99,8 +110,8 @@ Greet the user — e.g. *"Welcome to the Cognigy-Vibe plugin. Looks like your fi
 ### 2. Locate the `Demo Builds` workspace root
 
 - If the current directory **is** a `Demo Builds` folder (or contains `default-demo-config.json`), use it.
-- Else look for a `Demo Builds` / `demo-builds` folder in the cwd or its parents.
-- **If none exists, create one** and tell the user where. This is the workspace root; all customer builds become sub-folders here.
+- Else look for a `Demo Builds` / `demo-builds` folder in the cwd or its parents — **walking up only as far as `$HOME`, never past it to `/`** (see the Assumptions callout / #82).
+- **If none exists, create one at the current working directory** and tell the user the absolute path. This is the workspace root; all customer builds become sub-folders here. (Creation is cwd-dependent — see #82.)
 
 ### 3. Check for existing workspace config
 
@@ -111,11 +122,18 @@ Look for `default-demo-config.json` and `.env` at the workspace root.
 
 ### 4. (Optional) discover live resource IDs
 
-If the NiCE Cognigy MCP or `cognigy-vibe` is connected, offer to list real resources so the user picks instead of pasting — most valuable for **LLM referenceIds** and **TTS/STT connection labels**:
+If a Cognigy MCP is connected, offer to list real resources so the user picks instead of pasting — most valuable for **LLM referenceIds**. Prefer the **`cognigy-vibe`** server (bundled with this plugin, so it's the one reliably present at setup time); use its `cognigy_list` tool with **snake_case** params:
+
+```
+cognigy_list { resource_type: "projects" }
+cognigy_list { resource_type: "largelanguagemodels", project_id: "<id>" }   # label + referenceId + type; resource_type must match the server's collection name — confirm against cognigy_list output
+```
+
+Alternative, if the **NiCE** Cognigy MCP is the one connected (this is the exact form `build-orchestrator`'s §1.1 LLM gate uses — singular `resourceType`, camelCase, value `llm_model`):
 
 ```
 list_resources { resourceType: "project" }
-list_resources { resourceType: "llm_model", projectId: "<id>" }   // label + referenceId + type
+list_resources { resourceType: "llm_model", projectId: "<id>" }
 ```
 
 Present generation LLMs for `llm.options`, embedding models for `llm.embedding`. If no MCP is connected, collect as free text and note they can re-run setup to validate later.
@@ -139,6 +157,7 @@ Collect the schema. Pre-fill each option with sensible defaults so a user on the
 mkdir -p "<workspace root>"
 ```
 
+- Set `conventions.demoBuildsRoot` to the **absolute path** of the resolved workspace root (not `.`), so the config is unambiguous when later read from a child build folder.
 - Write `default-demo-config.json` (pretty JSON, `$schemaVersion: 2`) at the workspace root.
 - Write `.env` with `COGNIGY_BASE_URL` + `COGNIGY_API_KEY` at the workspace root (unless the user chose the outside-the-synced-tree option — then write it there and tell them to set `COGNIGY_PROJECT_ROOT`).
 - Ensure `.env` is gitignored if the workspace is a git repo. Re-read both files back and confirm they parse / are well-formed.

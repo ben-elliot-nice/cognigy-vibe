@@ -41,11 +41,11 @@ If the user doesn't name a customer, still load — the interview in §0 gets th
 
 The tenant build defaults (LLM, embedding, TTS, STT, channel/voice gateway, voice preview, locale, hosts, naming) live in a **workspace-level** config written once by `cognigy:init-cognigy-vibe`: `default-demo-config.json` at the `Demo Builds` root (the folder that holds every `<customer>-demo/` sub-build), with secrets in a sibling `.env`. This is the authoritative source for the values that used to be hardcoded in the "Default build values" table below.
 
-**Step 1 — find + read the config.** Look for `default-demo-config.json` at the workspace root — the `Demo Builds` folder. Check the cwd and walk **up** the parent directories (the session may be launched in `Demo Builds/` or in a `<customer>-demo/` sub-folder); the nearest ancestor that has the file is the workspace root.
+**Step 1 — find + read the config.** Look for `default-demo-config.json` at the workspace root — the `Demo Builds` folder. Check the cwd and walk **up** the parent directories (the session may be launched in `Demo Builds/` or in a `<customer>-demo/` sub-folder); the nearest ancestor that has the file is the workspace root. **Stop the walk at `$HOME` — never search past it to `/`** (see `cognigy:init-cognigy-vibe` Assumptions / issue #82).
 
 ```bash
-# from cwd, search self + ancestors for the workspace config
-d="$PWD"; while [ "$d" != "/" ]; do [ -f "$d/default-demo-config.json" ] && { cat "$d/default-demo-config.json"; break; }; d=$(dirname "$d"); done
+# from cwd, search self + ancestors (bounded by $HOME) for the workspace config
+d="$PWD"; while :; do [ -f "$d/default-demo-config.json" ] && { cat "$d/default-demo-config.json"; break; }; [ "$d" = "$HOME" ] || [ "$d" = "/" ] && break; d=$(dirname "$d"); done
 ```
 
 **Step 2 — branch on what you find:**
@@ -53,11 +53,16 @@ d="$PWD"; while [ "$d" != "/" ]; do [ -f "$d/default-demo-config.json" ] && { ca
 - **File missing or unparseable** → the user hasn't run setup yet. Say so and delegate:
   > "I don't have your workspace build defaults yet (tenant, LLM, voice, etc.). I'll run `cognigy:init-cognigy-vibe` once to capture them at your `Demo Builds` root — after that every build needs zero manual config."
 
-  Delegate to **`cognigy:init-cognigy-vibe`**, then re-read the file and continue. Do **not** silently fall back to the hardcoded AU1 table — those values are workspace config now.
+  Delegate to **`cognigy:init-cognigy-vibe`**, then re-read the file (Step 1) **once**. **🔴 Abort gate — no delegation loop.** If `default-demo-config.json` is *still* absent or unparseable after the delegation returns (user cancelled the wizard, or it failed to write), **STOP the build** with a clear message — do **not** re-delegate, and do **not** silently fall back to the hardcoded AU1 table:
+  > "Setup didn't complete, so I don't have your build defaults and can't start a build safely. Re-run `cognigy:init-cognigy-vibe` when you're ready, then start the build again."
+
+  Only continue past §0.0 once a valid config has been read.
 
 - **File present** → load it into a `buildConfig` object (and note its directory as the **workspace root** — that's where the `.env` is and where new `<customer>-demo/` folders go). These values override the documented defaults in "Default build values" wherever they differ. Surface a compact summary in the §0 recap (Step 3).
 
 **Step 3 — echo + confirm (not re-interview).** In the recap that follows §0.6, show the loaded config as a short table — default generation LLM (label) + any alternates, tenant region, persona temp, TTS voice label, STT label, voice channel, locale, project suffix — and ask the user to **confirm, switch the LLM to a listed alternate, or override for this build only**. A one-build override (e.g. the Azure GPT alternate, NZ English STT for a 2Degrees build, or a male voice) does **not** rewrite the saved file; it just changes `buildConfig` for this run. To change the saved defaults permanently, the user re-runs `cognigy:init-cognigy-vibe`.
+
+> **Temperature precedence (config vs Q10).** §0.0 loads `buildConfig.llm.temperatureVoice` (0.2) and `temperatureChat` (0.5); the **interview Q10 channel mix is the selector**, not a competing value — it picks *which* configured temperature applies (primarily-chat → `temperatureChat`; otherwise `temperatureVoice`). Since Q10 runs after §0.0, resolve the temperature **after** the interview. Order of precedence: an explicit per-build override in this Step 3 wins; else Q10 selects between the two configured temperatures; the recap's "persona temp" is therefore provisional until Q10 is answered.
 
 > **The live LLM gate (§1.1 Step 2) still runs.** The chosen LLM — `buildConfig.llm.default` (or the alternate the user picked in Step 3), resolved to its `referenceId` via `buildConfig.llm.options[]` — is the *suggested* value; the generation LLM must still be verified to exist in the target project before generation is relied on. A stale referenceId surfaces at the gate, not as a silent empty-output build.
 
