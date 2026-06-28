@@ -600,14 +600,14 @@ Transactional (Shape B — most common):
 ```
 [aiAgentJobTool: <tool_id>]                     ← from §1.3 push_agent_tool (tool node only)
   └── [Say: "Filler — <verb>"]                  ← §C.1 — voice dead-air handling
-        └── [Code: "<Action> <Domain>"]         ← §C.2 — context.toolResponse = {...}; api.resolve();
+        └── [Code: "<Action> <Domain>"]         ← §C.2 — context.toolResponse = {...}; (node finishes)
               └── [aiAgentToolAnswer]            ← appended LAST (§6 Step 4) — NOT auto-paired
 ```
 
 Transfer (reversed — Code first, so transfer commits to state before the spoken hand-off):
 ```
 [aiAgentJobTool: transfer_to_<team>]
-  └── [Code: "Mark transfer — <team>"]         ← context.toolResponse = { transferred: true, team: "..." }; api.resolve();
+  └── [Code: "Mark transfer — <team>"]         ← context.toolResponse = { transferred: true, team: "..." }; (node finishes)
         └── [Say: "Say — transferring to <team>"]  ← "Right, putting you through to our <team> team now."
               └── [aiAgentToolAnswer]
 ```
@@ -705,7 +705,6 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
    context.xappTrigger = true;
    context.xappScene = "<scene_name>";   // optional — for multi-scene flows, route inside ifThenElse
    context.toolResponse = { ...your tool result };
-   api.resolve();
    ```
 
 5. **Reset the trigger after the scene fires** — the Code node downstream of `setHTMLAppState` (in the `if` true branch) resets `context.xappTrigger = false` so subsequent turns don't re-fire.
@@ -714,7 +713,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 **Cross-tool-branch reuse:** if two tools fire the same scene, both set `context.xappTrigger = true` — the single `setHTMLAppState` handles both. If two tools fire *different* scenes, route inside the `if` true branch using `context.xappScene` to pick which scene renders.
 
-**Inbound xApp submits — the return path (per plugin `explain("xapp-event-handling")`).** Everything above *delivers* a scene; when the user acts inside the xApp (submits a form, taps a card) the result returns to the flow as an event. The submit payload arrives at **`input.data._cognigy._app.payload`**. Handle it with an `ifThenElse` near the top of the flow (before the AI Agent Job) that intercepts the submit, writes the result to `context.toolResponse`, and `api.resolve()`s into an `aiAgentToolAnswer` — the non-blocking two-turn async pattern (variant A = `sdk.submit()`; variant B = webhook inject). Do NOT re-derive the event shapes here — `explain("xapp-event-handling")` is the source. (This is the half the skill previously omitted: it covered delivery but not the return path.)
+**Inbound xApp submits — the return path (per plugin `explain("xapp-event-handling")`).** Everything above *delivers* a scene; when the user acts inside the xApp (submits a form, taps a card) the result returns to the flow as an event. The submit payload arrives at **`input.data._cognigy._app.payload`**. Handle it with an `ifThenElse` near the top of the flow (before the AI Agent Job) that intercepts the submit, writes the result to `context.toolResponse`, and flows into an `aiAgentToolAnswer` — the non-blocking two-turn async pattern (variant A = `sdk.submit()`; variant B = webhook inject). Do NOT re-derive the event shapes here — `explain("xapp-event-handling")` is the source. (This is the half the skill previously omitted: it covered delivery but not the return path.)
 
 ### §C.1 — Filler line library (pick one per tool, tone-match the persona)
 
@@ -735,7 +734,7 @@ Three result shapes — pick one per tool branch:
 const <arg> = input.aiAgent.toolArgs.<arg>;  // read tool args if applicable
 
 context.toolResponse = context.customer;  // or { receiptNumber, amount, ... } / { claimId, assessorWindow, ... } / etc.
-api.resolve();
+// Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
 LLM reads `context.toolResponse` next turn and continues the conversation.
 
@@ -750,7 +749,7 @@ if (lookupValue === "<known-good demo value — e.g. the caller's real id from �
 } else {
   context.toolResponse = { found: false, reason: "no_match", searchedFor: lookupValue };
 }
-api.resolve();
+// Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
 Persona `jobInstructions` MUST include: *"If a lookup tool returns `found: false`, apologise and ask the caller to confirm the value. Do NOT retry the same tool with the same input."*
 
@@ -761,19 +760,20 @@ context.toolResponse = {
   needsDisambiguation: true,
   prompt: "I found 2 accounts under that name — can you confirm the postcode?"
 };
-api.resolve();
+// Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
 Persona `jobInstructions` MUST include: *"If a tool returns `needsDisambiguation: true`, ask the user the `prompt` field. Do not fire tools until the user answers."*
 
 **Error pattern (rare — for genuinely broken tools):**
 ```javascript
 context.toolResponse = { error: true, message: "<safe message>", retryable: false };
-api.reject("<terse error reason for logs>");
+// Code node finishes — flow advances to aiAgentToolAnswer automatically.
+// Use api.stopExecution() only if you need to halt the flow entirely (skips aiAgentToolAnswer).
 ```
-Use `api.reject()` only when the tool genuinely failed. Mock tools should almost never use this — prefer structured no-match (Shape 2) or disambiguation (Shape 3) via `api.resolve()`.
+Mock tools should almost never need to signal a hard error — prefer structured no-match (Shape 2) or disambiguation (Shape 3).
 
 **Hard rules:**
-- **Always call `api.resolve()`** (or `api.reject()` on genuine failure) — without it, the AI Agent Job Node hangs and the next user turn breaks. Code nodes inside tool branches are async; the chain only advances to `aiAgentToolAnswer` on resolve.
+- **Code nodes execute synchronously** — write `context.toolResponse` and let the node finish; the flow advances to `aiAgentToolAnswer` automatically.
 - **Always write the result to `context.toolResponse`** — NOT `input.result` (legacy convention; replaced by plugin-canonical `context.toolResponse`).
 - **Build at least one tool with Shape 2 (no-match) per demo** to prove the persona's negative-path handling works.
 
@@ -1473,7 +1473,6 @@ context.customer = {
   // ... same industry fields as Init Session
 };
 context.toolResponse = context.customer;
-api.resolve();
 ```
 
 **HARD RULE — three-way field-name consistency:**
@@ -1602,7 +1601,6 @@ push_code_node {
 where the `.js` body is:
 ```javascript
 context.toolResponse = { transferred: true, team: "<team>", teamLabel: "<Customer> <Team>" };
-api.resolve();
 ```
 
 **Step 3 — second functional node** (appended onto Step 2's node):
@@ -1617,7 +1615,7 @@ push_code_node {
   label: "<Action> <Domain>"
 }
 ```
-The `.js` body reads args from `input.aiAgent.toolArgs`, writes `context.toolResponse`, calls `api.resolve()` (Shape 1, 2, or 3 per §C.2).
+The `.js` body reads args from `input.aiAgent.toolArgs`, writes `context.toolResponse` (Shape 1, 2, or 3 per §C.2), and finishes.
 
 Transfer → `say` (hand-off line):
 ```
@@ -1667,7 +1665,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `cognigy_create` | **`resource_type` is `"node"`** (plus a separate `flow_id` param) — NOT the path-form `"flows/<flowId>/chart/nodes"`. Path-form may work but is non-canonical. |
 | cognigy-vibe | `cognigy_create` | Say config is **auto-normalised** — the tool accepts either flat `config.text` or nested `config.say.text` (array). |
 | cognigy-vibe | `cognigy_create` | Don't author Code-node bodies here. As of v1.4.0, `push_code_node` CREATE mode (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes a Code node in one call — no empty-`cognigy_create` step needed. |
-| cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.resolve` / `api.reject`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Skill-specific shapes (success / no-match / disambiguation) live in §C.2. |
+| cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Code nodes execute synchronously; write `context.toolResponse` and finish. Skill-specific shapes (success / no-match / disambiguation) live in §C.2. |
 | cognigy-vibe | `cognigy_update` | Does an **always-fresh GET + deep merge** when `merge_config: true` is set. Patch deltas only; sibling fields stay intact. |
 | cognigy-vibe | `cognigy_delete` | DELETE any resource including individual nodes. Used in §8 collision cleanup. |
 | cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the §1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). §1.8 knowledge wiring uses NiCE `manage_knowledge`, not `inject`. |
