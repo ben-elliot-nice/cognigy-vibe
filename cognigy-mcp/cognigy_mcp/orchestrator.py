@@ -140,6 +140,13 @@ class _Orchestrator:
                 line = c.stdout.readline()
                 if not line:
                     break
+                stripped = line.rstrip()
+                if stripped:
+                    try:
+                        json.loads(stripped)
+                    except (json.JSONDecodeError, ValueError):
+                        _log(f"[inner-stdout-rejected] {stripped[:200]!r}")
+                        continue
                 with self._write_lock:
                     sys.stdout.buffer.write(line)
                     sys.stdout.buffer.flush()

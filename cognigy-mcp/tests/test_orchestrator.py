@@ -121,6 +121,54 @@ def test_find_env_file_grandparent(tmp_path):
 # Task 1 — stderr capture
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Task 2 — JSON-RPC guard in _start_reader
+# ---------------------------------------------------------------------------
+
+def test_start_reader_filters_non_json(monkeypatch):
+    """Non-JSON lines from inner server stdout must be logged, not forwarded to Claude."""
+    import cognigy_mcp.orchestrator as orch
+
+    log_lines = []
+    forwarded = []
+    monkeypatch.setattr(orch, "_log", lambda msg: log_lines.append(msg))
+
+    class FakeBuffer:
+        def write(self, data):
+            forwarded.append(data)
+        def flush(self):
+            pass
+
+    class FakeStdout:
+        buffer = FakeBuffer()
+
+    monkeypatch.setattr(sys, "stdout", FakeStdout())
+
+    script = (
+        "import sys\n"
+        "sys.stdout.write('this is not json\\n'); sys.stdout.flush()\n"
+        'sys.stdout.write(\'{"jsonrpc":"2.0","id":1,"result":{}}\' + "\\n"); sys.stdout.flush()\n'
+        "sys.stdout.write('also not json\\n'); sys.stdout.flush()\n"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    orchestrator = orch._Orchestrator()
+    orchestrator._start_reader(proc)
+    proc.wait(timeout=3)
+    time.sleep(0.1)
+
+    forwarded_text = b"".join(forwarded).decode()
+    assert '{"jsonrpc":"2.0"' in forwarded_text, "valid JSON-RPC must be forwarded"
+    assert "this is not json" not in forwarded_text, "garbage must NOT be forwarded"
+    assert "also not json" not in forwarded_text, "garbage must NOT be forwarded"
+    assert any("this is not json" in line for line in log_lines), "garbage must be logged"
+    assert any("also not json" in line for line in log_lines), "garbage must be logged"
+
+
 def test_inner_server_stderr_appears_in_log(monkeypatch):
     """Inner server stderr must reach the orchestrator log, not be discarded."""
     import cognigy_mcp.orchestrator as orch
