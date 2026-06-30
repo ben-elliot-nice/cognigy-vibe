@@ -93,6 +93,8 @@ Handled by `server.py` at startup. **First file found wins — no field merging 
 | `tts.*` | §1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
 | `stt.*` | §1.5(c) | Set Session Config recognizer fields (vendor, language, connection label, hints, dynamicHints) |
 | `channel.voiceGateway.endpointName` | §1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
+| `channel.voiceGateway.mode` | §1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
+| `channel.voiceGateway.bindFlow` | §1.5(d) | Whether to bind this endpoint to the demo flow |
 | `connection.baseUrl` | MCP auth + as-built doc | API host for all Cognigy API calls in this session |
 | `connection.endpointBase` | As-built doc / baseline | Endpoint host recorded in `[customer]-baseline.md` |
 | `connection.region` | §0.0 summary display | Shown in config confirmation table |
