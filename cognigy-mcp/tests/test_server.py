@@ -8,6 +8,7 @@ def test_server_creates_without_error(monkeypatch, tmp_path):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://cognigy-api-au1.nicecxone.com")
     monkeypatch.setenv("COGNIGY_API_KEY", "test-key")
     monkeypatch.setenv("COGNIGY_PROJECT_ID", "proj-123")
+    monkeypatch.delenv("COGNIGY_VIBE_DEV", raising=False)
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     server, all_tools = create_server()
     tool_names = [t.name for t in all_tools]
@@ -15,9 +16,10 @@ def test_server_creates_without_error(monkeypatch, tmp_path):
     assert "explain" in tool_names
     assert "explain_dev" not in tool_names
     assert "push_code_node" in tool_names
+    assert "push_agent_avatar" in tool_names
     assert "talk_to_agent" in tool_names
     assert "sync_remote_state" in tool_names
-    assert len(all_tools) == 15
+    assert len(all_tools) == 16
 
 
 def test_server_boots_without_project_id(monkeypatch, tmp_path):
@@ -25,9 +27,10 @@ def test_server_boots_without_project_id(monkeypatch, tmp_path):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://cognigy-api-au1.nicecxone.com")
     monkeypatch.setenv("COGNIGY_API_KEY", "test-key")
     monkeypatch.delenv("COGNIGY_PROJECT_ID", raising=False)
+    monkeypatch.delenv("COGNIGY_VIBE_DEV", raising=False)
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     server, all_tools = create_server()
-    assert len(all_tools) == 15
+    assert len(all_tools) == 16
 
 
 # --- degraded / dev mode tests (append below existing tests) ---
@@ -46,7 +49,7 @@ def test_create_server_degraded_when_no_env(monkeypatch):
     assert "sync_remote_state" in tool_names
     assert "init" not in tool_names
     assert "reload_mcp" not in tool_names
-    assert len(tools) == 15
+    assert len(tools) == 16
 
 
 def test_create_server_degraded_when_missing_key(monkeypatch):
