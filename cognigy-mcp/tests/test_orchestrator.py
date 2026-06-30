@@ -1,5 +1,7 @@
 import os
+import subprocess
 import sys
+import time
 import pytest
 from pathlib import Path
 from unittest.mock import patch
@@ -113,3 +115,30 @@ def test_find_env_file_grandparent(tmp_path):
     env.write_text("COGNIGY_API_KEY=key\n")
     result = _find_env_file(grandchild, tmp_path.parent)
     assert result == env
+
+
+# ---------------------------------------------------------------------------
+# Task 1 — stderr capture
+# ---------------------------------------------------------------------------
+
+def test_inner_server_stderr_appears_in_log(monkeypatch):
+    """Inner server stderr must reach the orchestrator log, not be discarded."""
+    import cognigy_mcp.orchestrator as orch
+    log_lines = []
+    monkeypatch.setattr(orch, "_log", lambda msg: log_lines.append(msg))
+
+    proc = subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys; sys.stderr.write('inner-err: crash trace\\n'); sys.exit(1)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    orchestrator = orch._Orchestrator()
+    orchestrator._start_stderr_logger(proc)
+    proc.wait(timeout=3)
+    time.sleep(0.1)  # let reader thread drain
+
+    assert any("inner-err: crash trace" in line for line in log_lines), (
+        f"stderr not captured in log. Got: {log_lines}"
+    )

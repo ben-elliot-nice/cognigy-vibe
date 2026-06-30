@@ -80,7 +80,7 @@ class _Orchestrator:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=sys.stderr,
+            stderr=subprocess.PIPE,
             env=os.environ.copy(),
         )
         _log(f"spawn pid={proc.pid}")
@@ -146,6 +146,16 @@ class _Orchestrator:
 
         threading.Thread(target=_read, args=(child,), daemon=True).start()
 
+    def _start_stderr_logger(self, child: subprocess.Popen) -> None:
+        def _read(c: subprocess.Popen) -> None:
+            while True:
+                line = c.stderr.readline()
+                if not line:
+                    break
+                _log(f"[inner-stderr] {line.decode(errors='replace').rstrip()}")
+
+        threading.Thread(target=_read, args=(child,), daemon=True).start()
+
     def _monitor_child(self, child: subprocess.Popen) -> None:
         def _watch(c: subprocess.Popen) -> None:
             c.wait()
@@ -179,6 +189,7 @@ class _Orchestrator:
             self._notify_tools_changed()
 
         self._start_reader(child)
+        self._start_stderr_logger(child)
         self._monitor_child(child)
         self._child = child
         _log("do_restart: complete")
@@ -187,6 +198,7 @@ class _Orchestrator:
     def run(self) -> None:
         self._child = self._spawn()
         self._start_reader(self._child)
+        self._start_stderr_logger(self._child)
         self._monitor_child(self._child)
 
         # Wakeup pipe: monitor thread writes a byte here when rc=42 fires,
