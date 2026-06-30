@@ -39,6 +39,8 @@ If the user doesn't name a customer, still load — the interview in §0 gets th
 
 ## §0.0 — Load build config (BLOCKING preflight — runs before the interview)
 
+> **Read `cognigy:build-config` — `## Schema reference` — before consuming any `buildConfig` fields.** It is the canonical reference for field definitions, cascade discovery order, and failure modes.
+
 **Step 1 — Call `get_build_state`.** No filter needed — the config fields are always included.
 
 **Step 2 — Branch on `config_loaded`:**
@@ -291,6 +293,8 @@ If field names diverge, the build skill is the source of truth — flag the mism
 ## Default build values (NiCE AU1 demo tenant)
 
 These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the user for them mid-build. On a different Cognigy tenant or region, **swap the tenant-specific ones** (LLM, locale, TTS/STT, endpoint host) per the swap note below.
+
+> Tenant-agnostic field definitions live in `cognigy:build-config`. The values below are NiCE AU1 demo tenant defaults — swap tenant-specific ones (LLM referenceId, locale, TTS/STT labels, endpoint host) per the swap note below the table.
 
 | Setting | Value |
 |---|---|
