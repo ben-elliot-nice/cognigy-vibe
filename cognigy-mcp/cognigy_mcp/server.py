@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 from dotenv import load_dotenv
@@ -16,7 +17,6 @@ from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain
 
 def _find_config_file() -> "tuple[dict | None, str | None]":
     """Cascade: cwd → ancestors → ~/.config/cognigy-vibe/config.json. First wins, no merging."""
-    import json
     home = Path.home()
     current = Path.cwd().resolve()
 
@@ -25,8 +25,10 @@ def _find_config_file() -> "tuple[dict | None, str | None]":
         if candidate.exists():
             try:
                 return json.loads(candidate.read_text()), str(candidate)
-            except (json.JSONDecodeError, OSError):
-                pass
+            except json.JSONDecodeError as e:
+                print(f"cognigy-vibe: skipping malformed config {candidate}: {e}", file=sys.stderr)
+            except OSError as e:
+                print(f"cognigy-vibe: cannot read config {candidate}: {e}", file=sys.stderr)
         if current == home or current == current.parent:
             break
         current = current.parent
@@ -35,8 +37,10 @@ def _find_config_file() -> "tuple[dict | None, str | None]":
     if global_config.exists():
         try:
             return json.loads(global_config.read_text()), str(global_config)
-        except (json.JSONDecodeError, OSError):
-            pass
+        except json.JSONDecodeError as e:
+            print(f"cognigy-vibe: skipping malformed config {global_config}: {e}", file=sys.stderr)
+        except OSError as e:
+            print(f"cognigy-vibe: cannot read config {global_config}: {e}", file=sys.stderr)
 
     return None, None
 
