@@ -388,3 +388,118 @@ def test_push_agent_tool_update_api_failure(mock_client, state, cache, tmp_path)
     data = json.loads(result[0].text)
     assert "error" in data
 
+
+import struct
+
+# ---------------------------------------------------------------------------
+# push_agent_avatar helpers
+# ---------------------------------------------------------------------------
+
+def _make_png_bytes(width: int, height: int) -> bytes:
+    """Produce minimal PNG bytes with correct signature and IHDR dimensions."""
+    sig = b'\x89PNG\r\n\x1a\n'
+    # IHDR: 4 bytes length + 4 bytes type + 13 bytes data + 4 bytes CRC
+    ihdr_data = struct.pack('>II', width, height) + b'\x08\x02\x00\x00\x00'
+    ihdr_type = b'IHDR'
+    import zlib
+    crc = struct.pack('>I', zlib.crc32(ihdr_type + ihdr_data) & 0xFFFFFFFF)
+    ihdr = struct.pack('>I', 13) + ihdr_type + ihdr_data + crc
+    iend = b'\x00\x00\x00\x00IEND\xaeB`\x82'
+    return sig + ihdr + iend
+
+
+# ---------------------------------------------------------------------------
+# push_agent_avatar tests
+# ---------------------------------------------------------------------------
+
+def test_push_agent_avatar_exported():
+    names = [t.name for t in TOOLS]
+    assert "push_agent_avatar" in names
+
+
+def test_push_agent_avatar_success(mock_client, state, cache, tmp_path):
+    img = tmp_path / "avatar_optimized.png"
+    img.write_bytes(_make_png_bytes(136, 184))
+    mock_client.patch.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({
+        "image_file": str(img),
+        "agent_id": "agent-abc",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["agent_id"] == "agent-abc"
+    assert data["bytes"] == len(img.read_bytes())
+    patch_path, patch_body = mock_client.patch.call_args[0]
+    assert "agent-abc" in patch_path
+    assert patch_body["imageOptimizedFormat"] is True
+    assert patch_body["image"].startswith("data:image/png;base64,")
+
+
+def test_push_agent_avatar_file_not_found(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({
+        "image_file": "/nonexistent/avatar.png",
+        "agent_id": "agent-abc",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    mock_client.patch.assert_not_called()
+
+
+def test_push_agent_avatar_not_png(mock_client, state, cache, tmp_path):
+    img = tmp_path / "avatar.jpg"
+    img.write_bytes(b'\xff\xd8\xff' + b'\x00' * 30)  # JPEG magic bytes
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({
+        "image_file": str(img),
+        "agent_id": "agent-abc",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    mock_client.patch.assert_not_called()
+
+
+def test_push_agent_avatar_wrong_dimensions_correct_ratio(mock_client, state, cache, tmp_path):
+    # 272x368 = 2× the spec, same 17:23 ratio
+    img = tmp_path / "avatar_optimized.png"
+    img.write_bytes(_make_png_bytes(272, 368))
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({
+        "image_file": str(img),
+        "agent_id": "agent-abc",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "272" in data["error"]
+    assert "resize to 136×184" in data["error"]
+    mock_client.patch.assert_not_called()
+
+
+def test_push_agent_avatar_wrong_dimensions_wrong_ratio(mock_client, state, cache, tmp_path):
+    img = tmp_path / "avatar_optimized.png"
+    img.write_bytes(_make_png_bytes(200, 200))
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({
+        "image_file": str(img),
+        "agent_id": "agent-abc",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "200" in data["error"]
+    assert "Expected 136×184" in data["error"]
+    mock_client.patch.assert_not_called()
+
+
+def test_push_agent_avatar_api_failure(mock_client, state, cache, tmp_path):
+    img = tmp_path / "avatar_optimized.png"
+    img.write_bytes(_make_png_bytes(136, 184))
+    mock_client.patch.side_effect = Exception("network error")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({
+        "image_file": str(img),
+        "agent_id": "agent-abc",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+
