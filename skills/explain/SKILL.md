@@ -15,6 +15,7 @@ Topics and what they cover:
 
 
 aiagent:
+  agent-avatar-image         Custom avatar image on AI Agent — data URI pattern, imageOptimizedFormat, file spec, push_agent_avatar usage
   agent-behavioral-rules     Silent tool execution, outcome-based framing, compliance rules in tool descriptions
   agent-handover             Escalation to human pattern and handover context artefact design (two-consumer model)
   agent-persona-authoring    AI Agent description and instructions field authoring — structure, constraints, speaking style
