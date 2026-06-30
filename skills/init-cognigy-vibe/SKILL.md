@@ -11,66 +11,7 @@ This is the **front door** for a new Cognigy-Vibe user. It captures, once, every
 
 > **Secrets & cloud sync.** `COGNIGY_API_KEY` is the one true secret. It is written **only** to `.env` in cwd. If cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` syncs — treat that as publishing the key. Inform the user to move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed. Never write the API key into `default-demo-config.json` and never commit it.
 
-## Config schema — `default-demo-config.json` (`$schemaVersion: 2`)
-
-```json
-{
-  "$schemaVersion": 2,
-  "owner": { "name": "<name>", "initials": "<2-3 char build-owner tag>" },
-  "connection": {
-    "baseUrl": "https://cognigy-api-<region>.nicecxone.com",
-    "endpointBase": "https://cognigy-endpoint-<region>.nicecxone.com",
-    "region": "<region, e.g. au1>"
-  },
-  "llm": {
-    "default": "<label of the default generation LLM>",
-    "options": [
-      { "label": "<name>", "referenceId": "<uuid>" }
-    ],
-    "embedding": { "label": "<optional, for Knowledge AI>", "referenceId": "" },
-    "temperatureVoice": 0.2,
-    "temperatureChat": 0.5,
-    "maxTokens": 400,
-    "toolChoice": "auto"
-  },
-  "locale": "en-AU",
-  "tts": {
-    "vendor": "ElevenLabs",
-    "model": "eleven_turbo_v2_5",
-    "language": "en",
-    "voiceType": "Custom",
-    "voiceId": "<voice id>",
-    "label": "<synthesizer connection label>"
-  },
-  "stt": {
-    "vendor": "Microsoft",
-    "language": "en-AU",
-    "label": "<recognizer connection label>",
-    "hints": [],
-    "dynamicHints": { "enabled": true }
-  },
-  "channel": {
-    "type": "voice-webrtc",
-    "voiceGateway": { "endpointName": "Click-to-Call", "mode": "webrtc", "bindFlow": true }
-  },
-  "voicePreview": {
-    "speechProvider": "Microsoft Azure Speech Services",
-    "connectionName": "Test",
-    "region": "AU",
-    "apiKeyRef": "test"
-  },
-  "voiceBehaviour": { "bargeIn": false, "vad": false }
-}
-```
-
-`.env` (secret, separate file):
-
-```
-COGNIGY_BASE_URL=https://cognigy-api-<region>.nicecxone.com
-COGNIGY_API_KEY=<your api key>
-```
-
-**What each block feeds** (see `build-orchestrator` "Default build values"): `connection` → MCP auth + as-built endpoint host; `llm.options`/`default` → `update_ai_agent.jobConfig.llmProviderReferenceId` (default selected, alternates offered); `llm.embedding` → Knowledge AI (§0.5/§1.8); `tts`/`stt` → voice config (Synthesizer/Recognizer); `stt.hints`/`dynamicHints` → Set Session Config `sttHints`; `channel.voiceGateway` → the webRTC Click-to-Call endpoint bound to the flow; `voicePreview` → the Azure speech connection used for in-UI preview.
+> **Dependency:** Read `cognigy:build-config` before proceeding — it is the canonical reference for the schema, all field descriptions, cascade discovery order, and where to write each file. The wizard steps below assume that context.
 
 ## Steps
 
