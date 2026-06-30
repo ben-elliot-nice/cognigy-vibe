@@ -261,6 +261,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if data[:4] != b'\x89PNG':
             return _ok({"error": f"File is not a PNG (wrong magic bytes): {path.name}"})
 
+        if len(data) < 24:
+            return _ok({"error": f"File is too small to be a valid PNG: {path.name}"})
+
         w = struct.unpack('>I', data[16:20])[0]
         h = struct.unpack('>I', data[20:24])[0]
 

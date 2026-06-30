@@ -1,4 +1,6 @@
 import json
+import struct
+import zlib
 import pytest
 from pathlib import Path
 from cognigy_mcp.tools.file_push import make_handlers, TOOLS
@@ -389,8 +391,6 @@ def test_push_agent_tool_update_api_failure(mock_client, state, cache, tmp_path)
     assert "error" in data
 
 
-import struct
-
 # ---------------------------------------------------------------------------
 # push_agent_avatar helpers
 # ---------------------------------------------------------------------------
@@ -401,7 +401,6 @@ def _make_png_bytes(width: int, height: int) -> bytes:
     # IHDR: 4 bytes length + 4 bytes type + 13 bytes data + 4 bytes CRC
     ihdr_data = struct.pack('>II', width, height) + b'\x08\x02\x00\x00\x00'
     ihdr_type = b'IHDR'
-    import zlib
     crc = struct.pack('>I', zlib.crc32(ihdr_type + ihdr_data) & 0xFFFFFFFF)
     ihdr = struct.pack('>I', 13) + ihdr_type + ihdr_data + crc
     iend = b'\x00\x00\x00\x00IEND\xaeB`\x82'
@@ -502,4 +501,14 @@ def test_push_agent_avatar_api_failure(mock_client, state, cache, tmp_path):
     })
     data = json.loads(result[0].text)
     assert "error" in data
+
+
+def test_push_agent_avatar_truncated_png(mock_client, state, cache, tmp_path):
+    img = tmp_path / "truncated.png"
+    img.write_bytes(b'\x89PNG\r\n\x1a\n\x00\x00')  # valid magic, no IHDR
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_agent_avatar"]({"image_file": str(img), "agent_id": "agent-abc"})
+    data = json.loads(result[0].text)
+    assert "error" in data
+    mock_client.patch.assert_not_called()
 
