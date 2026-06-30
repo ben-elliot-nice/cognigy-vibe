@@ -1,6 +1,8 @@
 from __future__ import annotations
+import base64
 import difflib
 import json
+import struct
 from pathlib import Path
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
@@ -63,6 +65,23 @@ TOOLS: list[Tool] = [
                 "job_node_id": {"type": "string", "description": "Required when creating: ID of the parent aiAgentJob node"},
             },
             "required": ["tool_file", "flow_id"],
+        },
+    ),
+    Tool(
+        name="push_agent_avatar",
+        description=(
+            "Read a local PNG file and push it as the avatar image on a Cognigy AI Agent. "
+            "Validates PNG format and dimensions (must be exactly 136×184px). "
+            "Encodes to base64 data URI and PATCHes the agent resource. "
+            "See explain('agent-avatar-image') for the full avatar spec."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "image_file": {"type": "string", "description": "Absolute path to a 136×184px PNG file"},
+                "agent_id": {"type": "string", "description": "Agent _id or referenceId"},
+            },
+            "required": ["image_file", "agent_id"],
         },
     ),
 ]
@@ -230,8 +249,45 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return _ok({"error": f"Failed to update tool node: {e}"})
         return _ok({"success": True, "node_id": node_id, "updated": True})
 
+    def _push_agent_avatar(args: dict) -> list[TextContent]:
+        path = Path(args["image_file"])
+        agent_id = args["agent_id"]
+
+        if not path.exists():
+            return _ok({"error": f"File not found: {path}"})
+
+        data = path.read_bytes()
+
+        if data[:4] != b'\x89PNG':
+            return _ok({"error": f"File is not a PNG (wrong magic bytes): {path.name}"})
+
+        if len(data) < 24:
+            return _ok({"error": f"File is too small to be a valid PNG: {path.name}"})
+
+        w = struct.unpack('>I', data[16:20])[0]
+        h = struct.unpack('>I', data[20:24])[0]
+
+        if w != 136 or h != 184:
+            ratio = w / h if h else 0
+            target_ratio = 136 / 184  # ≈ 0.7391
+            if abs(ratio - target_ratio) <= 0.01:
+                return _ok({"error": f"Image is {w}×{h}px. Correct ratio — resize to 136×184 and re-run."})
+            return _ok({"error": f"Image is {w}×{h}px. Expected 136×184px."})
+
+        data_uri = "data:image/png;base64," + base64.b64encode(data).decode()
+        try:
+            client.patch(f"/v2.0/aiagents/{agent_id}", {
+                "image": data_uri,
+                "imageOptimizedFormat": True,
+            })
+        except Exception as e:
+            return _ok({"error": f"Failed to update agent avatar: {e}"})
+
+        return _ok({"success": True, "agent_id": agent_id, "bytes": len(data)})
+
     return {
         "push_code_node": _push_code_node,
         "push_html_node": _push_html_node,
         "push_agent_tool": _push_agent_tool,
+        "push_agent_avatar": _push_agent_avatar,
     }
