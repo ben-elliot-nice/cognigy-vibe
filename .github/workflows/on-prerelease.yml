@@ -1,0 +1,89 @@
+name: Release (prerelease)
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ['v*rc*']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version
+        id: version
+        run: |
+          PYPROJECT_VERSION=$(python3 -c "
+          import re
+          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-mcp/pyproject.toml').read(), re.MULTILINE)
+          if not m:
+              raise SystemExit('Could not parse version from cognigy-mcp/pyproject.toml')
+          print(m.group(1))
+          ")
+
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+            BASE=$(python3 -c "
+          import re
+          m = re.match(r'^(\d+\.\d+\.\d+)', '${VERSION}')
+          if not m: raise SystemExit('Cannot parse base version from: ${VERSION}')
+          print(m.group(1))
+            ")
+          else
+            VERSION="${PYPROJECT_VERSION}.dev${{ github.run_number }}"
+            BASE="${PYPROJECT_VERSION}"
+          fi
+
+          {
+            echo "version=${VERSION}"
+            echo "base=${BASE}"
+            echo "pyproject_version=${PYPROJECT_VERSION}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}"
+
+      - name: Assert tag base matches pyproject version
+        if: github.ref_type == 'tag'
+        run: |
+          BASE="${{ steps.version.outputs.base }}"
+          PYPROJECT="${{ steps.version.outputs.pyproject_version }}"
+          if [ "$BASE" != "$PYPROJECT" ]; then
+            echo "::error::Tag base version ($BASE) does not match pyproject.toml version ($PYPROJECT) — bump pyproject.toml first"
+            exit 1
+          fi
+          echo "Tag base matches pyproject: ${BASE} ✓"
+
+      - name: Check version exceeds current stable on PyPI
+        run: |
+          pip install packaging --quiet
+          python3 << 'EOF'
+          import sys, json, urllib.request
+          from packaging.version import Version
+
+          with urllib.request.urlopen('https://pypi.org/pypi/cognigy-vibe-mcp/json') as r:
+              data = json.loads(r.read())
+
+          current_stable = data['info']['version']
+          new_base = "${{ steps.version.outputs.base }}"
+
+          if not Version(new_base) > Version(current_stable):
+              print(f"::error::Version {new_base} is not greater than current stable {current_stable} — bump pyproject.toml first")
+              sys.exit(1)
+
+          print(f"Version check passed: {new_base} > {current_stable} ✓")
+          EOF
+
+  release:
+    needs: validate
+    permissions:
+      contents: write
+    uses: ./.github/workflows/_release.yml
+    with:
+      prerelease: true
+      environment: development
+      version: ${{ needs.validate.outputs.version }}
+    secrets: inherit
