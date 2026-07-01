@@ -27,11 +27,11 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `connection.baseUrl` | string | required | Cognigy API base URL for this tenant | `"https://cognigy-api-au1.nicecxone.com"` |
 | `connection.endpointBase` | string | required | Cognigy endpoint host for this tenant | `"https://cognigy-endpoint-au1.nicecxone.com"` |
 | `connection.region` | string | required | Short region tag; used in summary display and as-built docs | `"au1"` |
-| `llm.default` | string | required | Label of the LLM to select by default at §0.0 | `"Azure GPT-4o"` |
+| `llm.default` | string | required | Label of the LLM to select by default at S0.0 | `"Azure GPT-4o"` |
 | `llm.options` | array | required | List of available generation LLMs for this tenant | see rows below |
 | `llm.options[].label` | string | required | Human-readable LLM name | `"Azure GPT-4o"` |
 | `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | `"a793f9ea-befd-4fdf-8be8-b1c8a8385a91"` |
-| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (§0.5 / §1.8) | `{ "label": "...", "referenceId": "" }` |
+| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (S0.5 / S1.8) | `{ "label": "...", "referenceId": "" }` |
 | `llm.embedding.label` | string | optional | Human-readable embedding model name | `"text-embedding-3-large"` |
 | `llm.embedding.referenceId` | string (uuid) | optional | Cognigy referenceId for the embedding model | `"..."` |
 | `llm.temperatureVoice` | number | optional | Temperature for voice/transactional builds | `0.2` |
@@ -82,26 +82,26 @@ Handled by `server.py` at startup. **First file found wins — no field merging 
 
 | Field | Consumed by | How |
 |---|---|---|
-| `llm.default` | §0.0 preflight | Shown in config summary; user may switch to another from `llm.options` |
-| `llm.options` | §1.1 Step 3 | `update_ai_agent.jobConfig.llmProviderReferenceId` — default selected, alternates offered |
-| `llm.embedding` | §0.5 / §1.8 | Knowledge AI connector — gated, only wired if knowledge is enabled |
-| `llm.temperatureVoice` | §1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is voice/transactional |
-| `llm.temperatureChat` | §1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is primarily chat |
-| `llm.maxTokens` | §1.1 Step 3 | `update_ai_agent.jobConfig.maxTokens` |
-| `llm.toolChoice` | §1.2 | Node patch for `toolChoice` (not reachable via `update_ai_agent`) |
-| `locale` | §1.5(c) | Set Session Config `locale`; also endpoint locale binding |
-| `tts.*` | §1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
-| `stt.*` | §1.5(c) | Set Session Config recognizer fields (vendor, language, connection label, hints, dynamicHints) |
-| `channel.voiceGateway.endpointName` | §1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
-| `channel.voiceGateway.mode` | §1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
-| `channel.voiceGateway.bindFlow` | §1.5(d) | Whether to bind this endpoint to the demo flow |
+| `llm.default` | S0.0 preflight | Shown in config summary; user may switch to another from `llm.options` |
+| `llm.options` | S1.1 Step 3 | `update_ai_agent.jobConfig.llmProviderReferenceId` — default selected, alternates offered |
+| `llm.embedding` | S0.5 / S1.8 | Knowledge AI connector — gated, only wired if knowledge is enabled |
+| `llm.temperatureVoice` | S1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is voice/transactional |
+| `llm.temperatureChat` | S1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is primarily chat |
+| `llm.maxTokens` | S1.1 Step 3 | `update_ai_agent.jobConfig.maxTokens` |
+| `llm.toolChoice` | S1.2 | Node patch for `toolChoice` (not reachable via `update_ai_agent`) |
+| `locale` | S1.5(c) | Set Session Config `locale`; also endpoint locale binding |
+| `tts.*` | S1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
+| `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, language, connection label, hints, dynamicHints) |
+| `channel.voiceGateway.endpointName` | S1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
+| `channel.voiceGateway.mode` | S1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
+| `channel.voiceGateway.bindFlow` | S1.5(d) | Whether to bind this endpoint to the demo flow |
 | `connection.baseUrl` | MCP auth + as-built doc | API host for all Cognigy API calls in this session |
 | `connection.endpointBase` | As-built doc / baseline | Endpoint host recorded in `[customer]-baseline.md` |
-| `connection.region` | §0.0 summary display | Shown in config confirmation table |
-| `voicePreview.*` | §1.5(c) | In-UI voice preview connection (Azure Speech Services) |
-| `voiceBehaviour.bargeIn` | §1.5(c) | Set Session Config `bargeIn` |
-| `voiceBehaviour.vad` | §1.5(c) | Set Session Config `enableVoiceActivityDetection` |
-| `owner.initials` | §1.1 | Build artefact naming prefix |
+| `connection.region` | S0.0 summary display | Shown in config confirmation table |
+| `voicePreview.*` | S1.5(c) | In-UI voice preview connection (Azure Speech Services) |
+| `voiceBehaviour.bargeIn` | S1.5(c) | Set Session Config `bargeIn` |
+| `voiceBehaviour.vad` | S1.5(c) | Set Session Config `enableVoiceActivityDetection` |
+| `owner.initials` | S1.1 | Build artefact naming prefix |
 
 ### 4. `get_build_state` config fields
 
@@ -122,7 +122,7 @@ When `config_loaded: false`, `config_source` and `config_summary` are absent. Ru
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `config_loaded: false` after wizard ran | Config written to wrong location, or session not restarted after write | Check `~/.config/cognigy-vibe/config.json` exists and parses; restart the Claude Code session |
-| Agent generates empty output despite config loaded | Stale `llm.options[].referenceId` — LLM exists in config but not in this project | Run §1.1 Step 2 LLM gate; import LLM via `manage_packages` or `setup_llm` |
+| Agent generates empty output despite config loaded | Stale `llm.options[].referenceId` — LLM exists in config but not in this project | Run S1.1 Step 2 LLM gate; import LLM via `manage_packages` or `setup_llm` |
 | Set Session Config uses wrong voice | `tts.label` or `stt.label` doesn't match a real connection in this project | Re-run `cognigy:init-cognigy-vibe` and pick correct connection labels from live list |
 | Project-level config ignored | Project `default-demo-config.json` is a partial file | File must be complete — no field merging. Write a full file or delete it to fall through to global. |
 | Config change not reflected mid-session | Config loaded once at startup; hot-reload not supported | Restart the Claude Code session after editing the config file |

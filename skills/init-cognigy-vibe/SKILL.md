@@ -1,13 +1,13 @@
 ---
 name: init-cognigy-vibe
-description: First-time-user setup wizard for the Cognigy-Vibe plugin. Run once per workstation to capture every variable a demo build needs — Cognigy API URL + key, LLM reference IDs, TTS, STT, voice channel (VoiceGateway webRTC), and voice-preview settings — and write them as reusable defaults. After this runs, `cognigy:build-orchestrator` builds for any customer with zero further manual setup. Triggers — "/init-cognigy-vibe", "set up cognigy vibe", "set up cognigy vibe MCP", "set up the cognigy plugin", "cognigy first-time setup", "configure my demo build defaults", "show/edit my Cognigy build config". Also auto-delegated by `build-orchestrator` §0.0 when no workspace config is found. Writes a non-secret `default-demo-config.json` to `~/.config/cognigy-vibe/config.json` and a secret `.env` to cwd; never commits secrets.
+description: First-time-user setup wizard for the Cognigy-Vibe plugin. Run once per workstation to capture every variable a demo build needs — Cognigy API URL + key, LLM reference IDs, TTS, STT, voice channel (VoiceGateway webRTC), and voice-preview settings — and write them as reusable defaults. After this runs, `cognigy:build-orchestrator` builds for any customer with zero further manual setup. Triggers — "/init-cognigy-vibe", "set up cognigy vibe", "set up cognigy vibe MCP", "set up the cognigy plugin", "cognigy first-time setup", "configure my demo build defaults", "show/edit my Cognigy build config". Also auto-delegated by `build-orchestrator` S0.0 when no workspace config is found. Writes a non-secret `default-demo-config.json` to `~/.config/cognigy-vibe/config.json` and a secret `.env` to cwd; never commits secrets.
 ---
 
 # cognigy:init-cognigy-vibe — first-time setup wizard
 
 This is the **front door** for a new Cognigy-Vibe user. It captures, once, everything a build needs and stores the non-secret config globally at `~/.config/cognigy-vibe/config.json` and credentials in `.env` at cwd. From then on, `cognigy:build-orchestrator` reads these defaults and never re-asks for tenant, credentials, LLM, voice, or naming.
 
-> **Run order.** Run this **before your first build**, or just start a build — `build-orchestrator` §0.0 auto-delegates here if no workspace config exists. Re-run any time to view or change your defaults.
+> **Run order.** Run this **before your first build**, or just start a build — `build-orchestrator` S0.0 auto-delegates here if no workspace config exists. Re-run any time to view or change your defaults.
 
 > **Secrets & cloud sync.** `COGNIGY_API_KEY` is the one true secret. It is written **only** to `.env` in cwd. If cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` syncs — treat that as publishing the key. Inform the user to move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed. Never write the API key into `default-demo-config.json` and never commit it.
 
@@ -76,5 +76,5 @@ Then: *"You're set up. Open a new project directory, say 'build a demo for Liber
 
 - `.env` is per-project-directory. New directory = new Cognigy project = new `.env`. The MCP always works in the context of a single project.
 - The global `config.json` at `~/.config/cognigy-vibe/config.json` applies to all projects on the same tenant. Drop a `default-demo-config.json` into any project directory to override for that project only — must be a complete file (no field merging).
-- The live **LLM gate** (`build-orchestrator` §1.1 Step 2) still verifies the chosen generation LLM exists in the target project before generation is relied on.
+- The live **LLM gate** (`build-orchestrator` S1.1 Step 2) still verifies the chosen generation LLM exists in the target project before generation is relied on.
 - Voice provisioning details depend on `manage_voice_gateway` capabilities — see the plugin issues filed alongside this skill.
