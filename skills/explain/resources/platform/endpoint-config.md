@@ -1,6 +1,6 @@
 ---
 topic: endpoint-config
-description: referenceId vs _id gotcha, urlToken caching
+description: referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint
 group: platform
 ---
 
@@ -33,3 +33,15 @@ This allows talk_to_agent to find the token without an API call.
 
 ### AU1 domain derivation
   cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
+
+### VoiceGateway webRTC endpoint
+`channel: "voiceGateway2"` with `webrtcWidgetConfig: { active: true }` enables
+the in-browser demo widget. Flow binding via `flowId` (hex `_id`) +
+`flowReferenceId` (UUID) at creation time — no UI routing step required.
+
+Demo URL format: `{COGNIGY_ENDPOINT_BASE}/demo/{URLToken}`
+
+For the full e2e provisioning (including speech connection prerequisite),
+use `provision_webrtc_endpoint` rather than `cognigy_create` directly.
+`provision_webrtc_endpoint` handles credential detection, dummy-connection
+cleanup, and URL derivation in one call.

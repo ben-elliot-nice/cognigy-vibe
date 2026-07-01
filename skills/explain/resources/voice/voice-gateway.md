@@ -16,11 +16,19 @@ Both must exist.
 - Place in OnFirstTime branch (not main chain — avoid re-init every turn)
 - Copy-paste identical across demos: create once, copy to other flows
 
-### VG endpoint routing — undocumented UI configuration
-The Cognigy endpoint for a voice flow must route DIRECTLY to the main flow.
-It must NOT route through VG Entrypoint (a common mistake that breaks voice).
-Configured in the Cognigy endpoint settings UI — NOT in any code file.
-After creating a voice endpoint, open it in the Cognigy UI and set the flow target manually.
+### VG endpoint creation — automatable via `provision_webrtc_endpoint`
+Creating a VoiceGateway webRTC endpoint and binding it to a flow is fully
+API-automatable. `provision_webrtc_endpoint` handles the Microsoft Azure Speech
+Services connection prerequisite, endpoint creation (`channel: "voiceGateway2"`,
+`webrtcWidgetConfig: { active: true }`), and flow binding (`flowId` +
+`flowReferenceId`) in one call.
+
+Demo calls work regardless of credential path. The in-browser voice-preview
+widget requires `COGNIGY_VOICE_PREVIEW_API_KEY` in `.env` (captured by
+`init-cognigy-vibe`).
+
+The webRTC demo URL is `{COGNIGY_ENDPOINT_BASE}/demo/{URLToken}`.
+See `build-orchestrator §1.5(g)` for build-context usage.
 
 ### DTMF input
 Comes in via: input.data.dtmf (string, e.g. "1" or "2")
