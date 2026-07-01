@@ -34,6 +34,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
    - The skill presents 4 options. **Always choose option 2 (Push and create PR).**
    - The skill will `git push -u origin <branch>` and run `gh pr create`.
    - **PRs target `dev`**, not `main`. The `dev → main` promotion (cutting a stable release) is the maintainer's responsibility and happens separately.
+   - If the branch tracks a GitHub issue, include `Closes #<number>` in the PR body — GitHub will auto-close the issue on merge.
 
 8. **Verify PR and check for conflicts**
    ```bash
@@ -65,6 +66,11 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
     Alternatively: `gh run watch <run-id>` (streams live; exits on completion).
 
 11. **Report to user** — final CI status (`success` / `failure`), PR URL, and any actions taken (rebases, force-pushes, re-runs).
+
+12. **Close the issue** — once the PR is merged, verify the related GitHub issue is closed. If `Closes #<number>` was in the PR body it will have auto-closed; otherwise close it manually:
+    ```bash
+    gh issue close <number> --comment "Resolved in PR #<pr-number>"
+    ```
 
 ## Documentation
 
