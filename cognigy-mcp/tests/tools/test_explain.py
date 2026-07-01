@@ -547,3 +547,12 @@ def test_profile_editing_documents_flat_key_constraint(mock_client, state, cache
     text = result[0].text
     assert "flat" in text.lower() or "top-level" in text.lower(), \
         "Must note that setProfileVar/mergeProfileVar accept flat top-level keys only"
+
+
+def test_profile_editing_warns_against_mixing_set_and_merge_on_same_key(mock_client, state, cache):
+    """profile-editing must warn that mixing setProfileVar+mergeProfileVar on the same key clobbers."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "profile-editing"})
+    text = result[0].text
+    assert "same key" in text.lower() or "clobber" in text.lower(), \
+        "Must warn against mixing setProfileVar and mergeProfileVar on the same key"
