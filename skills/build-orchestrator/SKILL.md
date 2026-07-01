@@ -356,6 +356,22 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 
 S1 reads these artifacts as the spec. The S0 interview answers are no longer the direct source — they were already consumed by SA and SB and crystallised into the design docs. If you find yourself reaching back to the interview for a build value, read the design doc instead.
 
+### S1 entry gate — mandatory design-doc read (BLOCKING)
+
+Before any MCP call in S1, read all four design docs from `Demo Builds/<customer>-demo/` and assert:
+
+- `{Customer}-agent-persona.md` exists AND has four H2 sections (`## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`). Assert `## Job Instructions` contains the S2.5 empathy library (check for "transfer_to_care" or "Lifeline").
+- `{Customer}-context-schema.md` exists AND contains `{{context.customer.` placeholders (the `memoryContextInjection` template).
+- `{Customer}-agent-architecture.md` exists AND has a non-empty tool list.
+- `{Customer}-agent-interfaces.md` exists.
+
+If any file is missing or a required field is empty, **stop**:
+> "One or more design docs are missing or incomplete. Run `cognigy:design-agent` for `<customer>` first, then re-start S1."
+
+Do not proceed on stale in-memory facts from a prior session. The design docs on disk are the spec; S1 reads them, it does not remember them.
+
+**On session resume:** before using any project/agent/flow IDs, call `sync_remote_state({ project_id: "<projectId>" })` to ensure MCP state reflects the current project. MCP state is the canonical ID source — never assume cached IDs from a prior session are still valid.
+
 ### 1.1 Create project + agent + flow + endpoint (cognigy-vibe)
 
 **Source:** persona content comes **verbatim** from `{Customer}-agent-persona.md`, extracted by H2 heading per the four-layer ladder defined in S2. The caller-profile context (the Job Node's `memoryContextInjection`, set in S1.2) comes from `{Customer}-context-schema.md` (industry-shaped per S3).
@@ -488,6 +504,8 @@ All S1.1 steps use cognigy-vibe directly — there is no session boundary. After
 3. Proceed to S1.2 in the **same session**.
 
 If step 1 fails with a "not loaded" / missing-credentials error, fix the credentials (run `cognigy:init-cognigy-vibe`, or relaunch where the `.env` resolves) before proceeding.
+
+> **Session resume path.** If resuming a build started in a prior session, run the S1 entry gate first (re-read all four design docs + assert fields), THEN call `sync_remote_state({ project_id: "<projectId>" })` to refresh MCP state before any S1.2+ call. Do not skip either step — design-doc drift and stale MCP state are the two most common causes of mid-session build failures on resume.
 
 ### 1.2 Patch the AI Agent Job Node — all job config fields (cognigy-vibe)
 
@@ -1739,6 +1757,11 @@ Patterns:    Shape-B tool branches ✓  Transfer reversed ✓  End-call pair ✓
              xApp scenes wired ✓ / N/A   Knowledge wired ✓ / N/A   Fork lane used ✓ / N/A
 
 Smoke test: Phase A 13/13 ✓ (incl. agent description & instructions ≤1000 chars, production config check)  Phase B deterministic ✓  Advisories: <none | each probabilistic WARN with the turn + suggested manual check (per S1.7)>
+
+**⚠️ Before demoing to a customer — demo-ready checklist:**
+- [ ] **Voice Preview configured** — required for WebRTC demoing (Settings → Voice Preview → Microsoft in the Cognigy UI). Build completes without it; demo fails without it.
+- [ ] **Debug flags clean** — Phase A assertion 13 confirmed `outputImmediately: true`, `debugLogSystemPrompt: false`, `debugResult: false`. If the assertion auto-fixed them, verify the patch landed via `cognigy_get` on the Job Node before the session.
+- [ ] **Phase B advisories reviewed** — any probabilistic WARN entries above should be manually validated in the Interaction Panel before presenting to a customer.
 
 Next steps (manual, in the Cognigy UI):
 - Open the Interaction Panel on the [Persona] agent to smoke-test conversation flow
