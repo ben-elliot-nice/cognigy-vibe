@@ -4,7 +4,7 @@ import os
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from mcp.types import Tool, TextContent
-from cognigy_mcp.api import CognigyClient
+from cognigy_mcp.api import CognigyClient, ApiError
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 
@@ -88,6 +88,29 @@ TOOLS: list[Tool] = [
                 },
             },
             "required": ["name", "resource_type"],
+        },
+    ),
+    Tool(
+        name="assign_org_llm",
+        description=(
+            "Append a project to an organisation-level LLM's assignedToProjects list. "
+            "Safe and idempotent — if the project is already assigned, no write is made. "
+            "Use after create_ai_agent to ensure the new project can use an org-level LLM. "
+            "Errors if the LLM is project-scoped (use manage_packages instead) or not found."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "Cognigy project _id to assign the LLM to",
+                },
+                "llm_id": {
+                    "type": "string",
+                    "description": "MongoDB _id of the org-level LLM (not referenceId)",
+                },
+            },
+            "required": ["project_id", "llm_id"],
         },
     ),
 ]
@@ -239,8 +262,35 @@ def make_handlers(
             return _ok({"error": f"'{name}' not found in {rtype}"})
         return _ok(entry)
 
+    def _assign_org_llm(args: dict) -> list[TextContent]:
+        project_id = args["project_id"]
+        llm_id = args["llm_id"]
+        try:
+            llm = client.get(f"/v2.0/largelanguagemodels/{llm_id}")
+        except Exception:
+            return _ok({"error": "llm_not_found", "llm_id": llm_id})
+        if llm.get("resourceLevel") != "organisation":
+            return _ok({
+                "error": "not_org_level",
+                "hint": "Use manage_packages to import a project-scoped LLM instead",
+            })
+        assigned: list = llm.get("assignedToProjects") or []
+        if project_id in assigned:
+            return _ok({"already_assigned": True, "llm_name": llm.get("name", "")})
+        try:
+            client.patch(
+                f"/v2.0/largelanguagemodels/{llm_id}",
+                {"assignedToProjects": assigned + [project_id]},
+            )
+        except ApiError as exc:
+            return _ok({"error": "patch_failed", "status": exc.status_code, "detail": str(exc)})
+        except Exception as exc:
+            return _ok({"error": "patch_failed", "detail": str(exc)})
+        return _ok({"assigned": True, "llm_name": llm.get("name", ""), "project_id": project_id})
+
     return {
         "sync_remote_state": _sync_remote_state,
         "get_build_state": _get_build_state,
         "resolve_resource": _resolve_resource,
+        "assign_org_llm": _assign_org_llm,
     }
