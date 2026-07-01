@@ -1,5 +1,6 @@
 import json
 import pytest
+from unittest.mock import PropertyMock
 from cognigy_mcp.tools.voice_ops import make_handlers, TOOLS
 
 
@@ -173,3 +174,25 @@ def test_connection_post_body(mock_client, state, cache, monkeypatch):
     assert conn_body["resourceLevel"] == "project"
     assert conn_body["projectId"] == "proj-abc"
     assert conn_body["fields"]["region"] == "eastus"
+
+
+def test_demo_url_fallback_when_endpoint_base_raises(mock_client, state, cache, monkeypatch):
+    """Falls back to relative URL when endpoint_base_url raises ValueError."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    mock_client.post.side_effect = [
+        {"_id": "conn-1"},
+        {"_id": "ep-1", "URLToken": "tok"},
+    ]
+    # Simulate a non-standard base URL that can't derive endpoint URL
+    type(mock_client).endpoint_base_url = PropertyMock(side_effect=ValueError("no cognigy-api- in URL"))
+
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "p", "flow_id": "f", "flow_reference_id": "r",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+
+    assert data["demo_url"].startswith("/demo/")
+    assert data["path"] == "dummy"
+    mock_client.delete.assert_called_once_with("/v2.0/connections/conn-1")

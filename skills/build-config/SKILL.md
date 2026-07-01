@@ -56,8 +56,7 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `channel.voiceGateway.bindFlow` | boolean | required | Whether to bind this endpoint to the flow | `true` |
 | `voicePreview.speechProvider` | string | required | In-UI preview speech provider name | `"Microsoft Azure Speech Services"` |
 | `voicePreview.connectionName` | string | required | Cognigy connection label for preview | `"Test"` |
-| `voicePreview.region` | string | required | Azure region for preview | `"AU"` |
-| `voicePreview.apiKeyRef` | string | required | API key reference for preview connection | `"test"` |
+| `voicePreview.region` | string | required | Azure region for preview | `"australiaeast"` |
 | `voiceBehaviour.bargeIn` | boolean | optional | Enable barge-in (caller interrupts agent) | `false` |
 | `voiceBehaviour.vad` | boolean | optional | Enable voice activity detection | `false` |
 
