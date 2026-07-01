@@ -717,7 +717,7 @@ End-call (full spec in §5). The two end-call tools have **different** shapes. `
 
 **Cross-tool-branch reuse:** if two tools fire the same scene, both set `context.xappTrigger = true` — the single `setHTMLAppState` handles both. If two tools fire *different* scenes, route inside the `if` true branch using `context.xappScene` to pick which scene renders.
 
-**Inbound xApp submits — the return path (per plugin `explain("xapp-event-handling")`).** Everything above *delivers* a scene; when the user acts inside the xApp (submits a form, taps a card) the result returns to the flow as an event. The submit payload arrives at **`input.data._cognigy._app.payload`**. Handle it with an `ifThenElse` near the top of the flow (before the AI Agent Job) that intercepts the submit, writes the result to `context.toolResponse`, and flows into an `aiAgentToolAnswer` — the non-blocking two-turn async pattern (variant A = `sdk.submit()`; variant B = webhook inject). Do NOT re-derive the event shapes here — `explain("xapp-event-handling")` is the source. (This is the half the skill previously omitted: it covered delivery but not the return path.)
+**Inbound xApp submits — the return path:** per `explain("xapp-event-handling")`.
 
 ### §C.1 — Filler line library (pick one per tool, tone-match the persona)
 
@@ -874,7 +874,7 @@ JSON form (what the node emits in the flow definition — for reference):
 
 > **Voice silence / no-input fields** (`userNoInput*`) — the values above are the chosen demo defaults (10 s timeout, 5 retries, `event` mode). For what each field means and the `event`-mode reprompt-then-escalate pattern (re-enter on the `noUserInput` system intent, discriminate on `input.data.event === "USER_INPUT_TIMEOUT"`), see plugin `explain("voice-silence-timeout")` rather than re-deriving the semantics here.
 
-**(d) Say Welcome** — `config.say.text` is a **plain string array** (one string per variant — NOT an array of `{type,content}` objects; objects render as `[object Object]`). The flat `config.text` form also works (the plugin auto-normalises either). Per plugin `explain("say-node")`. Note `generativeAI_customInputs` must be an **array** (`[]`), never an empty string:
+**(d) Say Welcome** — per `explain("say-node")` for the canonical config schema:
 ```
 cognigy_create {
   resource_type: "node",
@@ -1119,7 +1119,7 @@ Only run Phase B after Phase A is fully GREEN. Phase B catches LLM-level wiring 
    ```
    **Assert:**
    - [deterministic] On the triggering turn, `outputStack` contains a `setHTMLAppState` delivery (the scene was pushed) → §1.4b delivery path wired. Failure → loop back to §1.4b (scaffold / `context.xappTrigger`).
-   - [deterministic] After the emulated submit, the flow's inbound `ifThenElse` intercepts `input.data._cognigy._app.payload` and the submit result surfaces in the next tool answer (`context.toolResponse`) → §1.4b return path wired. Failure → loop back to §1.4b (inbound interceptor).
+   - [deterministic] After the emulated submit, the return path handler surfaces the result in the next tool answer per `explain("xapp-event-handling")` → §1.4b return path wired. Failure → loop back to §1.4b (inbound interceptor).
    - [advisory] Whether the LLM weaves the submitted data into its next reply naturally is an LLM decision — advisory, not a gate; log a warning if it doesn't.
 
 #### When Phase A passes and Phase B's deterministic assertions pass

@@ -129,11 +129,11 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
   ```bash
   git checkout -b feat/<name> origin/dev
   ```
-- **Do not bump versions.** CI will reject any PR to `dev` that changes the version. A prerelease (`x.y.z.devN`) is published automatically on every merge to `dev`. Stable releases are cut by the maintainer via a `dev → main` PR.
+- **Do not bump versions.** CI will reject any PR to `dev` that changes the version. Version bumps are pushed directly to `dev` by the maintainer to initiate a prerelease cycle — not via PR.
 - **Composite skills call atomic MCP tools** (`cognigy_get`, `cognigy_create`, …) — never hardcode `npx tsx` CLI calls in a skill.
-- PR to `dev`. On merge, a prerelease is automatically published to PyPI. To install a specific prerelease build for testing:
+- PR to `dev`. Prereleases are **not** published automatically on merge — the maintainer cuts them explicitly via `workflow_dispatch` (GitHub Actions → "Release (prerelease)" → Run workflow on `dev`) or RC tag (`git tag v1.7.0rc1 && git push origin v1.7.0rc1`). Both paths gate on the base version in `pyproject.toml` exceeding the current stable on PyPI. To install a specific prerelease for testing:
   ```bash
-  uvx cognigy-vibe-mcp==1.5.5.dev47         # specific build
+  uvx cognigy-vibe-mcp==1.7.0rc1            # specific RC
   uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
   ```
   Stable releases are published when the maintainer merges `dev → main`. The marketplace submodule reference must be updated manually after a stable release (see TODO item #1 in CLAUDE.md).
