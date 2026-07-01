@@ -1,44 +1,98 @@
 ---
 topic: llm-resources
-description: LLM listing by project, referenceId resolution, project-scope vs global, and the largelanguagemodels API path
+description: org-level vs project-level LLMs, assign_org_llm tool, discovery pattern, referenceId resolution, manage_packages fallback
 group: platform
 ---
 
-## llm-resources — Finding and resolving LLMs
+## llm-resources — LLM Discovery and Project Assignment
 
-LLM models are a Cognigy resource. List them with `cognigy_list` — `resource_type` passes straight through to the REST path, so no NiCE MCP dependency is needed for LLM discovery.
+### resourceLevel: organisation vs project
 
-### List the LLMs in a project
+Every LLM on a Cognigy tenant has a `resourceLevel` field:
+
+- `"organisation"` — tenant-wide model managed by an admin. Visible to all projects that have been granted access via `assignedToProjects`. This is the standard model for shared demo builds.
+- `"project"` — lives only inside one project. Not accessible from other projects without a `manage_packages` export/import.
+
+### Discovering available LLMs
+
+Call `cognigy_list` **without** a `project_id` to get all LLMs on the tenant (both org-level and project-level):
 
 ```
-cognigy_list { resource_type: "largelanguagemodels", project_id: "<projectId>" }
-# → GET /v2.0/largelanguagemodels?projectId=<projectId>
+cognigy_list {
+  resource_type: "largelanguagemodels",
+  full_objects: true,
+  fields: ["_id", "name", "referenceId", "resourceLevel", "modelType", "provider"]
+}
 ```
 
-Returns one entry per LLM. With `full_objects: true` (or `fields: ["_id","name","referenceId","modelType","provider"]`) each entry includes:
+Filter for org-level generation models:
+- Keep: `resourceLevel == "organisation"`
+- Exclude: `modelType` contains `"embedding"` (case-insensitive)
 
-| Field | Meaning |
-|---|---|
-| `name` | Human label (e.g. `Azure GPT 4.1`, `global-gpt-4.1-mini`) |
-| `referenceId` | The UUID you pass as `llmProviderReferenceId` in `update_ai_agent.jobConfig` |
-| `modelType` | Underlying model (e.g. `gpt-4.1`) |
-| `provider` | e.g. `azureOpenAI` |
+This gives the list to present to users during setup — real names, not hardcoded UUIDs.
 
-The default `cognigy_list` (no `full_objects`) returns `{id, name}` pairs — enough to let a user pick by label; fetch `referenceId` when you need to wire the agent.
+To list LLMs scoped to a specific project (e.g. to verify before generation):
+
+```
+cognigy_list { resource_type: "largelanguagemodels", project_id: "<projectId>", full_objects: true,
+               fields: ["_id", "name", "referenceId", "modelType", "provider"] }
+```
 
 ### referenceId resolution
 
-Builders configure LLMs by **label** (readable, stable across people); the build needs the **`referenceId`**. Resolve label → referenceId by listing with `full_objects: true` and matching on `name`. Never hardcode a referenceId blind — confirm it exists in the **target** project first (see project-scope below).
+Builders configure LLMs by **label** (readable, stable across people); the build needs the **`referenceId`**. Resolve label → referenceId by listing with `full_objects: true` and matching on `name`. Never hardcode a referenceId — confirm it exists in the **target** project first.
 
-### Project-scope vs global
+### Assigning an org-level LLM to a new project
 
-LLM connections are **project-scoped**: a `referenceId` valid in one project is not automatically usable in another. A freshly created project may have **no** LLM, in which case generation returns empty output with no error. Two ways to get an LLM into a target project:
+Use `assign_org_llm` after `create_ai_agent`. It appends the project to the LLM's `assignedToProjects` list safely:
 
-- **Reuse via packages** — export the `largelanguagemodels` resource (+ its connection) from a project that has it and import into the target (`manage_packages`).
-- **Global models** — some tenants expose a shared/global LLM available across projects; it still surfaces in the project-scoped list when usable.
+```
+assign_org_llm {
+  project_id: "<new project _id>",
+  llm_id: "<org-level LLM _id — NOT referenceId>"
+}
+```
 
-Always verify the chosen LLM exists in the target project (list it) before relying on `talk_to_agent` output.
+Returns:
+- `{ already_assigned: true, llm_name: "..." }` — no write made (idempotent, safe to call twice)
+- `{ assigned: true, llm_name: "...", project_id: "..." }` — project added
+- `{ error: "not_org_level", hint: "..." }` — LLM is project-scoped; use `manage_packages` instead
+- `{ error: "llm_not_found", llm_id: "..." }` — bad `llm_id`
 
-### Confirming the resource_type per region
+**Always use `assign_org_llm`, never hand-write the GET+PATCH.** The raw PATCH requires sending the full `assignedToProjects` array — a concurrent build targeting the same LLM would overwrite each other's entries.
 
-`largelanguagemodels` is the AU1 path. If a `cognigy_list` for it returns nothing unexpected on another region/tenant, confirm the exact collection name against that environment's OpenAPI spec (`GET https://cognigy-api-<region>.nicecxone.com/openapi/openapi-viewer.json`) — the spec is the source of truth for resource paths.
+### When `manage_packages` is still appropriate
+
+If the user's chosen LLM is `resourceLevel: "project"` (e.g. a custom connection not promoted to org level), `assign_org_llm` will refuse. Export the LLM from its source project and import it into the new project:
+
+```
+manage_packages { operation: "list_exportable", projectId: "<source project id>" }
+# → find the llm_model resource id
+
+manage_packages {
+  operation: "export",
+  projectId: "<source project id>",
+  resourceIds: ["<llm_model id>"],
+  includeDependencies: true,
+  outputPath: "<absolute path>/llm-backup.zip",
+  waitForCompletion: true
+}
+
+manage_packages {
+  operation: "import",
+  projectId: "<new project id>",
+  packagePath: "<absolute path>/llm-backup.zip",
+  waitForCompletion: true
+}
+```
+
+### `_id` vs `referenceId`
+
+- `_id` — MongoDB ObjectId hex string. Required by `assign_org_llm` and for direct API calls (`GET /v2.0/largelanguagemodels/<_id>`).
+- `referenceId` — UUID. Required by `update_ai_agent.jobConfig.llmProviderReferenceId`.
+
+Both are returned by `cognigy_list`. Store both in `buildConfig.llm.options[]` (`id` for assignment, `referenceId` for the job config patch).
+
+### Confirming the resource path per region
+
+`largelanguagemodels` is the standard path across regions. If a `cognigy_list` returns unexpected results on a non-AU1 tenant, confirm the exact collection name against that environment's OpenAPI spec (`GET https://cognigy-api-<region>.nicecxone.com/openapi/openapi-viewer.json`) — the spec is the source of truth for resource paths.
