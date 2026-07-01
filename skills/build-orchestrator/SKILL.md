@@ -8,7 +8,6 @@ description: End-to-end Cognigy AI Agent demo builder — the orchestrator that 
 > **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:init-mcp`. The orchestrator delegates to these by name; it does not vendor their content.
 >
 > **`cognigy-vibe-mcp` install.** `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after) — always run the latest. This skill relies on: file-backed tool authoring via `push_agent_tool` (canonical S1.3/S6 path), `push_code_node` CREATE mode (single-call create+position+push — S1.5(b), S6), IF/Once branch-marker insertion (S1.4b — `explain("node-positioning")`), the say-node string-array + `generativeAI_customInputs: []` shape (S1.5(d) — `explain("say-node")`), the xApp inbound event path (S1.4b / S1.7 — `explain("xapp-event-handling")`), in-session project binding via `sync_remote_state` (S1.1.5), and the `explain()` topics referenced throughout (`project-snapshots`, `voice-silence-timeout`, `output-formats`, `knowledge-store`, `llm-resources`).
-
 This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Agent demo from scratch. It produces a complete build adhering to the patterns documented in this skill body — full init chain, voice config, Shape-B tool branches with the plugin-canonical `aiAgentToolAnswer` terminal, transfer + end-call patterns, deterministic mocks, conditional-push xApp HTML, as-built docs generated from the live flow chart, drift baseline, package zip backup — for any industry, with the CRM shape adapting to the domain.
 
 **This skill body IS the reference build.** The quality bar is the pattern set defined here, not any prior real-customer build. When a real build (e.g. a recent customer demo) surfaces a pattern that's better than what's documented here, promote it back into this skill via the `nice-build-retrospective` skill — that's the formal upstream path. The audit skills (`nice-audit-cognigy-build`, `nice-cognigy-health-check`) compare a live build against THIS skill body, not against a remembered historical customer. Do not name historical customers as quality benchmarks anywhere in this skill body — that creates stale references and burns tokens chasing prior projects.
@@ -81,7 +80,6 @@ Per-build overrides update `buildConfig` in memory for this run only — they do
 ---
 
 ## S0 — Interview (one batch via AskUserQuestion)
-
 This single batch collects everything `cognigy:scope-demo` + the four `cognigy:design-agent-*` sub-skills need, so they produce their artifacts in context-provided mode (no re-interview).
 
 | # | Question | Header | Required |
@@ -325,7 +323,6 @@ All build defaults come from `buildConfig` (loaded via `get_build_state`). `buil
 | `push_code_node` | Push local `.js`/`.ts` to a Code node with conflict detection. Also CREATEs+positions the node in one call when `node_id` is omitted (`mode`+`target` provided). |
 | `push_html_node` | Push local `.html` to a `setHTMLAppState` node — xApp moments (S1.4b) |
 | `push_agent_tool` | Read a local `.tool.json` → create/update an `aiAgentJobTool` node — **canonical tool-authoring path (S1.3)** (plugin ≥ 1.4.2). CREATE: pass `job_node_id` (the parent `aiAgentJob` node); UPDATE: pass `node_id`. No `aiAgentId`. Creates ONLY the tool node — append `aiAgentToolAnswer` yourself (S6 Step 4). `cognigy_create` is blocked for `aiAgentJobTool` and redirects here. |
-
 **Rule of thumb:** prefer the `push_*` family for any node body or tool definition you want version-controlled in the demo folder. Use `cognigy_create` for resource and node creation; `cognigy_update` for patches.
 
 ---
@@ -395,7 +392,6 @@ Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.
 4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
 
 > **Note:** Do not use `manage_packages` export/import as the primary LLM wiring path — it is a fallback for project-scoped LLMs only. `assign_org_llm` is the correct path for org-level LLMs (the default for any config populated by `init-cognigy-vibe`).
-
 **Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the §1.1.5 restart.
 
 ```
@@ -420,7 +416,7 @@ The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Ste
 
 > **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
 
-### 1.1.5 — Bind cognigy-vibe to the new project
+### 1.1.5 — Wire up cognigy-vibe MCP for this project (delegate to `cognigy:init-mcp`)
 
 All §1.1 steps use cognigy-vibe directly — there is no session boundary. After §1.1 Step 3:
 
@@ -435,7 +431,6 @@ If step 1 fails with a "not loaded" / missing-credentials error, fix the credent
 ### 1.2 Patch the AI Agent Job Node — all job config fields (cognigy-vibe)
 
 `create_ai_agent` (§1.1 Step 1) creates the `aiAgentJob` node. `update_ai_agent` (§1.1 Step 3) already sets the key job fields — this step patches the remaining node-level config that `update_ai_agent` does not cover: `memoryContextInjection` and `toolChoice`. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
-
 **This step is mandatory.** Without it the agent loses caller context mid-conversation.
 
 `cognigy_update` does an always-fresh GET + deep merge — `merge_config: true` ensures a safe patch:
@@ -570,13 +565,12 @@ Transactional (Shape B — most common):
 [aiAgentJobTool: <tool_id>]                     ← from S1.3 push_agent_tool (tool node only)
   └── [Say: "Filler — <verb>"]                  ← SC.1 — voice dead-air handling
         └── [Code: "<Action> <Domain>"]         ← SC.2 — context.toolResponse = {...}; (node finishes)
-              └── [aiAgentToolAnswer]            ← appended LAST (S6 Step 4) — NOT auto-paired
-```
+              └── [aiAgentToolAnswer]            ← appended LAST (S6 Step 4) — NOT auto-paired```
 
 Transfer (reversed — Code first, so transfer commits to state before the spoken hand-off):
 ```
 [aiAgentJobTool: transfer_to_<team>]
-  └── [Code: "Mark transfer — <team>"]         ← context.toolResponse = { transferred: true, team: "..." }; (node finishes)
+  └── [Code: "Mark transfer — <team>"]         ← context.toolResponse = { transferred: true, team: "..." }
         └── [Say: "Say — transferring to <team>"]  ← "Right, putting you through to our <team> team now."
               └── [aiAgentToolAnswer]
 ```
@@ -624,7 +618,7 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
 
 1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
-2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per plugin `explain("node-positioning")`, an IF node auto-creates two **branch-marker** children in `childIds[]`: **`childIds[0]` = the Then (true) branch marker, `childIds[1]` = the Else marker.** Content inside a branch must be a **sibling appended after the marker** — `mode: "append"`, `target: <childIds[0]>` (the Then marker `_id`). Do NOT walk to a "true-branch tail" manually, and do NOT `appendChild` onto the marker (that nests inside it and breaks UI rendering). If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
+2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per `explain("node-positioning")`, use `mode: "append"` targeting the branch marker to insert inside a branch. If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
    ```
    // Step 2a — create the IF gate node
    cognigy_create {
@@ -682,7 +676,7 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
 
 **Cross-tool-branch reuse:** if two tools fire the same scene, both set `context.xappTrigger = true` — the single `setHTMLAppState` handles both. If two tools fire *different* scenes, route inside the `if` true branch using `context.xappScene` to pick which scene renders.
 
-**Inbound xApp submits — the return path:** per `explain("xapp-event-handling")`.
+**Inbound xApp submits — the return path (per plugin `explain("xapp-event-handling")`).** Everything above *delivers* a scene; when the user acts inside the xApp (submits a form, taps a card) the result returns to the flow as an event. The submit payload arrives at **`input.data._cognigy._app.payload`**. Handle it with an `ifThenElse` near the top of the flow (before the AI Agent Job) that intercepts the submit, writes the result to `context.toolResponse`, and feeds into an `aiAgentToolAnswer` — the non-blocking two-turn async pattern (variant A = `sdk.submit()`; variant B = webhook inject). Do NOT re-derive the event shapes here — `explain("xapp-event-handling")` is the source. (This is the half the skill previously omitted: it covered delivery but not the return path.)
 
 ### SC.1 — Filler line library (pick one per tool, tone-match the persona)
 
@@ -701,7 +695,6 @@ Three result shapes — pick one per tool branch:
 **Shape 1 — Success (most common):**
 ```javascript
 context.toolResponse = context.customer;  // or { receiptNumber, amount, ... } / { claimId, assessorWindow, ... } / etc.
-// Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
 LLM reads `context.toolResponse` next turn and continues the conversation.
 
@@ -716,7 +709,6 @@ if (lookupValue === "<known-good demo value — e.g. the caller's real id from S
 } else {
   context.toolResponse = { found: false, reason: "no_match", searchedFor: lookupValue };
 }
-// Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
 Persona `jobInstructions` MUST include: *"If a lookup tool returns `found: false`, apologise and ask the caller to confirm the value. Do NOT retry the same tool with the same input."*
 
@@ -727,20 +719,10 @@ context.toolResponse = {
   needsDisambiguation: true,
   prompt: "I found 2 accounts under that name — can you confirm the postcode?"
 };
-// Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
 Persona `jobInstructions` MUST include: *"If a tool returns `needsDisambiguation: true`, ask the user the `prompt` field. Do not fire tools until the user answers."*
 
-**Error pattern (rare — for genuinely broken tools):**
-```javascript
-context.toolResponse = { error: true, message: "<safe message>", retryable: false };
-// Code node finishes — flow advances to aiAgentToolAnswer automatically.
-// Use api.stopExecution() only if you need to halt the flow entirely (skips aiAgentToolAnswer).
-```
-Mock tools should almost never need to signal a hard error — prefer structured no-match (Shape 2) or disambiguation (Shape 3).
-
 **Hard rules:**
-- **Code nodes execute synchronously** — write `context.toolResponse` and let the node finish; the flow advances to `aiAgentToolAnswer` automatically.
 - **Always write the result to `context.toolResponse`** — NOT `input.result` (legacy convention; replaced by plugin-canonical `context.toolResponse`).
 - **Build at least one tool with Shape 2 (no-match) per demo** to prove the persona's negative-path handling works.
 
@@ -778,7 +760,7 @@ cognigy_create {
 
 Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_flow_chart` after this call.
 
-**(b) Initialize Session — Code node** inside On First Time. `push_code_node` **creates and positions the Code node in one call** — omit `node_id` and pass `mode` + `target` + `label`:
+**(b) Initialize Session — Code node** inside On First Time. As of cognigy-vibe **v1.4.0**, `push_code_node` **creates and positions the Code node in one call** — omit `node_id` and pass `mode` + `target` + `label`. The old two-step (empty `cognigy_create` → `push_code_node`) is no longer needed:
 ```
 push_code_node {
   script_file: "Demo Builds/<customer>-demo/code-nodes/<customer>_initialize_session.js",   // canonical CRM template, industry-shaped — S3
@@ -790,7 +772,7 @@ push_code_node {
 }
 ```
 
-> The single `push_code_node` CREATE call (omit `node_id`, provide `mode`+`target`) creates, positions, and pushes the body in one step. To UPDATE an existing Code node instead, pass its `node_id` (conflict-detected). Required params: `script_file`, `flow_id`. See plugin `explain("code-node-patterns")`.
+> **v1.4.0 change:** Code nodes no longer need the two-step `cognigy_create` (empty) → `push_code_node`. The single `push_code_node` CREATE call (omit `node_id`, provide `mode`+`target`) does both. To UPDATE an existing Code node instead, pass its `node_id` (conflict-detected). Required params: `script_file`, `flow_id`. See plugin `explain("code-node-patterns")`.
 
 **(c) Set Session Config** (extension `@cognigy/voicegateway2` auto-injected):
 ```
@@ -837,7 +819,7 @@ JSON form (what the node emits in the flow definition — for reference):
 
 > **Voice silence / no-input fields** (`userNoInput*`) — the values above are the chosen demo defaults (10 s timeout, 5 retries, `event` mode). For what each field means and the `event`-mode reprompt-then-escalate pattern (re-enter on the `noUserInput` system intent, discriminate on `input.data.event === "USER_INPUT_TIMEOUT"`), see plugin `explain("voice-silence-timeout")` rather than re-deriving the semantics here.
 
-**(d) Say Welcome** — per `explain("say-node")` for the canonical config schema:
+**(d) Say Welcome** — `config.say.text` is a **plain string array** (one string per variant — NOT an array of `{type,content}` objects; objects render as `[object Object]`). The flat `config.text` form also works (the plugin auto-normalises either). Per plugin `explain("say-node")`. Note `generativeAI_customInputs` must be an **array** (`[]`), never an empty string:
 ```
 cognigy_create {
   resource_type: "node",
@@ -992,7 +974,7 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
    | 6 | `setSessionConfig.config` has `ttsVendor`, `ttsVoice`, `sttVendor`, `sttLanguage` matching `buildConfig.tts.*` and `buildConfig.stt.*` | §1.5(c) — patch the node's config |
    | 7 | `setSessionConfig.config.sttHints` is a non-empty array containing the customer brand name AND the persona name AND ≥3 domain terms derived from the agent's tools | §1.5(c) — populate sttHints |
    | 8 | Say Welcome `config.say.text` is an array of ≥2 variants, each containing `{{context.customer.firstName}}` | §1.5(d) — re-write the say config |
-   | 9 | For every `aiAgentJobTool` child of the `aiAgentJob`, a well-formed branch exists per §1.4 (Shape B for transactional, reversed for transfers, end-call shape for end_call/end_call_resolved); AND every `aiAgentToolAnswer` node in the branch has a non-empty `config.answer` field (use `cognigy_get` on the node to confirm — an empty string or missing field means the Resolve node was created with bare `config: {}` and the LLM will see nothing back) | §1.4 / §6 — re-run the tool-branch build; re-create any unpopulated `aiAgentToolAnswer` nodes with `config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 }` |
+   | 9 | For every `aiAgentJobTool` child of the `aiAgentJob`, a well-formed branch exists per §1.4 (Shape B for transactional, reversed for transfers, end-call shape for end_call/end_call_resolved) | §1.4 / §6 — re-run the tool-branch build |
    | 10 | `end_call` and `end_call_resolved` tool branches both exist and both terminate with a `hangup` before the `aiAgentToolAnswer` | §5 — re-create the end-call pair |
    | 11 | `aiAgentJob.next` resolves to an `end` node | §1.1 — flow is incomplete |
    | 12 | **Agent free-text fields within the 1000-char cap** — via `cognigy_get` on the agent (`resource_type: "agents"`, not the flow chart), assert `description` (1A Persona) ≤ 1000 chars AND `instructions` (1B Special Instructions) ≤ 1000 chars. This is the structural backstop for the §1.1 pre-flight gate — it catches the case where an over-length field was *saved despite the platform error*, the exact silent-failure that injects mid-build uncertainty. | §1.1 / §2 — condense the over-length block (`## Persona` or `## Special Instructions`) and re-set the field |
@@ -1072,8 +1054,7 @@ Only run Phase B after Phase A is fully GREEN. Phase B catches LLM-level wiring 
    ```
    **Assert:**
    - [deterministic] On the triggering turn, `outputStack` contains a `setHTMLAppState` delivery (the scene was pushed) → S1.4b delivery path wired. Failure → loop back to S1.4b (scaffold / `context.xappTrigger`).
-   - [deterministic] After the emulated submit, the return path handler surfaces the result in the next tool answer per `explain("xapp-event-handling")` → S1.4b return path wired. Failure → loop back to S1.4b (inbound interceptor).
-   - [advisory] Whether the LLM weaves the submitted data into its next reply naturally is an LLM decision — advisory, not a gate; log a warning if it doesn't.
+   - [deterministic] After the emulated submit, the return path handler surfaces the result in the next tool answer per `explain("xapp-event-handling")` → S1.4b return path wired. Failure → loop back to S1.4b (inbound interceptor).   - [advisory] Whether the LLM weaves the submitted data into its next reply naturally is an LLM decision — advisory, not a gate; log a warning if it doesn't.
 
 #### When Phase A passes and Phase B's deterministic assertions pass
 
@@ -1567,7 +1548,6 @@ push_code_node {
 }
 ```
 The `.js` body reads args from `input.aiAgent.toolArgs`, writes `context.toolResponse` (Shape 1, 2, or 3 per SC.2), and finishes.
-
 Transfer → `say` (hand-off line):
 ```
 cognigy_create {
@@ -1619,7 +1599,6 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for S1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (S1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (S6 Step 4). No `aiAgentId` param. |
 | cognigy-vibe | `get_flow_chart` | Returns shape depends on `format` param: `"hierarchy"` (default) → `{ hierarchy: "..." }` only; `"raw"` → `{ nodes: [...], relations: [...] }` only; `"both"` → all three fields. Key is `hierarchy`, NOT `hierarchyString`. Use `format: "both"` for as-built generation (S1.6); use `format: "raw"` when walking node IDs (S1.7 Phase A). Required AFTER S1.1 Steps 2–4 (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
-
 ---
 
 ## S8 — Reconciling with UI prototypes the user may build in parallel
