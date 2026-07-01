@@ -230,13 +230,15 @@ def test_node_wiring_relation_field_names_are_correct(mock_client, state, cache)
     assert '"children"' in text, "node-wiring must document 'children' field"
 
 
-def test_node_positioning_documents_insert_before_workaround(mock_client, state, cache):
+def test_node_positioning_documents_canonical_modes(mock_client, state, cache):
+    """node-positioning documents append and appendChild as the two canonical modes."""
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["explain"]({"topic": "node-positioning"})
     text = result[0].text
-    assert "insertBefore" in text, "Should mention insertBefore by name"
-    assert "predecessor" in text, "Should document the predecessor-node workaround"
-    assert "move" in text.lower(), "Should mention the move operation as alternative"
+    assert '"append"' in text, "Should document append mode"
+    assert '"appendChild"' in text, "Should document appendChild mode"
+    assert "branch marker" in text.lower() or "branchMarkerId" in text or "childIds" in text, \
+        "Should document branch-marker targeting for Once/IF branches"
 
 
 def test_node_positioning_documents_if_branch_population(mock_client, state, cache):

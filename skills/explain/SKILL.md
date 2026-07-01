@@ -39,7 +39,7 @@ code:
 nodes:
   flow-chart-reading         reading chart output, node type strings, extension field
   node-config-update         full-replace semantics, merge_config pattern, silent field deletion
-  node-positioning           append vs appendChild modes, child branch population, insertAfter + insertBefore 500 bug on AU1, insert-before workaround
+  node-positioning           append vs appendChild modes, child branch population for Once and IF nodes
   node-types                 quick reference for all node type strings
   node-wiring                chart structure, relations array, sequential vs child chains
 
