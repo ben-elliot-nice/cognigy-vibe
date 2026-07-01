@@ -595,7 +595,7 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
 
 **Why the Filler Say (transactional):** the plugin's canonical `agent-tool-branch` is `aiAgentJobTool → Code → aiAgentToolAnswer` (three nodes). This skill adds an explicit Filler Say between the tool node and Code — non-canonical but deliberate, because voice channels otherwise produce 0.5–2s of audible dead air during the Code mock. The Filler Say is the only authorised deviation, justified by voice UX. See plugin `explain("agent-tool-branch")`.
 
-**Insertion rule (applies to all three shapes):** use plugin-canonical `mode: "append"` + `target: "<previousNodeId>"` per `explain("node-positioning")`. `append` inserts the new node AFTER target with the chain auto-rewired. **Do NOT use `insertAfter`** — broken on AU1 (returns 500). Extension is auto-injected for `@cognigy/basic-nodes` (AI Agent nodes) / `cxone-utils` / `@cognigy/voicegateway2`.
+**Insertion rule (applies to all three shapes):** `mode: "append"` per `explain("node-positioning")`. Extension is auto-injected for `@cognigy/basic-nodes` (AI Agent nodes) / `cxone-utils` / `@cognigy/voicegateway2`.
 
 **Build steps:** see S6 for the per-shape step-by-step recipe (which node type to append first, what to push via `push_code_node`, how the `aiAgentToolAnswer` terminal is appended last in Step 4 — it is NOT auto-paired). Do not re-derive the steps here — S6 is the single source.
 
@@ -657,7 +657,7 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
      }
    }
    ```
-   Extension is auto-injected (`@cognigy/basic-nodes` for `if`; `cxone-utils` for `setHTMLAppState`). **Do NOT use `insertAfter` / `insertBefore`** — broken on AU1 (return 500); `append` against the branch marker is the only reliable mode.
+   Extension is auto-injected (`@cognigy/basic-nodes` for `if`; `cxone-utils` for `setHTMLAppState`). Use `mode: "append"` per `explain("node-positioning")`.
 
 3. **Push the HTML body:**
    ```
@@ -700,8 +700,6 @@ Three result shapes — pick one per tool branch:
 
 **Shape 1 — Success (most common):**
 ```javascript
-const <arg> = input.aiAgent.toolArgs.<arg>;  // read tool args if applicable
-
 context.toolResponse = context.customer;  // or { receiptNumber, amount, ... } / { claimId, assessorWindow, ... } / etc.
 // Code node finishes — flow advances to aiAgentToolAnswer automatically.
 ```
@@ -1597,7 +1595,7 @@ cognigy_create {
   body: { type: "aiAgentToolAnswer", mode: "append", target: "<lastFunctionalNodeId>", config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 } }
 }
 ```
-> **The `answer` field is mandatory.** It is the CognigyScript the node hands back to the LLM as the tool result; `{{JSON.stringify(context.toolResponse)}}` surfaces the object the Code node wrote. A bare `config: {}` returns an empty tool result and the LLM sees nothing back — see `explain("agent-tool-branch")` Step 3 / `explain("agent-tool-patterns")`.
+> **The `answer` field is mandatory** — see `explain("agent-tool-branch")` Step 3.
 After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentToolAnswer` (transactional/transfer), `aiAgentJobTool → [Hangup] → aiAgentToolAnswer` (`end_call`), or `aiAgentJobTool → [Say] → [Hangup] → aiAgentToolAnswer` (`end_call_resolved`). This is the canonical three-/four-node branch from plugin `explain("agent-tool-branch")`.
 
 ---
@@ -1609,7 +1607,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | `cognigy_list` | `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars to their plural form. Prefer plural to match the Cognigy API directly. |
 | cognigy-vibe | `cognigy_list` | LLM resource type is `largelanguagemodels` (plural, no underscore) — NOT `llm_models` (returns 404). |
 | cognigy-vibe | `cognigy_create` | **Extension is auto-injected** for all known node types (`@cognigy/voicegateway2` for `setSessionConfig`/`hangup`, `cxone-utils` for `setHTMLAppState`/`initAppSession`, `@cognigy/basic-nodes` for `aiAgentJobTool`/`aiAgentToolAnswer`/`aiAgentJob`). You can omit `extension` in the body. Spelling it out also works. |
-| cognigy-vibe | `cognigy_create` | **Insertion mode: use `mode: "append"` + `target: "<previousNodeId>"`** — inserts the new node AFTER target and auto-rewires the chain. `mode: "appendChild"` is for putting `aiAgentJobTool` as a child of `aiAgentJob`. **`insertAfter` / `insertBefore` are BROKEN on AU1** (return 500 "Error while reading ChartData"). See plugin `explain("node-positioning")`. |
+| cognigy-vibe | `cognigy_create` | **Insertion mode: use `mode: "append"` + `target: "<previousNodeId>"`. `mode: "appendChild"` is for putting `aiAgentJobTool` as a child of `aiAgentJob`.** See plugin `explain("node-positioning")`. |
 | cognigy-vibe | `cognigy_create` | **`resource_type` is `"node"`** (plus a separate `flow_id` param) — NOT the path-form `"flows/<flowId>/chart/nodes"`. Path-form may work but is non-canonical. |
 | cognigy-vibe | `cognigy_create` | Say config is **auto-normalised** — the tool accepts either flat `config.text` or nested `config.say.text` (array). |
 | cognigy-vibe | `cognigy_create` | Don't author Code-node bodies here. `push_code_node` CREATE mode (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes a Code node in one call. |
