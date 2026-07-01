@@ -261,7 +261,7 @@ With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo fo
 
 **Context-provided suppression:** Pass the interview answers into each sub-skill so they don't re-interview. Mapping:
 
-- **`design-agent-persona`** — pre-fill agent name (Q4), tone descriptors (Q4 + brand-research STone descriptors), primary channel (Q10), compliance framing (Q11). Output MUST follow the four-layer ladder (S2): `## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`. Special Instructions (1B) includes the canonical SPEAKING CONVENTIONS block (verbatim from S2 layer b) plus abuse / out-of-scope handling — **NOT brand voice**, which lives in `## Persona` (1A, sourced from brand-research.md). Universal Always/Never rules from Q12 + S2.5 empathy library live in `## Job Instructions` (see "Empathy injection" below for the verbatim rule).
+- **`design-agent-persona`** — pre-fill agent name (Q4), tone descriptors (Q4 + brand-research Tone descriptors), primary channel (Q10), compliance framing (Q11). Output MUST follow the four-layer ladder (S2): `## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`. Special Instructions (1B) includes the canonical SPEAKING CONVENTIONS block (verbatim from S2 layer b) plus abuse / out-of-scope handling — **NOT brand voice**, which lives in `## Persona` (1A, sourced from brand-research.md). Universal Always/Never rules from Q12 + S2.5 empathy library live in `## Job Instructions` (see "Empathy injection" below for the verbatim rule).
 - **`design-agent-jobs`** — pre-fill job definitions from Q6 use cases. For each use case, ask only "irreversible? staging?" if not obvious from the demo plan. Routing intents derive from Q6 → S1.3 transfer derivation table.
 - **`design-agent-interfaces`** — pre-fill channel mix from Q10. Out-of-chat moments come from the demo plan's Phase 3 area 5; only ask for xApp content type / data payload if missing.
 - **`design-agent-contracts`** — pre-fill obligation catalogue from Q11 compliance + Q12 guard surface + any irreversible-action staging captured by `design-agent-jobs`.
@@ -1145,7 +1145,7 @@ Only run Phase B after Phase A is fully GREEN. Phase B catches LLM-level wiring 
 "Pass" = every Phase A assertion GREEN **and** every **deterministic** Phase B assertion GREEN. Outstanding **advisory** (probabilistic) warnings do not block hand-back, but every one must be recorded here and echoed in the S10 hand-back so the user sees them — never silently drop an advisory.
 
 Append a `## Smoke test results` section to `[CUSTOMER]_FLOW_INSERTS.md` (after S11 Known gaps) capturing:
-- Phase A: PASS for each of the 12 (deterministic) assertions
+- Phase A: PASS for each of the 13 (deterministic) assertions
 - Phase B: the turn transcripts (user message + bot response text, verbatim), each assertion tagged PASS / FAIL (deterministic) / WARN (advisory)
 - Any advisory warnings carried forward to S10
 - Session IDs used (so the user can replay in the Cognigy session inspector)
@@ -1189,7 +1189,7 @@ cognigy_create { resource_type: "knowledgestores/<ksId>/sources/<sourceId>/chunk
 // 4. Trigger ingestion:
 cognigy_invoke { resource_type: "knowledgestore", resource_id: "<ksId>", operation: "run", body: { connector_id: "<connectorId>" } }
 ```
-Resolve `<ksId>` via `resolve_resource { name: "<store name>", resource_type: "knowledgestores" }`. **Source-create gotchas (400 otherwise):** `type` must be `"manual"` (not `"text"`); do NOT pass `content` or `knowledgeStoreId` at source-create.
+Resolve `<ksId>` via `resolve_resource { name: "<store name>", resource_type: "knowledgestores" }`. Resolve `<connectorId>` via `cognigy_list { resource_type: "knowledgestores/<ksId>/connectors" }` — see `explain("knowledge-store")` for the connector discovery pattern. **Source-create gotchas (400 otherwise):** `type` must be `"manual"` (not `"text"`); do NOT pass `content` or `knowledgeStoreId` at source-create.
 
 b. **Enable Knowledge AI on the agent** — patch the agent resource to wire the store:
 ```
@@ -1265,7 +1265,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 ```
 <Persona> is the inbound voice concierge for <Customer>. <Customer>'s mission is "<verbatim mission from brand-research>" — <Persona> is the front line of that promise.
 
-<Persona> is <3–4 brand-voice descriptors from brand-research STone descriptors>. <Persona's tone do's, paraphrased into 1 sentence from brand-research>. <Persona> projects steadiness — not pity. When a caller raises a sensitive topic, <Persona> follows the S2.5 empathy protocol (defined in Job Instructions below).
+<Persona> is <3–4 brand-voice descriptors from brand-research Tone descriptors>. <Persona's tone do's, paraphrased into 1 sentence from brand-research>. <Persona> projects steadiness — not pity. When a caller raises a sensitive topic, <Persona> follows the S2.5 empathy protocol (defined in Job Instructions below).
 
 BRAND VOICE (from brand research — S0.6):
 - Tone descriptors: <3–6 from brand-research.md>
