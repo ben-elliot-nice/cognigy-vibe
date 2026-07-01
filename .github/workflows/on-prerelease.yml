@@ -60,7 +60,7 @@ jobs:
           fi
           echo "Tag base matches pyproject: ${BASE} ✓"
 
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.2.0
 
       - name: Check version exceeds current stable on PyPI
         run: |
