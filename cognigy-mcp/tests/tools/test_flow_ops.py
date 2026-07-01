@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from cognigy_mcp.tools.flow_ops import make_handlers, TOOLS
+from cognigy_mcp.tools.flow_ops import make_handlers, TOOLS, _normalise_say_config
 
 
 def test_all_tools_exported():
@@ -537,3 +537,10 @@ def test_cognigy_create_aiagentjobtool_blocked(mock_client, state, cache):
     assert "error" in data
     assert "push_agent_tool" in data["error"]
     mock_client.post.assert_not_called()
+
+
+def test_say_normalise_does_not_inject_temperature():
+    """Say node defaults must not include generativeAI_temperature.
+    Temperature belongs on the AI Agent Job Node, not Say nodes."""
+    result = _normalise_say_config({"text": "Hello world"})
+    assert "generativeAI_temperature" not in result

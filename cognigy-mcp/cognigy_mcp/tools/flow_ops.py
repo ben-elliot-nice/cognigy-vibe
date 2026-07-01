@@ -181,7 +181,6 @@ _SAY_CONFIG_DEFAULTS = {
     "generativeAI_rephraseOutputMode": "none",
     "generativeAI_amountOfLastUserInputs": 5,
     "generativeAI_customInputs": "",
-    "generativeAI_temperature": 0.7,
 }
 
 
