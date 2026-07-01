@@ -6,7 +6,7 @@ group: nodes
 
 ## node-positioning — Inserting and Moving Nodes
 
-### Mode: append (SAFE on AU1)
+### Mode: append
 Only reliable insertion mode. Target = node you want to insert AFTER.
   body: {"type": "say", "label": "My Node", "mode": "append", "target": "<previousNodeId>"}
 

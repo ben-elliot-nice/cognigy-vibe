@@ -239,6 +239,9 @@ def test_node_positioning_documents_canonical_modes(mock_client, state, cache):
     assert '"appendChild"' in text, "Should document appendChild mode"
     assert "branch marker" in text.lower() or "branchMarkerId" in text or "childIds" in text, \
         "Should document branch-marker targeting for Once/IF branches"
+    assert "insertBefore" not in text, "Should not document removed insertBefore"
+    assert "insertAfter" not in text, "Should not document removed insertAfter"
+    assert "BROKEN on AU1" not in text, "Should not document AU1 breakage"
 
 
 def test_node_positioning_documents_if_branch_population(mock_client, state, cache):
