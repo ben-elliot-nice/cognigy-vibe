@@ -42,14 +42,14 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `llm.toolChoice` | string | optional | Tool selection mode | `"auto"` |
 | `locale` | string | required | BCP-47 locale for the agent and endpoint | `"en-AU"` |
 | `tts.vendor` | string | required | TTS provider name | `"ElevenLabs"` |
-| `tts.model` | string | required | TTS model identifier | `"eleven_turbo_v2_5"` |
+| `tts.model` | string | required | TTS model identifier | enter from Cognigy UI → Connections |
 | `tts.language` | string | required | TTS language code | `"en"` |
 | `tts.voiceType` | string | required | TTS voice type | `"Custom"` |
-| `tts.voiceId` | string | required | Provider-specific voice ID | `"kqVqVtE8vZVRm6uoad9t"` |
-| `tts.label` | string | required | Cognigy synthesizer connection label | `"nexora_elevenlabs"` |
+| `tts.voiceId` | string | required | Provider-specific voice ID | enter from Cognigy UI → Connections |
+| `tts.label` | string | required | Cognigy synthesizer connection label | enter from Cognigy UI → Connections |
 | `stt.vendor` | string | required | STT provider name | `"Microsoft"` |
 | `stt.language` | string | required | STT language/locale code | `"en-AU"` |
-| `stt.label` | string | required | Cognigy recognizer connection label | `"nexora-azure-speech-services-australiaeast"` |
+| `stt.label` | string | required | Cognigy recognizer connection label | enter from Cognigy UI → Connections |
 | `stt.hints` | array | optional | Static STT hint phrases | `[]` |
 | `stt.dynamicHints.enabled` | boolean | optional | Enable dynamic STT hints | `true` |
 | `channel.type` | string | required | Channel type identifier | `"voice-webrtc"` |
