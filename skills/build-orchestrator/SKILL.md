@@ -676,7 +676,7 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
 
 **Cross-tool-branch reuse:** if two tools fire the same scene, both set `context.xappTrigger = true` — the single `setHTMLAppState` handles both. If two tools fire *different* scenes, route inside the `if` true branch using `context.xappScene` to pick which scene renders.
 
-**Inbound xApp submits — the return path (per plugin `explain("xapp-event-handling")`).** Everything above *delivers* a scene; when the user acts inside the xApp (submits a form, taps a card) the result returns to the flow as an event. The submit payload arrives at **`input.data._cognigy._app.payload`**. Handle it with an `ifThenElse` near the top of the flow (before the AI Agent Job) that intercepts the submit, writes the result to `context.toolResponse`, and feeds into an `aiAgentToolAnswer` — the non-blocking two-turn async pattern (variant A = `sdk.submit()`; variant B = webhook inject). Do NOT re-derive the event shapes here — `explain("xapp-event-handling")` is the source. (This is the half the skill previously omitted: it covered delivery but not the return path.)
+**Inbound xApp submits — the return path:** per `explain("xapp-event-handling")`.
 
 ### SC.1 — Filler line library (pick one per tool, tone-match the persona)
 
