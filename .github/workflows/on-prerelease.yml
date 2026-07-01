@@ -64,8 +64,7 @@ jobs:
 
       - name: Check version exceeds current stable on PyPI
         run: |
-          uv pip install packaging --system --quiet
-          python3 << 'EOF'
+          uv run --with packaging --no-project python3 << 'EOF'
           import sys, json, urllib.request
           from packaging.version import Version
 
