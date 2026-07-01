@@ -12,7 +12,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Compute version
         id: version
@@ -60,7 +60,7 @@ jobs:
           fi
           echo "Tag base matches pyproject: ${BASE} ✓"
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v8
 
       - name: Check version exceeds current stable on PyPI
         run: |
