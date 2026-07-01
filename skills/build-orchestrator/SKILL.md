@@ -565,7 +565,8 @@ Transactional (Shape B — most common):
 [aiAgentJobTool: <tool_id>]                     ← from S1.3 push_agent_tool (tool node only)
   └── [Say: "Filler — <verb>"]                  ← SC.1 — voice dead-air handling
         └── [Code: "<Action> <Domain>"]         ← SC.2 — context.toolResponse = {...}; (node finishes)
-              └── [aiAgentToolAnswer]            ← appended LAST (S6 Step 4) — NOT auto-paired```
+              └── [aiAgentToolAnswer]            ← appended LAST (S6 Step 4) — NOT auto-paired
+```
 
 Transfer (reversed — Code first, so transfer commits to state before the spoken hand-off):
 ```
@@ -974,7 +975,7 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
    | 6 | `setSessionConfig.config` has `ttsVendor`, `ttsVoice`, `sttVendor`, `sttLanguage` matching `buildConfig.tts.*` and `buildConfig.stt.*` | §1.5(c) — patch the node's config |
    | 7 | `setSessionConfig.config.sttHints` is a non-empty array containing the customer brand name AND the persona name AND ≥3 domain terms derived from the agent's tools | §1.5(c) — populate sttHints |
    | 8 | Say Welcome `config.say.text` is an array of ≥2 variants, each containing `{{context.customer.firstName}}` | §1.5(d) — re-write the say config |
-   | 9 | For every `aiAgentJobTool` child of the `aiAgentJob`, a well-formed branch exists per §1.4 (Shape B for transactional, reversed for transfers, end-call shape for end_call/end_call_resolved) | §1.4 / §6 — re-run the tool-branch build |
+   | 9 | For every `aiAgentJobTool` child of the `aiAgentJob`, a well-formed branch exists per §1.4 (Shape B for transactional, reversed for transfers, end-call shape for end_call/end_call_resolved); AND every `aiAgentToolAnswer` node in the branch has a non-empty `config.answer` field (use `cognigy_get` on the node to confirm — an empty string or missing field means the Resolve node was created with bare `config: {}` and the LLM will see nothing back) | §1.4 / §6 — re-run the tool-branch build; re-create any unpopulated `aiAgentToolAnswer` nodes with `config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 }` |
    | 10 | `end_call` and `end_call_resolved` tool branches both exist and both terminate with a `hangup` before the `aiAgentToolAnswer` | §5 — re-create the end-call pair |
    | 11 | `aiAgentJob.next` resolves to an `end` node | §1.1 — flow is incomplete |
    | 12 | **Agent free-text fields within the 1000-char cap** — via `cognigy_get` on the agent (`resource_type: "agents"`, not the flow chart), assert `description` (1A Persona) ≤ 1000 chars AND `instructions` (1B Special Instructions) ≤ 1000 chars. This is the structural backstop for the §1.1 pre-flight gate — it catches the case where an over-length field was *saved despite the platform error*, the exact silent-failure that injects mid-build uncertainty. | §1.1 / §2 — condense the over-length block (`## Persona` or `## Special Instructions`) and re-set the field |
@@ -1054,7 +1055,8 @@ Only run Phase B after Phase A is fully GREEN. Phase B catches LLM-level wiring 
    ```
    **Assert:**
    - [deterministic] On the triggering turn, `outputStack` contains a `setHTMLAppState` delivery (the scene was pushed) → S1.4b delivery path wired. Failure → loop back to S1.4b (scaffold / `context.xappTrigger`).
-   - [deterministic] After the emulated submit, the return path handler surfaces the result in the next tool answer per `explain("xapp-event-handling")` → S1.4b return path wired. Failure → loop back to S1.4b (inbound interceptor).   - [advisory] Whether the LLM weaves the submitted data into its next reply naturally is an LLM decision — advisory, not a gate; log a warning if it doesn't.
+   - [deterministic] After the emulated submit, the return path handler surfaces the result in the next tool answer per `explain("xapp-event-handling")` → S1.4b return path wired. Failure → loop back to S1.4b (inbound interceptor).
+   - [advisory] Whether the LLM weaves the submitted data into its next reply naturally is an LLM decision — advisory, not a gate; log a warning if it doesn't.
 
 #### When Phase A passes and Phase B's deterministic assertions pass
 
