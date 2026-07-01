@@ -134,7 +134,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 - PR to `dev`. Prereleases are **not** published automatically on merge — the maintainer cuts them explicitly via `workflow_dispatch` (GitHub Actions → "Release (prerelease)" → Run workflow on `dev`) or RC tag (`git tag v1.7.0rc1 && git push origin v1.7.0rc1`). Both paths gate on the base version in `pyproject.toml` exceeding the current stable on PyPI. To install a specific prerelease for testing:
   ```bash
   uvx cognigy-vibe-mcp==1.7.0rc1            # specific RC
-  uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
+  uv tool install cognigy-vibe-mcp --prerelease allow  # latest RC prerelease
   ```
   Stable releases are published when the maintainer merges `dev → main`. The marketplace submodule reference must be updated manually after a stable release (see TODO item #1 in CLAUDE.md).
 - See [CLAUDE.md](CLAUDE.md) for the full development workflow (planning, subagent-driven implementation, PR + CI flow).

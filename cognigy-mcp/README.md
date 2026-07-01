@@ -8,7 +8,8 @@ Part of the [cognigy-claude-plugin](https://github.com/ben-elliot-nice/cognigy-c
 
 ```bash
 uv tool install cognigy-vibe-mcp                        # stable
-uv tool install cognigy-vibe-mcp --prerelease allow     # latest prerelease
+uv tool install cognigy-vibe-mcp --prerelease allow     # latest RC prerelease
+uvx cognigy-vibe-mcp==1.7.0rc1                          # specific RC (check PyPI for latest)
 ```
 
 ## Quick start
