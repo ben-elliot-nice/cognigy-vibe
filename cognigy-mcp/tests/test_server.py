@@ -19,7 +19,7 @@ def test_server_creates_without_error(monkeypatch, tmp_path):
     assert "push_agent_avatar" in tool_names
     assert "talk_to_agent" in tool_names
     assert "sync_remote_state" in tool_names
-    assert len(all_tools) == 16
+    assert len(all_tools) == 17
 
 
 def test_server_boots_without_project_id(monkeypatch, tmp_path):
@@ -30,7 +30,7 @@ def test_server_boots_without_project_id(monkeypatch, tmp_path):
     monkeypatch.delenv("COGNIGY_VIBE_DEV", raising=False)
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     server, all_tools = create_server()
-    assert len(all_tools) == 16
+    assert len(all_tools) == 17
 
 
 # --- degraded / dev mode tests (append below existing tests) ---
@@ -49,7 +49,7 @@ def test_create_server_degraded_when_no_env(monkeypatch):
     assert "sync_remote_state" in tool_names
     assert "init" not in tool_names
     assert "reload_mcp" not in tool_names
-    assert len(tools) == 16
+    assert len(tools) == 17
 
 
 def test_create_server_degraded_when_missing_key(monkeypatch):

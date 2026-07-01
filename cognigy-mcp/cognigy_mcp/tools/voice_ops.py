@@ -71,6 +71,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         connection_name = args["connection_name"]
         region = args.get("region", "australiaeast")
 
+        # Fail fast before creating any resources if base URL is misconfigured
+        endpoint_base = client.endpoint_base_url
+
         api_key = os.environ.get("COGNIGY_VOICE_PREVIEW_API_KEY")
         is_dummy = not bool(api_key)
         effective_key = api_key if api_key else "dummy"
@@ -86,22 +89,23 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         })
         connection_id = conn_result["_id"]
 
-        # Create webRTC endpoint bound to the flow
-        ep_result = client.post("/v2.0/endpoints", {
-            "name": endpoint_name,
-            "channel": "voiceGateway2",
-            "flowId": flow_id,
-            "flowReferenceId": flow_reference_id,
-            "projectId": project_id,
-            "webrtcWidgetConfig": {"active": True},
-        })
+        # Create webRTC endpoint bound to the flow; clean up connection on failure
+        try:
+            ep_result = client.post("/v2.0/endpoints", {
+                "name": endpoint_name,
+                "channel": "voiceGateway2",
+                "flowId": flow_id,
+                "flowReferenceId": flow_reference_id,
+                "projectId": project_id,
+                "webrtcWidgetConfig": {"active": True},
+            })
+        except Exception:
+            client.delete(f"/v2.0/connections/{connection_id}")
+            raise
+
         endpoint_id = ep_result["_id"]
         url_token = ep_result.get("URLToken") or ep_result.get("urlToken", "")
-
-        try:
-            demo_url = f"{client.endpoint_base_url}/demo/{url_token}"
-        except ValueError:
-            demo_url = f"/demo/{url_token}"
+        demo_url = f"{endpoint_base}/demo/{url_token}"
 
         # Dummy path: remove the throwaway connection
         if is_dummy:

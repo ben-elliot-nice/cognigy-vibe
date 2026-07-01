@@ -1,6 +1,7 @@
 import json
 import pytest
 from unittest.mock import PropertyMock
+from cognigy_mcp.api import ApiError
 from cognigy_mcp.tools.voice_ops import make_handlers, TOOLS
 
 
@@ -176,23 +177,36 @@ def test_connection_post_body(mock_client, state, cache, monkeypatch):
     assert conn_body["fields"]["region"] == "eastus"
 
 
-def test_demo_url_fallback_when_endpoint_base_raises(mock_client, state, cache, monkeypatch):
-    """Falls back to relative URL when endpoint_base_url raises ValueError."""
+def test_endpoint_base_url_raises_propagates_before_api_calls(mock_client, state, cache, monkeypatch):
+    """ValueError from endpoint_base_url raises immediately — no API calls made."""
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
-    mock_client.post.side_effect = [
-        {"_id": "conn-1"},
-        {"_id": "ep-1", "URLToken": "tok"},
-    ]
-    # Simulate a non-standard base URL that can't derive endpoint URL
     type(mock_client).endpoint_base_url = PropertyMock(side_effect=ValueError("no cognigy-api- in URL"))
 
     handlers = make_handlers(mock_client, state, cache)
-    result = handlers["provision_webrtc_endpoint"]({
-        "project_id": "p", "flow_id": "f", "flow_reference_id": "r",
-        "endpoint_name": "Click-to-Call", "connection_name": "Test",
-    })
-    data = json.loads(result[0].text)
+    with pytest.raises(ValueError):
+        handlers["provision_webrtc_endpoint"]({
+            "project_id": "p", "flow_id": "f", "flow_reference_id": "r",
+            "endpoint_name": "Click-to-Call", "connection_name": "Test",
+        })
 
-    assert data["demo_url"].startswith("/demo/")
-    assert data["path"] == "dummy"
-    mock_client.delete.assert_called_once_with("/v2.0/connections/conn-1")
+    mock_client.post.assert_not_called()
+    mock_client.delete.assert_not_called()
+
+
+def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
+    """If endpoint POST raises, the speech connection is deleted before re-raising."""
+    monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
+    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.post.side_effect = [
+        {"_id": "conn-real"},
+        ApiError(500, "endpoint creation failed"),
+    ]
+
+    handlers = make_handlers(mock_client, state, cache)
+    with pytest.raises(ApiError):
+        handlers["provision_webrtc_endpoint"]({
+            "project_id": "proj-1", "flow_id": "fid", "flow_reference_id": "fref",
+            "endpoint_name": "Click-to-Call", "connection_name": "Test",
+        })
+
+    mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
