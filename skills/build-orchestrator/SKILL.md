@@ -819,7 +819,7 @@ JSON form (what the node emits in the flow definition — for reference):
 
 > **Voice silence / no-input fields** (`userNoInput*`) — the values above are the chosen demo defaults (10 s timeout, 5 retries, `event` mode). For what each field means and the `event`-mode reprompt-then-escalate pattern (re-enter on the `noUserInput` system intent, discriminate on `input.data.event === "USER_INPUT_TIMEOUT"`), see plugin `explain("voice-silence-timeout")` rather than re-deriving the semantics here.
 
-**(d) Say Welcome** — `config.say.text` is a **plain string array** (one string per variant — NOT an array of `{type,content}` objects; objects render as `[object Object]`). The flat `config.text` form also works (the plugin auto-normalises either). Per plugin `explain("say-node")`. Note `generativeAI_customInputs` must be an **array** (`[]`), never an empty string:
+**(d) Say Welcome** — per `explain("say-node")` for the canonical config schema:
 ```
 cognigy_create {
   resource_type: "node",
