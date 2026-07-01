@@ -19,7 +19,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
    git worktree add .claude/worktrees/<name> -b feat/<name> origin/dev
    ```
 
-4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written.
+4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written. The plan **must** include a task to find and fix related documentation (CLAUDE.md, runtime-reference, explain topics, contributor guides). See [§Documentation](#documentation) for content guidelines.
 
 5. **Commit the spec/plan** after user approval. The plan file lives in the repo; commit it as a standalone commit before any implementation.
 
@@ -67,17 +67,9 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 ## Documentation
 
-### Specs and plans
-
-Every superpowers spec and implementation plan **must** include a task to find and fix related documentation before the branch is finished. This includes CLAUDE.md, runtime-reference, explain topics, and any contributor guides that reference the changed behaviour.
-
-During find-and-fix operations: flag to the user any opportunities to restructure explain topics — especially extracting atomic topics from higher-order or orchestration skills — and ask whether restructuring is in scope before acting.
-
-### Documentation preferences
-
 - **Runtime usage** (skills, MCP tools, hooks, code conventions) → document via the `cognigy:explain` skill and the MCP tool build structure (`runtime-reference/`). Do not duplicate this content in CLAUDE.md or docs/.
 - **Modular architecture** — atomic pieces of knowledge are their own explain topic. Higher-order and orchestration skills reference those topics by name instead of duplicating their content. Design atomic topics with this in mind: one concern per topic, reusable across contexts.
-- **Find-and-fix scope** — when restructuring opportunities arise (e.g. an atomic concern buried inside an orchestration skill), surface them to the user and confirm scope before extracting.
+- **Find-and-fix scope** — during any docs update, flag to the user any opportunities to restructure explain topics (especially extracting atomic topics from higher-order or orchestration skills) and ask whether restructuring is in scope before acting.
 
 ## Rules
 
