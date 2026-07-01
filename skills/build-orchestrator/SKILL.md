@@ -64,6 +64,7 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 | TTS | `<config_summary.tts_label>` | (same) |
 | STT | `<config_summary.stt_label>` | (same) |
 | Locale | `<config_summary.locale>` | (same) |
+| Owner initials | `<config_summary.owner_initials>` | (same) |
 
 Ask: *"Proceed with these defaults, switch LLM to a listed alternate (from `buildConfig.llm.options`), or override a field for this build only?"*
 
@@ -299,7 +300,7 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 | Setting | Value |
 |---|---|
 | LLM (generation) | **Discover per project — do NOT blind-hardcode.** Assign the `referenceId` of an LLM that exists in THIS project (S1.1 Step 3); a fresh project has none and generates empty output until one is wired (reuse-via-`manage_packages` or `setup_llm` — S1.1 Step 2). NiCE AU1 demo-tenant shared global LLM: `a793f9ea-befd-4fdf-8be8-b1c8a8385a91`. |
-| Project name | `[CUSTOMER]_Demo_BH` (preserve original casing; `_BH` is just a build-owner tag — use your own initials/suffix) |
+| Project name | `[CUSTOMER]_Demo_[buildConfig.owner.initials]` (preserve original casing; initials come from `buildConfig.owner.initials` set in `cognigy:init-cognigy-vibe`) |
 | Folder convention | lowercase `[customer]-demo/` in `Demo Builds/` |
 | Persona LLM temp | `0.2` voice/transactional (**default**) — set `0.5` ONLY when Q10 channel mix is primarily conversational chat (webchat/WhatsApp). Wired at S1.1 + S1.2 (see note below). |
 | Persona maxTokens | `400` |
@@ -384,7 +385,7 @@ S1 reads these artifacts as the spec. The S0 interview answers are no longer the
 
 ```
 create_ai_agent {
-  name: "<Customer>_Demo_BH",
+  name: "<Customer>_Demo_[buildConfig.owner.initials]",
   description: "<## Persona block (1A) ONLY — ≤1000 chars, brand voice included, NO Special Instructions concatenated>"
 }
 ```
@@ -393,6 +394,8 @@ Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.
 
 > ⚠️ Returned `endpointUrl` uses host `cognigy-api-au1.nicecxone.com` — that 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>` in the as-built doc.
 
+> **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
+
 **Step 2 — LLM gate (per `explain("llm-resources")`).** A freshly auto-created project may report `llmStatus: "unknown"`. Before assigning the LLM in Step 3, ensure the project has a working LLM with a non-empty `connectionId` — reuse another project's via `manage_packages` export/import, or `setup_llm`. Do not `talk_to_agent` until a working LLM is confirmed.
 
 **Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the S1.1.5 restart.
@@ -400,7 +403,7 @@ Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.
 ```
 update_ai_agent {
   aiAgentId: "<agent.id>",
-  name: "<personaName from persona.md>",        // renames the AGENT; project keeps <Customer>_Demo_BH
+  name: "<personaName from persona.md>",        // renames the AGENT; project keeps <Customer>_Demo_[buildConfig.owner.initials]
   instructions: "<## Special Instructions block (1B) — ≤ 1000 chars>",
   jobConfig: {
     jobName: "<Customer> Concierge — <Persona>",
@@ -967,8 +970,8 @@ After all build steps land:
      operation: "export",
      projectId: "<projectId>",
      resourceIds: ["<flowId>", "<agentId>", "<endpointId>", ...all from step (a)],
-     name: "<Customer>_Demo_BH",
-     outputPath: "<absolute path to Demo Builds/<customer>-demo/package/<customer>_Demo_BH.zip>",
+     name: "<Customer>_Demo_[buildConfig.owner.initials]",
+     outputPath: "<absolute path to Demo Builds/<customer>-demo/package/<customer>_Demo_[buildConfig.owner.initials].zip>",
      includeDependencies: true,
      waitForCompletion: true
    }
@@ -1721,7 +1724,7 @@ First-turn tool enforcement is handled by the init chain (Initialize Session pre
 ## S10 — Output to user (hand-back format)
 
 ```
-✅ Built — [CUSTOMER]_Demo_BH
+✅ Built — [CUSTOMER]_Demo_[buildConfig.owner.initials]
 
 Project ID:   <id>
 Agent ID:     <id>  ([Persona] — referenceId <ref>)
@@ -1745,7 +1748,7 @@ Demo folder: Demo Builds/[customer]-demo/
   Documentation:
     - [CUSTOMER]_FLOW_INSERTS.md                  ← as-built generated from get_flow_chart
     - [customer]-baseline.md                      ← drift-detection snapshot
-    - package/[customer]_Demo_BH.zip              ← package backup (manage_packages)
+    - package/[customer]_Demo_[buildConfig.owner.initials].zip  ← package backup (manage_packages)
 
 Tools wired: <comma-separated list including end_call + end_call_resolved + transfers + any use-case tools. NO separate search_*_faqs tool — knowledge retrieval is via built-in Knowledge AI on the Job Node when S1.8 runs.>
 Init chain:  Start → Once → On First Time → Initialize Session → Set Session Config → Say Welcome → Wait → AI Agent → End
@@ -1769,7 +1772,8 @@ One paragraph. No further prose unless something failed during build.
 Rules that apply across multiple sections and aren't owned by any single one. Section-specific rules live in their own section, not here.
 
 **Naming:**
-- **Project name:** `[CUSTOMER]_Demo_BH` — preserve original casing.
+- **Project name:** `[CUSTOMER]_Demo_[buildConfig.owner.initials]` — preserve original casing. Initials from `buildConfig.owner.initials` (set via `cognigy:init-cognigy-vibe`).
+- **Naming conflict:** If `[CUSTOMER]_Demo_[initials]` already exists, append `_2` (then `_3`, etc.). Never insert the persona name or change the initials suffix.
 - **Folder name:** `[customer]-demo` — lowercase.
 - **Agent name:** persona name only, no suffix.
 - **Tool names:** `snake_case`, verb-led.
