@@ -1,6 +1,6 @@
 ---
 name: build-orchestrator
-description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by S0.5; if opened, wired via Cognigy's built-in Knowledge AI (`manage_knowledge` + `manage_settings`) in S1.8. Smoke test runs in S1.7 before hand-back — Phase A structural verification against `get_flow_chart` (13 assertions, incl. a ≤1000-char agent-field cap and production config check) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant S1.5 / S1.4 / S5 step; only hands back when both phases are green.
+description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by S0.5; if opened, wired via Cognigy's built-in Knowledge AI (cognigy-vibe knowledge-store API) in S1.8. Smoke test runs in S1.7 before hand-back — Phase A structural verification against `get_flow_chart` (13 assertions, incl. a ≤1000-char agent-field cap and production config check) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant S1.5 / S1.4 / S5 step; only hands back when both phases are green.
 ---
 
 # Build Orchestrator — end-to-end Cognigy AI Agent demo builder
@@ -17,7 +17,7 @@ This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Ag
 
 - **`cognigy:scope-demo`** → produces `{Customer}-demo-plan.md` (12 facts, design conversation, demo plan)
 - **`cognigy:design-agent`** → orchestrates four sub-skills that produce persona, architecture + context schema, interfaces, and contracts docs
-- **`manage_knowledge` + `manage_settings`** → only if S0.5 gate opens, ingests locally-authored FAQ bodies into a Cognigy knowledge store and enables built-in Knowledge AI on the agent (S1.8)
+- **cognigy-vibe knowledge-store API** → only if S0.5 gate opens, ingests locally-authored FAQ bodies into a Cognigy knowledge store and enables built-in Knowledge AI on the agent (S1.8)
 
 Voice-preview provisioning is explicitly **out of scope** — that happens manually in the Cognigy UI. `talk_to_agent` smoke testing is **in scope** as of v4 — S1.7 runs Phase A structural + Phase B 3-turn runtime verification automatically before hand-back.
 
@@ -121,7 +121,7 @@ Then it produces the **final build recap**, which shows:
 
 **This is a decision step. Execution moves to S1.8.**
 
-**This build path has ZERO knowledge by default.** No knowledge store, no `.ctxt` files, no `manage_settings { set_knowledge_ai }`, no `search_*_faqs` tool, no `manage_knowledge` calls of any kind.
+**This build path has ZERO knowledge by default.** No knowledge store, no `.ctxt` files, no knowledge-AI wiring, no `search_*_faqs` tool, no knowledge store API calls of any kind.
 
 **Adding knowledge is only allowed if the user has EXPLICITLY confirmed it in the current session.** Explicit confirmation means one of:
 
@@ -139,7 +139,7 @@ Then it produces the **final build recap**, which shows:
   | K1 | Topic title (one short noun phrase, e.g. "Cancelling your policy") | Topic title | Yes |
   | K2 | Body content — short markdown FAQ text (heading + a few paragraphs). Will be written to `knowledge/<slug>.md` and ingested into the Cognigy knowledge store in S1.8. | Body | Yes |
 
-  Repeat the K1–K2 batch until the user says "done". All topic specs land in memory until S1.8. Defer all knowledge execution to **S1.8**, which runs after the core build and wires Cognigy's built-in Knowledge AI via `manage_knowledge` (create store + ingest the local bodies) + `manage_settings { set_knowledge_ai: true }`.
+  Repeat the K1–K2 batch until the user says "done". All topic specs land in memory until S1.8. Defer all knowledge execution to **S1.8**, which runs after the core build and wires Cognigy's built-in Knowledge AI via the cognigy-vibe knowledge-store API (create store + ingest the local bodies + patch agent to enable Knowledge AI).
 
 **Why this gate exists:** knowledge adds a store-ingestion step, an async ingestion wait, a `knowledgeSearchModelId` cross-project ref dependency, and retrieval wiring on the Job Node. Every prior demo where knowledge was added "to be helpful" cost 15–30 minutes of rework. Default-off keeps builds fast; the gate keeps assumptions explicit.
 
@@ -299,7 +299,7 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 
 | Setting | Value |
 |---|---|
-| LLM (generation) | **Discover per project — do NOT blind-hardcode.** Assign the `referenceId` of an LLM that exists in THIS project (S1.1 Step 3); a fresh project has none and generates empty output until one is wired (reuse-via-`manage_packages` or `setup_llm` — S1.1 Step 2). NiCE AU1 demo-tenant shared global LLM: `a793f9ea-befd-4fdf-8be8-b1c8a8385a91`. |
+| LLM (generation) | **Discover per project — do NOT blind-hardcode.** Assign the `referenceId` of an LLM that exists in THIS project (S1.1 Step 5); a fresh project has none and generates empty output until one is wired (assign an org-level LLM via `cognigy_update` — S1.1 Step 5). NiCE AU1 demo-tenant shared global LLM: `a793f9ea-befd-4fdf-8be8-b1c8a8385a91`. |
 | Project name | `[CUSTOMER]_Demo_[buildConfig.owner.initials]` (preserve original casing; initials come from `buildConfig.owner.initials` set in `cognigy:init-cognigy-vibe`) |
 | Folder convention | lowercase `[customer]-demo/` in `Demo Builds/` |
 | Persona LLM temp | `0.2` voice/transactional (**default**) — set `0.5` ONLY when Q10 channel mix is primarily conversational chat (webchat/WhatsApp). Wired at S1.1 + S1.2 (see note below). |
@@ -321,28 +321,17 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 
 **On the NiCE AU1 demo tenant these work as-is** — don't regenerate or guess them mid-build. **On a different tenant or region, swap them:** the LLM referenceId per the discovery step above; locale / TTS voice / STT label / endpoint host for your region (e.g. NZ English STT for a 2Degrees build, or a male voice). The voice/region values are demo conveniences, not platform requirements.
 
-> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 3 `update_ai_agent.jobConfig.temperature` (S1.2 no longer re-sets it — see S1.2). (Previously `0.5` was documented but never wired; it is now.)
+> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 6 / S1.2 `cognigy_update`.
 
 ---
 
-## MCP tool split
-
-**NiCE_Cognigy_MCP_Server** — high-level creation + packaging:
-
-- `create_ai_agent` — project + agent + stub flow + REST endpoint in one call
-- `create_tool` — aiAgentJobTool + `aiAgentToolAnswer` pair, auto-wired (Cognigy UI calls the answer node "Resolve Tool Action" / "Resolve Tool Answer" — same node). **Alternative path only.** The canonical tool-authoring call is cognigy-vibe `push_agent_tool` (file-first — S1.3). Use `create_tool` only for a quick one-call tool needing no visibility `condition`; it builds a *different* skeleton (auto-pairs the answer node, wrapped/stringified arg shape) — do NOT mix the two recipes in one branch.
-- `manage_flow_nodes` — **fallback only.** Supports `say`, `question`, `ifThenElse`, `lookup`, `setSessionContext`, `code`, `goTo`, `sleep`, `httpRequest`. This skill uses cognigy-vibe `cognigy_create` for all flow-node creation (init chain AND tool branches) because it covers more node types (`once`, `setSessionConfig`, `wait`, `hangup`, AI-agent nodes) and gives uniform `mode: "append"` semantics. Use `manage_flow_nodes` only if cognigy-vibe is unavailable AND the node type is one of the 9 listed above.
-- `list_resources`, `delete_resource`, `update_tool` — discovery + cleanup
-- `manage_packages` — package zip export (backup artifact — see S1.6)
-- `manage_knowledge` — knowledge-store wiring (used in S1.8 if `cognigy_invoke inject` doesn't fit)
-
-**cognigy-vibe** — full resource + file-push surface:
+## cognigy-vibe tools
 
 | Tool | What it does |
 |---|---|
 | `cognigy_get` | GET any resource, cache-first |
 | `cognigy_list` | List resources. `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars. Prefer plural to match the Cognigy API directly. See S7 cheatsheet. |
-| `cognigy_create` | POST resource; extension auto-injected, Say config auto-normalised. Required for node types NiCE doesn't support: `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `wait`, `hangup` |
+| `cognigy_create` | POST resource or node; extension auto-injected, Say config auto-normalised. Required for node types not otherwise reachable: `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `hangup`, AI-agent nodes. |
 | `cognigy_update` | PATCH with always-fresh GET + optional deep merge — use `merge_config: true` and patch deltas only |
 | `cognigy_delete` | DELETE any resource including nodes — use for S8 collision cleanup |
 | `cognigy_invoke` | Named operations: **move, clone, train, inject, search** — fork lane (S1.0), knowledge wiring (S1.8), asset discovery |
@@ -351,7 +340,7 @@ These are the demo defaults for the **NiCE AU1 demo tenant** — don't ask the u
 | `push_html_node` | Push local `.html` to a `setHTMLAppState` node — xApp moments (S1.4b) |
 | `push_agent_tool` | Read a local `.tool.json` → create/update an `aiAgentJobTool` node — **canonical tool-authoring path (S1.3)** (plugin ≥ 1.4.2). CREATE: pass `job_node_id` (the parent `aiAgentJob` node); UPDATE: pass `node_id`. No `aiAgentId`. Creates ONLY the tool node — append `aiAgentToolAnswer` yourself (S6 Step 4). `cognigy_create` is blocked for `aiAgentJobTool` and redirects here. |
 
-**Rule of thumb:** if `manage_flow_nodes` rejects a `nodeType` with "supported types" error, switch to `cognigy_create` with the right `extension`. Prefer the `push_*` family for any node body or tool definition you want version-controlled in the demo folder.
+**Rule of thumb:** prefer the `push_*` family for any node body or tool definition you want version-controlled in the demo folder. Use `cognigy_create` for resource and node creation; `cognigy_update` for patches.
 
 ---
 
@@ -579,8 +568,6 @@ Capture **`node_id`** (the `aiAgentJobTool` node `_id`) for each — needed for 
 > **Naming note:** the terminal **`aiAgentToolAnswer`** node (Cognigy UI label "Resolve Tool Action" / "Resolve Tool Answer") is the plugin's canonical end of a tool branch. With `push_agent_tool` it is NOT auto-created — you append it last via `cognigy_create` (S6 Step 4). See plugin `explain("agent-tool-branch")` for the three-node shape.
 
 > **Conditioned / guard tools (visibility `condition`).** To hide a tool from the LLM until a guard state is met (e.g. `authenticate_caller` shown only while `!context.shortTermMemory.authVerified`, or a contract-staged tool — S9 / `{Customer}-agent-contracts.md`), set the optional top-level **`condition`** field in the `.tool.json`; `push_agent_tool` maps it into the node's `config.condition` for you. Use `context.shortTermMemory.*` (LLM-visible) or `context.contracts.*` / `context.ami.*` (enforcement-only) per `explain("tool-conditions")`. **Manual change after the fact:** `cognigy_update { resource_type:"node", resource_id:"<toolNodeId>", merge_config:true, body:{ config:{ condition:"..." } } }` — `condition` lives **inside `config`**; sending it top-level returns HTTP 400.
-
-**Alternative path (NiCE `create_tool`) — only for a quick conditionless tool.** `create_tool` builds a *different* skeleton: it **auto-pairs** the `aiAgentToolAnswer` node in one call and takes the **wrapped/stringified** arg shape (`{ name, toolType, config:{ toolId, description, parameters:"<stringified JSON>" } }`). It always *creates* (not create-or-update) and cannot set a `condition`. Use it only when you want the one-call auto-pair and the tool needs no `condition` — and do NOT mix its recipe with the `push_agent_tool` branch recipe (S6) in the same branch. If you use it, still write the equivalent `.tool.json` to disk so the demo folder stays the SSOT — the S1.6 cross-check (the `FLOW_INSERTS.md` tool-coverage item — "All `tools/*.json` for every tool wired into the agent") reads these files.
 
 > The `aiAgentJobTool` node label defaults to `toolId` (snake_case) when the optional `label` is omitted. Set `label` in the `.tool.json` for a friendlier UI display name.
 
@@ -852,7 +839,7 @@ cognigy_create {
   body: { type: "once", mode: "append", target: "<startNodeId>", label: "Once", config: {} }
 }
 ```
-> `<startNodeId>` is NOT returned by `create_ai_agent`. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
+> `<startNodeId>` is NOT returned by S1.1 Steps 1–4. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
 
 Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_flow_chart` after this call.
 
@@ -983,31 +970,9 @@ After all build steps land:
 
 4. **Generate `[customer]-baseline.md`** — drift-detection snapshot. Include the same data but with concrete node IDs, code-node bodies (full text), tool wiring, and Set Session Config JSON. Usable input for `nice-cognigy-health-check` and `nice-demo-decay-check`.
 
-   > This `baseline.md` is a **local markdown drift artifact** for the audit skills — it is NOT a Cognigy resource snapshot. Cognigy also offers project-level resource *versioning* (a `snapshot` resource via `cognigy_create`, async job) — see plugin `explain("project-snapshots")` if you want a server-side restore point in addition to the package zip. Optional; the package zip in step 5 remains the canonical backup for this skill.
+   > This `baseline.md` is a **local markdown drift artifact** for the audit skills — it is NOT a Cognigy resource snapshot. Cognigy also offers project-level resource *versioning* (a `snapshot` resource via `cognigy_create`, async job) — see plugin `explain("project-snapshots")` if you want a server-side restore point. Optional.
 
-5. **Export the package zip as backup** (via NiCE `manage_packages`, two-call):
-
-   **(a) List exportable resources:**
-   ```
-   manage_packages {
-     operation: "list_exportable",
-     projectId: "<projectId>"
-   }
-   ```
-
-   **(b) Export to disk** (includeDependencies defaults true, but pass all top-level resource IDs to be safe):
-   ```
-   manage_packages {
-     operation: "export",
-     projectId: "<projectId>",
-     resourceIds: ["<flowId>", "<agentId>", "<endpointId>", ...all from step (a)],
-     name: "<Customer>_Demo_[buildConfig.owner.initials]",
-     outputPath: "<absolute path to Demo Builds/<customer>-demo/package/<customer>_Demo_[buildConfig.owner.initials].zip>",
-     includeDependencies: true,
-     waitForCompletion: true
-   }
-   ```
-   This produces the `.zip` backup. No unzip step required — the as-built was already generated from `get_flow_chart` in step 3.
+5. **Package zip export** — not currently supported via cognigy-vibe (issue #117). To create an offline backup, export manually via the Cognigy UI: **Settings → Packages → Export**. The as-built doc and baseline snapshot (steps 3–4) are the primary build record.
 
 **Cross-check before hand-back.** Open the new `FLOW_INSERTS.md` and verify against the list below.
 
@@ -1190,45 +1155,39 @@ If S0.5 returned YES, the user gave a list of FAQ topic specs. **This section wi
 
 **Step 2 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
 
-a. **Create the knowledge store on the agent** via NiCE `manage_knowledge`, then ingest each local markdown body from Step 1 as a source/chunk:
-   ```
-   manage_knowledge {
-     operation: "create_store",
-     projectId: "<projectId>",
-     agentId: "<agent.id>",
-     name: "<Customer>_Knowledge",
-     sources: [{ name: "<topic-slug>", text: "<contents of knowledge/<topic-slug>.md>" }, ...]
-   }
-   → returns { knowledgeStoreId, ... }
-   ```
-   One source entry per local body file. If `manage_knowledge` does not accept inline `sources` in your running MCP, create the store empty and ingest via the cognigy-vibe fallback below.
+a. **Create the knowledge store and ingest sources** via cognigy-vibe (per plugin `explain("knowledge-store")` — hierarchy Project → KnowledgeStore → Sources → Chunks):
+```
+// 1. Create a new knowledge store:
+cognigy_create { resource_type: "knowledgestores", body: { projectId: "<projectId>", name: "<Customer>_Knowledge" } }
+→ returns { _id: "<ksId>" }
 
-b. **Enable Knowledge AI on the agent** via NiCE `manage_settings`:
-   ```
-   manage_settings {
-     operation: "set_knowledge_ai",
-     agentId: "<agent.id>",
-     enabled: true,
-     knowledgeStoreId: "<from step (a)>"
-   }
-   ```
+// 2. For each local knowledge/<topic-slug>.md body — create a source:
+cognigy_create { resource_type: "knowledgestores/<ksId>/sources", body: { name: "<topic-slug>", type: "manual" } }
+→ returns { _id: "<sourceId>" }
+
+// 3. Add the body text as a chunk:
+cognigy_create { resource_type: "knowledgestores/<ksId>/sources/<sourceId>/chunks", body: { text: "<contents of knowledge/<topic-slug>.md>" } }
+
+// 4. Trigger ingestion:
+cognigy_invoke { resource_type: "knowledgestore", resource_id: "<ksId>", operation: "run", body: { connector_id: "<connectorId>" } }
+```
+Resolve `<ksId>` via `resolve_resource { name: "<store name>", resource_type: "knowledgestores" }`. **Source-create gotchas (400 otherwise):** `type` must be `"manual"` (not `"text"`); do NOT pass `content` or `knowledgeStoreId` at source-create.
+
+b. **Enable Knowledge AI on the agent** — patch the agent resource to wire the store:
+```
+cognigy_update {
+  resource_type: "agents",
+  resource_id: "<agent.id>",
+  merge_config: true,
+  body: { knowledgeStoreId: "<ksId>", knowledgeAI: true }
+}
+```
 
 **Verify the wiring landed.** `cognigy_get { resource_type: "agents", resource_id: "<agent.id>" }` and confirm:
 - `knowledgeStoreId` matches the store from (a)
 - `knowledgeAI: true` (or equivalent enabled flag) is set
 
 A silent shape mismatch can return 200 OK without actually wiring anything — verification catches this before smoke test, where it would otherwise surface as "the bot ignores its FAQs".
-
-**Fallback — cognigy-vibe knowledge-store API** (if NiCE `manage_knowledge` / `manage_settings` don't fit the running MCP). Per plugin `explain("knowledge-store")` — hierarchy Project → KnowledgeStore → Sources → Chunks:
-```
-// 1. Create the source under an existing store (ksId):
-cognigy_create { resource_type: "knowledgestores/<ksId>/sources", body: { name: "<source name>", type: "manual" } }
-// 2. Add text as chunks (one call per chunk):
-cognigy_create { resource_type: "knowledgestores/<ksId>/sources/<sourceId>/chunks", body: { text: "<FAQ body>" } }
-// 3. Trigger ingestion via a connector:
-cognigy_invoke { resource_type: "knowledgestore", resource_id: "<ksId>", operation: "run", body: { connector_id: "<connectorId>" } }
-```
-Resolve `<ksId>` via `resolve_resource { name: "<store name>", resource_type: "knowledgestores" }`. **Source-create gotchas (400 otherwise):** `type` must be `"manual"` (not `"text"`); do NOT pass `content` or `knowledgeStoreId` at source-create — text is added as chunks afterwards (step 2). Same verification applies.
 
 **Last resort — manual UI step.** If neither MCP path works, document a manual UI step in `[CUSTOMER]_FLOW_INSERTS.md` Section 9 (Knowledge wiring) and surface it in the hand-back block. Don't fail the build — knowledge can be wired manually post-hoc.
 
@@ -1243,7 +1202,7 @@ Resolve `<ksId>` via `resolve_resource { name: "<store name>", resource_type: "k
 - Knowledge store ID: <id from Step 2(a)>
 - Topics ingested: <count> (sources in the Cognigy knowledge store)
 - Local body files: knowledge/<slug>.md × <count>
-- Wiring mechanism: <manage_knowledge + manage_settings | cognigy-vibe knowledge-store API | manual UI step>
+- Wiring mechanism: <cognigy-vibe knowledge-store API | manual UI step>
 ```
 
 No `search_*_faqs` tool is created and no persona routing-tree edit is performed — built-in Knowledge AI does not require either.
@@ -1263,7 +1222,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 | Layer | persona.md H2 heading | Agent-level field | Job Node config field (after S1.2 patch) |
 |---|---|---|---|
 | (a) **Persona** — WHO the agent is (incl. brand voice) | `## Persona` | agent `description` | n/a — agent-level only |
-| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `update_ai_agent`; **≤ 1000 chars**) | n/a — agent-level only |
+| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `cognigy_update` S1.1 Step 6; **≤ 1000 chars**) | n/a — agent-level only |
 | (c) **Job Description** — WHAT this job handles | `## Job Description` | n/a | `description` (= `jobDescription`) |
 | (d) **Job Instructions** — HOW this job procedurally runs | `## Job Instructions` | n/a | `instructions` (= `jobInstructions`) |
 
@@ -1271,7 +1230,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 
 **Extraction rule for S1.1 + S1.2:** parse `{Customer}-agent-persona.md` by H2 heading and map each block to its OWN field — they are **NOT** concatenated:
 - agent `description` = `## Persona` block only (1A — WHO, incl. brand voice).
-- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `update_ai_agent`, since `create_ai_agent` does not accept it — see S1.1).
+- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `cognigy_update` S1.1 Step 6 — see S1.1).
 - `jobDescription` = `## Job Description` block (2A).
 - `jobInstructions` = `## Job Instructions` block (2B, S2.5 empathy library verbatim).
 
@@ -1692,13 +1651,8 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 
 | MCP | Tool | Gotcha |
 |---|---|---|
-| NiCE | `list_resources` | `resourceType` is **singular** (`project`, `agent`, `flow`, `endpoint`, `llm_model`, `knowledge_store`, `extension`, `function`, `tool`, `conversation`). |
 | cognigy-vibe | `cognigy_list` | `resource_type` accepts both singular (`flow`) and plural (`flows`) — the server normalises common singulars to their plural form. Prefer plural to match the Cognigy API directly. |
-| NiCE | `create_ai_agent` | Returns `endpointUrl` with wrong subdomain — `cognigy-api-au1.nicecxone.com` 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>`. |
-| NiCE | `create_ai_agent` | Accepts ONLY `{ name, description, projectId?, knowledgeStoreReferenceId? }`. Agent rename + guardrails (1B) + ALL job fields (jobDescription/jobInstructions/LLM/temperature/maxTokens) go via `update_ai_agent` (S1.1 Step 3). `memoryContextInjection` + `toolChoice` are reachable by neither agent tool → S1.2 node patch. `locale` has no agent-tool home → S1.5(c). |
-| NiCE | `create_tool` | **Alternative path (S1.3)** — canonical is cognigy-vibe `push_agent_tool`. Auto-pairs the answer node; always *creates* (NOT create-or-update). Requires `aiAgentId` + `toolType` + `config`. `config.parameters` is **stringified JSON**, not an object. `config.toolId` is the LLM-facing snake_case ID. Cannot set a visibility `condition`. Don't mix with the S6 `push_agent_tool` recipe in one branch. |
-| NiCE | `manage_flow_nodes` | Supports `say`, `question`, `ifThenElse`, `lookup`, `setSessionContext`, `code`, `goTo`, `sleep`, `httpRequest`. NOT `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `wait`, `hangup`. |
-| NiCE | `manage_flow_nodes` | Say nodes: text is direct: `config: { text: "..." }`. Different from `cognigy_create`. |
+| cognigy-vibe | `cognigy_list` | LLM resource type is `largelanguagemodels` (plural, no underscore) — NOT `llm_models` (returns 404). |
 | cognigy-vibe | `cognigy_create` | **Extension is auto-injected** for all known node types (`@cognigy/voicegateway2` for `setSessionConfig`/`hangup`, `cxone-utils` for `setHTMLAppState`/`initAppSession`, `@cognigy/basic-nodes` for `aiAgentJobTool`/`aiAgentToolAnswer`/`aiAgentJob`). You can omit `extension` in the body. Spelling it out also works. |
 | cognigy-vibe | `cognigy_create` | **Insertion mode: use `mode: "append"` + `target: "<previousNodeId>"`** — inserts the new node AFTER target and auto-rewires the chain. `mode: "appendChild"` is for putting `aiAgentJobTool` as a child of `aiAgentJob`. **`insertAfter` / `insertBefore` are BROKEN on AU1** (return 500 "Error while reading ChartData"). See plugin `explain("node-positioning")`. |
 | cognigy-vibe | `cognigy_create` | **`resource_type` is `"node"`** (plus a separate `flow_id` param) — NOT the path-form `"flows/<flowId>/chart/nodes"`. Path-form may work but is non-canonical. |
@@ -1707,14 +1661,11 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Code nodes execute synchronously; write `context.toolResponse` and finish. Skill-specific shapes (success / no-match / disambiguation) live in SC.2. |
 | cognigy-vibe | `cognigy_update` | Does an **always-fresh GET + deep merge** when `merge_config: true` is set. Patch deltas only; sibling fields stay intact. |
 | cognigy-vibe | `cognigy_delete` | DELETE any resource including individual nodes. Used in S8 collision cleanup. |
-| cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the S1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). S1.8 knowledge wiring uses NiCE `manage_knowledge`, not `inject`. |
+| cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the S1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). S1.8 knowledge wiring uses the `cognigy_create` knowledge-store API path. |
 | cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **Two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
 | cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for S1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (S1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (S6 Step 4). No `aiAgentId` param. |
-| cognigy-vibe | `get_flow_chart` | Returns shape depends on `format` param: `"hierarchy"` (default) → `{ hierarchy: "..." }` only; `"raw"` → `{ nodes: [...], relations: [...] }` only; `"both"` → all three fields. Key is `hierarchy`, NOT `hierarchyString`. Use `format: "both"` for as-built generation (S1.6); use `format: "raw"` when walking node IDs (S1.7 Phase A). Required AFTER `create_ai_agent` (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
-| NiCE | `delete_resource` | `resourceType: "tool"` + `id: <aiAgentJobToolNodeId>` + `aiAgentId`. Use to clean up duplicate tools at the resource level. For individual node-level cleanup, prefer cognigy-vibe `cognigy_delete`. |
-| NiCE | `manage_packages` | Two-call export: `operation: "list_exportable"` to discover resource IDs, then `operation: "export"` with `resourceIds` + `outputPath` (absolute path) + `waitForCompletion: true`. `includeDependencies` defaults true. Returns `{ savedPath }`. As of this refactor, the package zip is a **backup artifact** — as-built generation runs off `get_flow_chart`, not the zip. See S1.6. |
-| NiCE | `manage_knowledge` | Cognigy built-in Knowledge AI (S1.8). `operation: "create_store"` with `projectId` + `agentId` + `name` + `sources: [{ name, text }]` (ingest local `knowledge/<slug>.md` bodies). Pair with `manage_settings { operation: "set_knowledge_ai", enabled: true, knowledgeStoreId }`. No CXone Expert publishing — that belongs in a future `knowledge@nice` skill. |
+| cognigy-vibe | `get_flow_chart` | Returns shape depends on `format` param: `"hierarchy"` (default) → `{ hierarchy: "..." }` only; `"raw"` → `{ nodes: [...], relations: [...] }` only; `"both"` → all three fields. Key is `hierarchy`, NOT `hierarchyString`. Use `format: "both"` for as-built generation (S1.6); use `format: "raw"` when walking node IDs (S1.7 Phase A). Required AFTER S1.1 Steps 2–4 (find `aiAgentJob` node ID) and AFTER creating `once` (find auto-created `onFirstExecution` / `afterwards` IDs). |
 
 ---
 
@@ -1733,7 +1684,7 @@ If the user has prototyped tool branches in the UI before / during the build, th
      resource_id: "<yourAiAgentJobToolNodeId>"
    }
    ```
-   (NiCE `delete_resource { resourceType: "tool", id, aiAgentId }` still works for agent-resource-level cleanup, but `cognigy_delete` is the cleaner node-level path when reconciling against an in-UI prototype.)
+   (`cognigy_delete` is the node-level path when reconciling against an in-UI prototype.)
 3. **Update the user's prototype in-place** via `cognigy_update` (delta-only, deep merge per S1.2):
    - Set a clean `description`
    - Fix `parameters` schema (replace UI-template junk with `"{\"type\":\"object\",\"properties\":{},\"required\":[]}"`)
@@ -1780,7 +1731,7 @@ Demo folder: Demo Builds/[customer]-demo/
   Documentation:
     - [CUSTOMER]_FLOW_INSERTS.md                  ← as-built generated from get_flow_chart
     - [customer]-baseline.md                      ← drift-detection snapshot
-    - package/[customer]_Demo_[buildConfig.owner.initials].zip  ← package backup (manage_packages)
+    - *(optional) package zip — export manually via Cognigy UI → Settings → Packages (issue #117 tracks vibe support)*
 
 Tools wired: <comma-separated list including end_call + end_call_resolved + transfers + any use-case tools. NO separate search_*_faqs tool — knowledge retrieval is via built-in Knowledge AI on the Job Node when S1.8 runs.>
 Init chain:  Start → Once → On First Time → Initialize Session → Set Session Config → Say Welcome → AI Agent → End
