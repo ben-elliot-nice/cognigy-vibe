@@ -8,24 +8,25 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 ## Development Workflow
 
-1. **Feature arrives** — clarify scope if ambiguous before any code work.
+1. **Feature arrives** — if there is a GitHub issue, read it first: `gh issue view <number>`. Clarify scope if ambiguous before any code work.
 
 2. **Sync from remote** — if working tree is clean, `git pull` is preferred. Use `git fetch origin dev` only if you have uncommitted changes and don't want to switch branches first. (If you are the maintainer cutting a release, sync from `main` instead.)
 
-3. **Create branch or worktree from remote dev** (not local dev)
+3. **Create branch or worktree from remote dev** (not local dev). When working from a GitHub issue, name the branch `feat/<number>-<slug>`:
    ```bash
-   git checkout -b feat/<name> origin/dev
-   # or, using the using-git-worktrees skill:
-   git worktree add .claude/worktrees/<name> -b feat/<name> origin/dev
+   git checkout -b feat/98-my-feature origin/dev
+   # or, using the using-git-worktrees skill (preferred — activates the worktree in-session):
+   # EnterWorktree will create .claude/worktrees/feat/98-my-feature on a new branch
    ```
 
 4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written. The plan **must** include a task to find and fix related documentation (CLAUDE.md, runtime-reference, explain topics, contributor guides). See [§Documentation](#documentation) for content guidelines.
 
-5. **Commit the spec/plan** after user approval. The plan file lives in the repo; commit it as a standalone commit before any implementation.
+5. **Specs and plans are locally tracked only** — `docs/superpowers/` is intentionally gitignored. No commit is needed or possible. This is expected; do not ask or warn about it.
 
 6. **Implement using `superpowers:subagent-driven-development`**
    - Read the plan; extract all tasks upfront; create a TodoWrite list.
    - Dispatch one fresh implementer subagent per task (never in parallel).
+   - **Every implementer dispatch must include:** the absolute worktree path as working directory, and an explicit instruction to run `git branch --show-current` and confirm it matches the expected branch before making any commit. If it does not match, the subagent must stop and report BLOCKED — do not commit to the wrong branch.
    - After each task: spec-compliance review → code-quality review → mark complete.
    - After all tasks: dispatch a final code-quality reviewer, then proceed to step 7.
 
