@@ -495,6 +495,8 @@ def test_code_node_patterns_add_contact_memory_takes_string(mock_client, state, 
     text = result[0].text
     assert "api.addContactMemory({ label" not in text, \
         "addContactMemory must not be documented with object signature — Cognigy takes a plain string"
+    assert 'api.addContactMemory("' in text, \
+        "addContactMemory must be documented with a plain string argument"
 
 
 # ── Issue #61: profile-editing topic ─────────────────────────────────────────

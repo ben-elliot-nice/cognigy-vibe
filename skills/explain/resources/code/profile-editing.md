@@ -53,6 +53,8 @@ async function mergeProfileVar(key, value) {
 
 **Flat keys only.** `setProfileVar` and `mergeProfileVar` accept flat top-level profile keys only (e.g. `'firstname'`, `'address'`) — no dotted-path notation. To update a nested field inside a Complex-type key, pass the whole updated object.
 
+**Do not mix `setProfileVar` and `mergeProfileVar` on the same key within a single node.** The `profile` snapshot is taken at node entry and does not reflect writes made earlier in the same execution — a `mergeProfileVar` call after `setProfileVar` on the same key will merge against the pre-node value, silently clobbering the earlier write.
+
 ### Usage example
 
 ```javascript
@@ -69,8 +71,8 @@ async function main() {
     return
   }
   const firstname = nameResult.value
-  // Overwrite a top-level field
-  await setProfileVar('lastname', 'Smith')
+  // Overwrite a top-level field using the retrieved value
+  await setProfileVar('firstname', firstname.trim())
   // Deep-merge into a Complex-type field (e.g. preferences is Complex type)
   await mergeProfileVar('preferences', { theme: 'dark' })
 }
