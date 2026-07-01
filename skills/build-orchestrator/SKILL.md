@@ -956,6 +956,24 @@ cognigy_create {
 
 > **Do NOT add a Wait for Input node inside `onFirstExecution`.** A Wait node here delays the Once gate marking first-execution complete — the branch must fully drain before Once considers the first-execution done, so the Wait consumes an extra turn and produces a silent empty Turn 2 response. The branch ending naturally after Say Welcome is the correct yield mechanism. `Wait for Input` belongs only in non-Once flow architectures (e.g. simple `Start → Say → Wait → AI Agent` without the Once gate).
 
+**S1.5(g) Voice Provisioning** — create the VoiceGateway webRTC endpoint bound to this build's flow:
+```
+provision_webrtc_endpoint {
+  project_id:        <projectId>
+  flow_id:           <flowId>
+  flow_reference_id: <flowReferenceId>
+  endpoint_name:     buildConfig.channel.voiceGateway.endpointName   // "Click-to-Call"
+  connection_name:   buildConfig.voicePreview.connectionName          // "Test"
+  region:            buildConfig.voicePreview.region                  // e.g. "australiaeast"
+}
+```
+
+On return:
+- `path == "real"` → record `demo_url` + `connection_name` in the as-built doc (S1.6).
+- `path == "dummy"` → record `demo_url` only; add note: *"Voice preview widget inactive — set `COGNIGY_VOICE_PREVIEW_API_KEY` in `.env` and re-run `init-cognigy-vibe` to enable."*
+
+> **S1.7 advisory (not a hard gate):** after Phase A structural assertions, confirm that a `provision_webrtc_endpoint` result is present in build state with a non-empty `demo_url`. If absent (tool was skipped or errored), report as a warning in the Phase A output block — do not loop, since the endpoint is outside the flow chart and cannot be re-verified by `get_flow_chart`.
+
 ### 1.6 As-built + baseline (primary: `get_flow_chart`; backup: package zip)
 
 **This step is mandatory.** It closes the most common rework gap: as-built docs that describe intent rather than what's deployed. The flow-chart is the source of truth; the doc reads it back.
@@ -1791,5 +1809,5 @@ Rules that apply across multiple sections and aren't owned by any single one. Se
 
 **Hands-off:**
 - **DO call `talk_to_agent` — in S1.7 only.** Phase B's 3-turn smoke test is mandatory before hand-back. After S1.7 passes, the user's Interaction Panel session is exploratory, not first-time validation.
-- **Do NOT configure Voice Preview / `manage_voice_gateway`.** Manual UI step.
+- **Voice provisioning runs at S1.5(g)** via `provision_webrtc_endpoint`. Do not call it again elsewhere in the build.
 - **Don't start building before the user says "yes / go / confirmed"** to the recap.

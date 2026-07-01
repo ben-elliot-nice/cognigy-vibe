@@ -155,6 +155,7 @@ def test_degraded_server_tools_list_returns_expected_tools():
             "cognigy_delete", "cognigy_invoke", "sync_remote_state", "get_build_state",
             "resolve_resource", "get_flow_chart", "push_code_node", "push_html_node",
             "push_agent_tool", "push_agent_avatar", "talk_to_agent", "explain",
+            "provision_webrtc_endpoint",
         ])
         assert tool_names == expected, (
             f"tool list mismatch.\nGot:      {tool_names}\nExpected: {expected}"
