@@ -267,8 +267,12 @@ def make_handlers(
         llm_id = args["llm_id"]
         try:
             llm = client.get(f"/v2.0/largelanguagemodels/{llm_id}")
-        except Exception:
-            return _ok({"error": "llm_not_found", "llm_id": llm_id})
+        except ApiError as exc:
+            if exc.status_code == 404:
+                return _ok({"error": "llm_not_found", "llm_id": llm_id})
+            return _ok({"error": "get_failed", "status": exc.status_code, "detail": str(exc)})
+        except Exception as exc:
+            return _ok({"error": "get_failed", "detail": str(exc)})
         if llm.get("resourceLevel") != "organisation":
             return _ok({
                 "error": "not_org_level",

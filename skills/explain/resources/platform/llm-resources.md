@@ -59,7 +59,9 @@ Returns:
 - `{ error: "not_org_level", hint: "..." }` — LLM is project-scoped; use `manage_packages` instead
 - `{ error: "llm_not_found", llm_id: "..." }` — bad `llm_id`
 
-**Always use `assign_org_llm`, never hand-write the GET+PATCH.** The raw PATCH requires sending the full `assignedToProjects` array — a concurrent build targeting the same LLM would overwrite each other's entries.
+**Always use `assign_org_llm`, never hand-write the GET+PATCH.** The raw PATCH requires sending the full `assignedToProjects` array — a hand-written PATCH that omits an entry drops it. `assign_org_llm` prevents this by reading the current array before writing.
+
+> **Concurrency note.** `assign_org_llm` prevents duplicate entries (if the project is already in the array, it skips the PATCH) but does not protect against two simultaneous *first*-assignment calls targeting the same LLM. In that race, both calls read the same pre-write array, and each writes a version without the other's entry — one assignment is lost. In practice this is harmless for demo builds (sequential per-build usage), but do not rely on it for concurrent automated provisioning.
 
 ### When `manage_packages` is still appropriate
 

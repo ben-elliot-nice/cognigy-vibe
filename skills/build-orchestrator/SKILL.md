@@ -383,7 +383,7 @@ create_ai_agent {
 }
 ```
 
-Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.referenceId`, `endpoint.URLToken`, `endpoint.endpointUrl`, `llmStatus`. **Capture all IDs immediately.**
+Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.referenceId`, `endpoint.URLToken`, `endpoint.endpointUrl`. **Capture all IDs immediately.**
 
 > ⚠️ Returned `endpointUrl` uses host `cognigy-api-au1.nicecxone.com` — that 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>` in the as-built doc.
 
@@ -447,21 +447,15 @@ cognigy_update {
   resource_id: "<aiAgentJobNodeId>",
   merge_config: true,
   body: { config: {
-    jobName: "<Customer> Concierge — <Persona>",
-    jobDescription: "<## Job Description block (2A) from {Customer}-agent-persona.md>",
-    jobInstructions: "<## Job Instructions block (2B) — INCLUDING the §2.5 empathy library verbatim>",
-    llmProviderReferenceId: "<buildConfig.llm.selected.referenceId — confirmed available in this project by §1.1 Step 2>",
-    temperature: 0.2,
-    maxTokens: 400,
-    memoryContextInjection: "<from {Customer}-context-schema.md, industry-shaped per S3, with {{context.customer.*}} placeholders>",
+    memoryContextInjection: "<from {Customer}-context-schema.md, industry-shaped per §3, with {{context.customer.*}} placeholders>",
     toolChoice: "auto"
   }}
 }
 ```
 
-> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch S1.2 if so.
+> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch §1.1 Step 3 (`update_ai_agent`) if so.
 
-> Verify by `cognigy_get` on the same node: confirm all patched fields (`jobName`, `jobDescription`, `llmProviderReferenceId`, `temperature`, `memoryContextInjection`, `toolChoice`) are set and hold your values, not defaults.
+> Verify by `cognigy_get` on the same node: confirm `memoryContextInjection` and `toolChoice` are set and hold your values, not defaults.
 
 ### 1.3 Author tools as `.tool.json` files, then push (cognigy-vibe `push_agent_tool`)
 

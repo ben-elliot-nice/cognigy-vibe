@@ -305,6 +305,27 @@ def test_assign_org_llm_not_found(mock_client, state, cache):
     assert data["llm_id"] == "llm-999"
 
 
+def test_assign_org_llm_get_api_error_non_404(mock_client, state, cache):
+    """Non-404 ApiError on GET returns get_failed, not llm_not_found."""
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(403, "Forbidden")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "get_failed"
+    assert data["status"] == 403
+
+
+def test_assign_org_llm_get_generic_exception(mock_client, state, cache):
+    """Network or unexpected error on GET returns get_failed with detail."""
+    mock_client.get.side_effect = ConnectionError("timeout")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "get_failed"
+    assert "timeout" in data["detail"]
+
+
 def test_assign_org_llm_idempotent(mock_client, state, cache):
     """PATCH must only be issued once — second call with same project finds it already assigned."""
     mock_client.get.side_effect = [
