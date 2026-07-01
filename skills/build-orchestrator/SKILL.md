@@ -1,6 +1,6 @@
 ---
 name: build-orchestrator
-description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome → Wait) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by S0.5; if opened, wired via Cognigy's built-in Knowledge AI (`manage_knowledge` + `manage_settings`) in S1.8. Smoke test runs in S1.7 before hand-back — Phase A structural verification against `get_flow_chart` (12 assertions, incl. a ≤1000-char agent-field cap) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant S1.5 / S1.4 / S5 step; only hands back when both phases are green.
+description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by S0.5; if opened, wired via Cognigy's built-in Knowledge AI (`manage_knowledge` + `manage_settings`) in S1.8. Smoke test runs in S1.7 before hand-back — Phase A structural verification against `get_flow_chart` (12 assertions, incl. a ≤1000-char agent-field cap) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant S1.5 / S1.4 / S5 step; only hands back when both phases are green.
 ---
 
 # Build Orchestrator — end-to-end Cognigy AI Agent demo builder
@@ -798,7 +798,7 @@ Start
       └─ Code "Initialize Session"           (loads context.customer per S3)
          └─ Set Session Config                (voice config — see S1.5(c) below)
             └─ Say "Welcome line"             (industry-specific greeting)
-               └─ Wait for Input
+                                              (branch ends here — no Wait needed)
    └─ Afterwards                              (leave empty — Once.next = AI Agent on subsequent turns)
 └─ AI Agent
    └─ End
@@ -909,16 +909,9 @@ cognigy_create {
 ```
 > Three variants — Cognigy randomly picks one. Tone: confident, no apologies in the opener.
 
-**(e) Wait for Input** — terminator:
-```
-cognigy_create {
-  resource_type: "node",
-  flow_id: "<flowId>",
-  body: { type: "wait", mode: "append", target: "<sayWelcomeNodeId>", label: "Wait for Input", config: {} }
-}
-```
+**(e) Afterwards branch — leave empty.** Once routes to `Once.next` (= AI Agent) on subsequent turns automatically.
 
-**(f) Afterwards branch — leave empty.** Once routes to `Once.next` (= AI Agent) on subsequent turns automatically.
+> **Do NOT add a Wait for Input node inside `onFirstExecution`.** A Wait node here delays the Once gate marking first-execution complete — the branch must fully drain before Once considers the first-execution done, so the Wait consumes an extra turn and produces a silent empty Turn 2 response. The branch ending naturally after Say Welcome is the correct yield mechanism. `Wait for Input` belongs only in non-Once flow architectures (e.g. simple `Start → Say → Wait → AI Agent` without the Once gate).
 
 ### 1.6 As-built + baseline (primary: `get_flow_chart`; backup: package zip)
 
@@ -985,7 +978,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 **🔴 BLOCKING — must be satisfied before hand-back**
 
 *Flow / runtime:*
-- The `Once → Initialize Session → Set Session Config → Say Welcome → Wait` chain (by node ID)
+- The `Once → Initialize Session → Set Session Config → Say Welcome` chain (by node ID)
 - The exact Set Session Config defaults (ElevenLabs Custom `kqVqVtE8vZVRm6uoad9t`, `nexora_elevenlabs`, `nexora-azure-speech-services-australiaeast`, `en-AU`, bargeIn off, VAD off)
 - At least one transactional tool with Shape-B (Filler Say → Code → aiAgentToolAnswer)
 - At least one transfer tool with reversed pattern (Code → Say → aiAgentToolAnswer)
@@ -1038,7 +1031,7 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
    | 1 | A `start` node exists; its `next` resolves to a `once` node | S1.5(a) Once |
    | 2 | The `once` node's `children` are `[onFirstExecution, afterwards]` (exact types, both present) | S1.5(a) Once — re-run; plugin auto-spawns these |
    | 3 | The `once` node's `next` resolves to a node of type `aiAgentJob` | S1.5(a) target — Once likely appended after the wrong node |
-   | 4 | `onFirstExecution.next` chain = `code` (label contains "Initialize Session") → `setSessionConfig` → `say` (label contains "Welcome") → `wait` — exact order, no extras, no gaps | S1.5(b)–(e) — re-create the missing node(s) |
+   | 4 | `onFirstExecution.next` chain = `code` (label contains "Initialize Session") → `setSessionConfig` → `say` (label contains "Welcome") — exact order, no extras, no gaps | S1.5(b)–(d) — re-create the missing node(s) |
    | 5 | The Initialize Session `code` node has non-empty `config.code` AND its body assigns `context.customer` and `context.call` per S3 CRM template | S1.5(b) + `push_code_node` of the canonical CRM template |
    | 6 | `setSessionConfig.config` has `ttsVendor: "elevenlabs"`, `ttsVoice: "kqVqVtE8vZVRm6uoad9t"`, `sttVendor: "microsoft"`, `sttLanguage: "en-AU"` | S1.5(c) — patch the node's config |
    | 7 | `setSessionConfig.config.sttHints` is a non-empty array containing the customer brand name AND the persona name AND ≥3 domain terms derived from the agent's tools | S1.5(c) — populate sttHints |
@@ -1078,7 +1071,7 @@ Only run Phase B after Phase A is fully GREEN. Phase B catches LLM-level wiring 
    **Assert (all [deterministic]):**
    - [deterministic] `outputStack[0].data._cognigy._voiceGateway2.json` present → Set Session Config fired
    - [deterministic] Response `text` contains the caller's `firstName` from S3 (e.g. "Sarah") → Initialize Session ran and `{{context.customer.firstName}}` resolved
-   - [deterministic] Response `text` is the Say Welcome line only — no LLM-generated content → AI Agent did not fire on turn 1 (Wait held)
+   - [deterministic] Response `text` is the Say Welcome line only — no LLM-generated content → Once gate held; branch drained after Say Welcome on turn 1
    
    Any failure → loop back: re-run Phase A to locate the gap; the runtime didn't fire what the chart suggested was wired.
 
@@ -1751,7 +1744,7 @@ Demo folder: Demo Builds/[customer]-demo/
     - package/[customer]_Demo_[buildConfig.owner.initials].zip  ← package backup (manage_packages)
 
 Tools wired: <comma-separated list including end_call + end_call_resolved + transfers + any use-case tools. NO separate search_*_faqs tool — knowledge retrieval is via built-in Knowledge AI on the Job Node when S1.8 runs.>
-Init chain:  Start → Once → On First Time → Initialize Session → Set Session Config → Say Welcome → Wait → AI Agent → End
+Init chain:  Start → Once → On First Time → Initialize Session → Set Session Config → Say Welcome → AI Agent → End
 Patterns:    Shape-B tool branches ✓  Transfer reversed ✓  End-call pair ✓  No-match shape demonstrated ✓
              xApp scenes wired ✓ / N/A   Knowledge wired ✓ / N/A   Fork lane used ✓ / N/A
 
