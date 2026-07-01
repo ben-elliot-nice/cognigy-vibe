@@ -89,7 +89,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         })
         connection_id = conn_result["_id"]
 
-        # Create webRTC endpoint bound to the flow; clean up connection on failure
+        # Create webRTC endpoint bound to the flow; best-effort cleanup on failure
         try:
             ep_result = client.post("/v2.0/endpoints", {
                 "name": endpoint_name,
@@ -100,7 +100,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "webrtcWidgetConfig": {"active": True},
             })
         except Exception:
-            client.delete(f"/v2.0/connections/{connection_id}")
+            try:
+                client.delete(f"/v2.0/connections/{connection_id}")
+            except Exception:
+                pass  # best-effort — don't mask the original error
             raise
 
         endpoint_id = ep_result["_id"]
