@@ -473,3 +473,75 @@ def test_agent_handover_has_two_consumer_model(mock_client, state, cache):
     assert "escalate_to_human" in text
     assert "handoverContext" in text
     assert "handoverSummary" in text
+
+
+# ── Issue #61: profile section corrections ───────────────────────────────────
+
+def test_code_node_patterns_profile_is_read_only_snapshot(mock_client, state, cache):
+    """profile section must describe read-only snapshot behaviour and reference profile-editing."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    assert "read-only" in text.lower() or "read only" in text.lower(), \
+        "profile section must describe the read-only snapshot model"
+    assert "profile-editing" in text, \
+        "profile section must reference explain('profile-editing') for utilities"
+
+
+def test_code_node_patterns_add_contact_memory_takes_string(mock_client, state, cache):
+    """api.addContactMemory must be documented as taking a plain string, not an object."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "code-node-patterns"})
+    text = result[0].text
+    assert "api.addContactMemory({ label" not in text, \
+        "addContactMemory must not be documented with object signature — Cognigy takes a plain string"
+
+
+# ── Issue #61: profile-editing topic ─────────────────────────────────────────
+
+def test_profile_editing_topic_exists(mock_client, state, cache):
+    """profile-editing must be a recognised explain topic."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "profile-editing"})
+    text = result[0].text
+    assert "Unknown topic" not in text, "profile-editing must be a known topic"
+    assert len(text) > 100
+
+
+def test_profile_editing_documents_utility_functions(mock_client, state, cache):
+    """profile-editing must document all three utility functions."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "profile-editing"})
+    text = result[0].text
+    assert "getProfileVar" in text, "Must document getProfileVar"
+    assert "setProfileVar" in text, "Must document setProfileVar"
+    assert "mergeProfileVar" in text, "Must document mergeProfileVar"
+
+
+def test_profile_editing_documents_snapshot_model(mock_client, state, cache):
+    """profile-editing must explain that profile is a read-only snapshot."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "profile-editing"})
+    text = result[0].text
+    assert "snapshot" in text.lower(), \
+        "Must explain that profile is a read-only snapshot"
+    assert "api.updateProfile" in text, \
+        "Must document api.updateProfile as the only write path"
+
+
+def test_profile_editing_utility_functions_await_update_profile(mock_client, state, cache):
+    """setProfileVar and mergeProfileVar must await api.updateProfile."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "profile-editing"})
+    text = result[0].text
+    assert "await api.updateProfile" in text, \
+        "Utility functions must await api.updateProfile — it returns a Promise"
+
+
+def test_profile_editing_documents_flat_key_constraint(mock_client, state, cache):
+    """profile-editing must document that only flat top-level keys are supported."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "profile-editing"})
+    text = result[0].text
+    assert "flat" in text.lower() or "top-level" in text.lower(), \
+        "Must note that setProfileVar/mergeProfileVar accept flat top-level keys only"

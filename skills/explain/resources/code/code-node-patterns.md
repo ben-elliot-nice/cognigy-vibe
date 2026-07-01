@@ -43,7 +43,7 @@ Direct read access: `const val = context.myKey`
 For writes, prefer `setVar`/`mergeVar` (see Utility Functions) over `api.setContext`. Use `api.addToContext` only when you need array-push semantics (`'array'` mode).
 
 #### `profile`
-Contact profile data (persistent across sessions). Write via `api.updateProfile` or `api.addContactMemory` — no direct mutation equivalent exists yet (tracked in issue #61).
+Contact profile data (persistent across sessions). The `profile` global is a **read-only snapshot** — direct mutation (`profile.key = value`) does not persist to the contact store. Use `api.updateProfile(key, value)` directly for simple one-liners, or see `explain('profile-editing')` for utility functions consistent with the `setVar`/`mergeVar` convention.
 
 #### `analyticsdata`
 Analytics record for the current execution. Write to capture custom analytics.
@@ -106,7 +106,7 @@ For modifying input objects, use the setVar/mergeVar utility functions:
 
 #### Profile
   api.updateProfile('fieldName', value)
-  api.addContactMemory({ label: 'key', value: 'val' })
+  api.addContactMemory("text to remember")
   api.activateProfile()
   api.deactivateProfile()
   api.deleteProfile()

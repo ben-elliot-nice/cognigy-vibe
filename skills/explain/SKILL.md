@@ -33,6 +33,7 @@ code:
   cognigyScript              interpolation contexts, what works where
   function-execution         async pattern, inject-back via sessions API
   output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
+  profile-editing            Writing to the Cognigy contact profile — why direct mutation doesn't persist, api.updateProfile behaviour, and getProfileVar/setProfileVar/mergeProfileVar utility functions
   session-injection          context/state inject for in-session testing
 
 nodes:
