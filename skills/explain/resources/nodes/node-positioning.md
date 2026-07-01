@@ -1,42 +1,18 @@
 ---
 topic: node-positioning
-description: append vs appendChild modes, child branch population, insertAfter + insertBefore 500 bug on AU1, insert-before workaround
+description: append vs appendChild modes, child branch population for Once and IF nodes
 group: nodes
 ---
 
 ## node-positioning — Inserting and Moving Nodes
 
-### Mode: append (SAFE on AU1)
+### Mode: append
 Only reliable insertion mode. Target = node you want to insert AFTER.
   body: {"type": "say", "label": "My Node", "mode": "append", "target": "<previousNodeId>"}
 
 ### Mode: appendChild (for tool branch nodes)
 Use when adding aiAgentJobTool as a child of an aiAgentJob node.
   body: {"type": "aiAgentJobTool", "mode": "appendChild", "target": "<aiAgentJobNodeId>"}
-
-### BROKEN on AU1 (return 500 "Error while reading ChartData")
-  - insertAfter
-  - insertBefore
-
-### Workaround: inserting a node BEFORE an existing target
-There is no direct "insert before" mode. To place a new node before target node T:
-
-Option A — append after predecessor (preferred):
-  1. GET the flow chart
-  2. Find T's predecessor: the relation whose "next" == T._id
-  3. Create the new node with mode: "append", target: <predecessorNodeId>
-
-Option B — append anywhere, then move:
-  1. Create the new node with mode: "append" anywhere convenient
-  2. cognigy_invoke(resource_type="flows", resource_id=<flowId>,
-       operation="move", body={"nodeId": <newNodeId>, "mode": "append", "target": <predecessorNodeId>})
-
-Use Option A when you know the predecessor. Use Option B when the node already exists
-and needs repositioning.
-
-### Move an existing node
-Use cognigy_invoke with operation="move":
-  body: {"mode": "append", "target": "<nodeId to insert after>"}
 
 ### Common mistakes
 - Using chartReference as target → 404 "Failed to find chart node"
