@@ -27,11 +27,13 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `connection.baseUrl` | string | required | Cognigy API base URL for this tenant | `"https://cognigy-api-au1.nicecxone.com"` |
 | `connection.endpointBase` | string | required | Cognigy endpoint host for this tenant | `"https://cognigy-endpoint-au1.nicecxone.com"` |
 | `connection.region` | string | required | Short region tag; used in summary display and as-built docs | `"au1"` |
-| `llm.default` | string | required | Label of the LLM to select by default at S0.0 | `"Azure GPT-4o"` |
+| `llm.default` | string | required | Label of the default LLM — must match an `llm.options[].label` value exactly | populated by `cognigy:init-cognigy-vibe` from live discovery — do not hand-edit |
 | `llm.options` | array | required | List of available generation LLMs for this tenant | see rows below |
 | `llm.options[].label` | string | required | Human-readable LLM name | `"Azure GPT-4o"` |
-| `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | `"a793f9ea-befd-4fdf-8be8-b1c8a8385a91"` |
-| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (S0.5 / S1.8) | `{ "label": "...", "referenceId": "" }` |
+| `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | populated by `cognigy:init-cognigy-vibe` from live discovery — do not hand-edit |
+| `llm.options[].id` | string | required | MongoDB `_id` of the LLM — used by `assign_org_llm` without re-lookup | `"699ed916..."` |
+| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives §1.1 Step 2 assignment branch | `"organisation"` |
+| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (§0.5 / §1.8) | `{ "label": "...", "referenceId": "" }` |
 | `llm.embedding.label` | string | optional | Human-readable embedding model name | `"text-embedding-3-large"` |
 | `llm.embedding.referenceId` | string (uuid) | optional | Cognigy referenceId for the embedding model | `"..."` |
 | `llm.temperatureVoice` | number | optional | Temperature for voice/transactional builds | `0.2` |
@@ -40,14 +42,14 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `llm.toolChoice` | string | optional | Tool selection mode | `"auto"` |
 | `locale` | string | required | BCP-47 locale for the agent and endpoint | `"en-AU"` |
 | `tts.vendor` | string | required | TTS provider name | `"ElevenLabs"` |
-| `tts.model` | string | required | TTS model identifier | `"eleven_turbo_v2_5"` |
+| `tts.model` | string | required | TTS model identifier | enter from Cognigy UI → Connections |
 | `tts.language` | string | required | TTS language code | `"en"` |
 | `tts.voiceType` | string | required | TTS voice type | `"Custom"` |
-| `tts.voiceId` | string | required | Provider-specific voice ID | `"kqVqVtE8vZVRm6uoad9t"` |
-| `tts.label` | string | required | Cognigy synthesizer connection label | `"nexora_elevenlabs"` |
+| `tts.voiceId` | string | required | Provider-specific voice ID | enter from Cognigy UI → Connections |
+| `tts.label` | string | required | Cognigy synthesizer connection label | enter from Cognigy UI → Connections |
 | `stt.vendor` | string | required | STT provider name | `"Microsoft"` |
 | `stt.language` | string | required | STT language/locale code | `"en-AU"` |
-| `stt.label` | string | required | Cognigy recognizer connection label | `"nexora-azure-speech-services-australiaeast"` |
+| `stt.label` | string | required | Cognigy recognizer connection label | enter from Cognigy UI → Connections |
 | `stt.hints` | array | optional | Static STT hint phrases | `[]` |
 | `stt.dynamicHints.enabled` | boolean | optional | Enable dynamic STT hints | `true` |
 | `channel.type` | string | required | Channel type identifier | `"voice-webrtc"` |

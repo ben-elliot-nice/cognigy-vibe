@@ -246,3 +246,101 @@ def test_sync_remote_state_builds_extension_map(mock_client, state, cache, monke
     assert ext_map is not None, "extension_map should be written to state"
     assert ext_map["myNode"] == "my-ext"
     assert ext_map["anotherNode"] == "my-ext"
+
+
+def test_assign_org_llm_already_assigned(mock_client, state, cache):
+    mock_client.get.return_value = {
+        "_id": "llm-1",
+        "name": "Azure GPT 4.1",
+        "resourceLevel": "organisation",
+        "assignedToProjects": ["proj-already"],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-already", "llm_id": "llm-1"})
+    data = json.loads(result[0].text)
+    assert data["already_assigned"] is True
+    mock_client.patch.assert_not_called()
+
+
+def test_assign_org_llm_new_project(mock_client, state, cache):
+    mock_client.get.return_value = {
+        "_id": "llm-1",
+        "name": "Azure GPT 4.1",
+        "resourceLevel": "organisation",
+        "assignedToProjects": ["proj-existing"],
+    }
+    mock_client.patch.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    data = json.loads(result[0].text)
+    assert data["assigned"] is True
+    assert data["project_id"] == "proj-new"
+    assert data["llm_name"] == "Azure GPT 4.1"
+    call_body = mock_client.patch.call_args[0][1]
+    assert "proj-new" in call_body["assignedToProjects"]
+    assert "proj-existing" in call_body["assignedToProjects"]
+
+
+def test_assign_org_llm_not_org_level(mock_client, state, cache):
+    mock_client.get.return_value = {
+        "_id": "llm-2",
+        "name": "Project LLM",
+        "resourceLevel": "project",
+        "assignedToProjects": [],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-2"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "not_org_level"
+    mock_client.patch.assert_not_called()
+
+
+def test_assign_org_llm_not_found(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(404, "Not found")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-999"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "llm_not_found"
+    assert data["llm_id"] == "llm-999"
+
+
+def test_assign_org_llm_get_api_error_non_404(mock_client, state, cache):
+    """Non-404 ApiError on GET returns get_failed, not llm_not_found."""
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(403, "Forbidden")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "get_failed"
+    assert data["status"] == 403
+
+
+def test_assign_org_llm_get_generic_exception(mock_client, state, cache):
+    """Network or unexpected error on GET returns get_failed with detail."""
+    mock_client.get.side_effect = ConnectionError("timeout")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "get_failed"
+    assert "timeout" in data["detail"]
+
+
+def test_assign_org_llm_idempotent(mock_client, state, cache):
+    """PATCH must only be issued once — second call with same project finds it already assigned."""
+    mock_client.get.side_effect = [
+        # First call: project not yet assigned
+        {"_id": "llm-1", "name": "Azure GPT 4.1", "resourceLevel": "organisation", "assignedToProjects": ["proj-existing"]},
+        # Second call: project now in list (simulates state after first PATCH)
+        {"_id": "llm-1", "name": "Azure GPT 4.1", "resourceLevel": "organisation", "assignedToProjects": ["proj-existing", "proj-new"]},
+    ]
+    mock_client.patch.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    handlers["assign_org_llm"]({"project_id": "proj-new", "llm_id": "llm-1"})
+    assert mock_client.patch.call_count == 1
+
+
+def test_assign_org_llm_in_tools_list():
+    names = [t.name for t in TOOLS]
+    assert "assign_org_llm" in names

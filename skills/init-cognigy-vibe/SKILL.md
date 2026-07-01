@@ -19,41 +19,60 @@ This is the **front door** for a new Cognigy-Vibe user. It captures, once, every
 
 Greet the user — e.g. *"Welcome to the Cognigy-Vibe plugin. Looks like your first time — I'll run a quick one-time setup so every build after this needs zero manual config."* (Skip the welcome flourish on a deliberate re-run.)
 
-### 2. Check for existing workspace config
+### 2. Verify MCP connectivity (hard prerequisite — runs before config check)
+
+Call `cognigy_list { resource_type: "projects" }`.
+
+- **Success** → proceed to Step 3.
+- **Failure** → **Hard stop:**
+  > "MCP connection required before setup can continue. Check that `COGNIGY_BASE_URL` and `COGNIGY_API_KEY` are set in your `.env` file, restart the Claude Code session, and re-run `cognigy:init-cognigy-vibe`."
+
+  Do not fall through to manual LLM entry. There is no manual entry path for LLMs.
+
+### 3. Check for existing workspace config
 
 Call `get_build_state`. Inspect `config_loaded`:
 
 - **`config_loaded: true`** → show a compact summary table (region, LLM, TTS, STT, locale, source path)
   and ask: **keep as-is / edit / start fresh**.
   - Keep → done (exit the wizard).
-  - Edit → re-run the relevant wizard batches (steps 3–4) with current values pre-filled; user changes only what they want.
-  - Start fresh → proceed to step 3 with blank fields.
-- **`config_loaded: false`** → no config found anywhere in the cascade. Proceed to step 3 (full wizard).
-
-### 3. (Optional) discover live resource IDs
-
-If the NiCE Cognigy MCP or `cognigy-vibe` is connected, offer to list real resources so the user picks instead of pasting — most valuable for **LLM referenceIds** and **TTS/STT connection labels**:
-
-```
-cognigy_list { resource_type: "projects" }
-cognigy_list { resource_type: "largelanguagemodels", project_id: "<id>", full_objects: true }
-  # returns name (label), referenceId, modelType, provider
-```
-
-Present generation LLMs for `llm.options`, embedding models for `llm.embedding`. If no MCP is connected, collect as free text and note they can re-run setup to validate later.
+  - Edit → re-run the relevant wizard batches (steps 4–5) with current values pre-filled; user changes only what they want.
+  - Start fresh → proceed to step 4 with blank fields.
+- **`config_loaded: false`** → no config found anywhere in the cascade. Proceed to step 4 (full wizard).
 
 ### 4. Wizard interview (`AskUserQuestion` batches)
 
-Collect the schema. Pre-fill each option with sensible defaults so a user on the reference tenant can accept fast; others override. Group into ≤3 batches:
+Collect the schema. Group into ≤3 batches:
 
 | Group | Captures |
 |---|---|
 | **Identity & tenant** | owner initials; `connection.region` → derives baseUrl + endpointBase; **API key** (→ `.env`) |
-| **LLM** | one or more generation LLMs (label + referenceId), which is `default`; optional embedding LLM; temperatures |
-| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language; STT hints + dynamic hints on/off |
+| **LLM** | Discovered live — see below (no manual UUID entry) |
+| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language — enter values as shown in Cognigy UI → Settings → Connections. No defaults provided. |
 | **Channel & preview** | channel type (default voice-webRTC); VoiceGateway endpoint name (default `Click-to-Call`); voice-preview speech provider + connection name/region |
 
 `maxTokens` (400), `toolChoice` (auto), `voiceBehaviour` (barge-in/VAD off) are written at defaults without a question unless the user asks.
+
+#### Live LLM discovery (runs before the LLM group question)
+
+1. `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType", "provider"] }`
+2. Filter: keep `resourceLevel == "organisation"` AND `modelType` does not contain `"embedding"` (case-insensitive).
+3. If the filtered list is empty → **hard stop:** *"No organisation-level LLMs found on this tenant. Ask your Cognigy admin to configure at least one org-level generation LLM, then re-run setup."*
+4. Present as `AskUserQuestion` — one option per model. Label: `"<name> (<modelType>)"`. Description: provider name.
+5. Write the selected model to config as `llm.options[0]`:
+   ```json
+   {
+     "label": "<name>",
+     "referenceId": "<referenceId>",
+     "id": "<_id>",
+     "resourceLevel": "organisation"
+   }
+   ```
+   Also set `llm.default` to the selected model's `label`.
+
+Do not present a pre-selected default. Do not ask the user to type or paste a UUID.
+
+> **Note:** TTS/STT connection discovery is not yet supported — enter connection labels and voice IDs as shown in Cognigy UI → Settings → Connections. Automated discovery is tracked in [issue #76](https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/76) (Voice Gateway integration).
 
 ### 5. Write the files
 
