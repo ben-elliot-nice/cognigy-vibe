@@ -77,7 +77,7 @@ Handled by `server.py` at startup. **First file found wins — no field merging 
 - A project-level file must be **complete** if it exists. There is no field-level merging. Partial files are not supported.
 - The path of the winning file is reported as `config_source` in `get_build_state`.
 
-**Writing:** `cognigy:init-cognigy-vibe` always writes `.env` to `cwd`. On first-time setup it writes the non-secret config to `~/.config/cognigy-vibe/config.json` (global). For a project-only override, write a complete `default-demo-config.json` to the project directory — it will win over the global config on next session start.
+**Writing:** `cognigy:init-cognigy-vibe` always writes `.env` to `cwd` — this is the session workspace root, not a per-build demo directory. `.env` is workspace-level and shared across all `Demo Builds/` in this session (see `explain("session-workspace")`). On first-time setup it writes the non-secret config to `~/.config/cognigy-vibe/config.json` (global). For a workspace-level override, write a complete `default-demo-config.json` to `cwd` — it will win over the global config on next session start.
 
 ### 3. Field → build step map
 
