@@ -109,3 +109,25 @@ def test_endpoint_base_url_raises_for_non_matching_url():
     c = CognigyClient(base_url="https://localhost:8080", api_key="key")
     with pytest.raises(ValueError, match="cognigy-api-"):
         _ = c.endpoint_base_url
+
+
+def test_download_success(client):
+    """download() returns raw bytes from the response body."""
+    zip_bytes = b"PK\x03\x04fake-zip-content"
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/packages/pkg-1/download").mock(
+            return_value=httpx.Response(200, content=zip_bytes)
+        )
+        result = client.download("/v2.0/packages/pkg-1/download")
+    assert result == zip_bytes
+
+
+def test_download_error_raises_api_error(client):
+    """download() raises ApiError on HTTP 4xx/5xx."""
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/packages/missing/download").mock(
+            return_value=httpx.Response(404, json={"error": "Not found"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.download("/v2.0/packages/missing/download")
+    assert exc.value.status_code == 404

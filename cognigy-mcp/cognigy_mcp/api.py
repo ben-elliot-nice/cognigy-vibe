@@ -62,3 +62,9 @@ class CognigyClient:
             return resp.json()
         except Exception:
             return {}
+
+    def download(self, path: str) -> bytes:
+        """Authenticated GET that returns raw bytes (for binary downloads such as zip files)."""
+        resp = self._http.get(self._base + path)
+        self._raise_for_status(resp)
+        return resp.content
