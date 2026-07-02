@@ -52,6 +52,7 @@ platform:
   outbound-trigger           6-step CXone trigger, Accept-Encoding: identity requirement
   project-snapshots          create project snapshots for versioning (flow-level versioning does not exist in the API)
   say-node                   say node config schema: correct text field, required _cognigy/_data fields, generativeAI_customInputs
+  session-workspace          session workspace directory model — cwd vs Demo Builds/, .env scope, sync_remote_state project binding
 
 voice:
   voice-gateway              VG endpoint routing, Set Session Config, SIP headers, DTMF
