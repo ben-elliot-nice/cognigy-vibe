@@ -3,11 +3,15 @@ import base64
 import difflib
 import json
 import struct
+import time
 from pathlib import Path
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+
+_EXPORT_POLL_INTERVAL = 3.0   # seconds between job-status polls
+_EXPORT_TIMEOUT = 300.0       # total seconds before giving up
 
 TOOLS: list[Tool] = [
     Tool(
@@ -82,6 +86,27 @@ TOOLS: list[Tool] = [
                 "agent_id": {"type": "string", "description": "Agent _id or referenceId"},
             },
             "required": ["image_file", "agent_id"],
+        },
+    ),
+    Tool(
+        name="export_package",
+        description=(
+            "Export a Cognigy project as a zip package and save it to a local file. "
+            "Initiates an async export job via POST /v2.0/packages, polls until the job "
+            "completes, then downloads the zip to the specified output path. "
+            "Parent directories are created automatically. "
+            "Typical output path: Demo Builds/<customer>-demo/<customer>-package.zip"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Cognigy project _id to export"},
+                "output_path": {
+                    "type": "string",
+                    "description": "Absolute or relative path where the zip file will be written",
+                },
+            },
+            "required": ["project_id", "output_path"],
         },
     ),
 ]
@@ -285,9 +310,68 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         return _ok({"success": True, "agent_id": agent_id, "bytes": len(data)})
 
+    def _export_package(args: dict) -> list[TextContent]:
+        project_id = args["project_id"]
+        output_path = Path(args["output_path"])
+
+        # Kick off the async export job
+        try:
+            job = client.post("/v2.0/packages", {"projectId": project_id})
+        except Exception as e:
+            return _ok({"error": f"Failed to start export job: {e}"})
+
+        job_id = job.get("_id")
+        if not job_id:
+            return _ok({"error": f"Export job response missing _id: {job}"})
+
+        # Poll until the job completes or times out
+        deadline = time.monotonic() + _EXPORT_TIMEOUT
+        while True:
+            if time.monotonic() > deadline:
+                return _ok({
+                    "error": f"Export job {job_id} timed out after {_EXPORT_TIMEOUT:.0f}s",
+                    "job_id": job_id,
+                })
+            time.sleep(_EXPORT_POLL_INTERVAL)
+            try:
+                status = client.get(f"/v2.0/packages/{job_id}")
+            except Exception as e:
+                return _ok({"error": f"Failed to poll export job {job_id}: {e}", "job_id": job_id})
+
+            job_status = status.get("status", "")
+            if job_status == "error":
+                return _ok({
+                    "error": f"Export job failed: {status.get('error', 'unknown error')}",
+                    "job_id": job_id,
+                })
+            if job_status == "done":
+                break
+            # Any other status (queued, running, etc.) — keep polling
+
+        # Download the zip
+        try:
+            zip_bytes = client.download(f"/v2.0/packages/{job_id}/download")
+        except Exception as e:
+            return _ok({"error": f"Failed to download package zip: {e}", "job_id": job_id})
+
+        # Write to disk, creating parent dirs as needed
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(zip_bytes)
+        except OSError as e:
+            return _ok({"error": f"Failed to write zip to {output_path}: {e}", "job_id": job_id})
+
+        return _ok({
+            "success": True,
+            "job_id": job_id,
+            "output_path": str(output_path),
+            "bytes": len(zip_bytes),
+        })
+
     return {
         "push_code_node": _push_code_node,
         "push_html_node": _push_html_node,
         "push_agent_tool": _push_agent_tool,
         "push_agent_avatar": _push_agent_avatar,
+        "export_package": _export_package,
     }

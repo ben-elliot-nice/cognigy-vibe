@@ -3,7 +3,9 @@ import struct
 import zlib
 import pytest
 from pathlib import Path
+from unittest.mock import patch, call
 from cognigy_mcp.tools.file_push import make_handlers, TOOLS
+from cognigy_mcp.api import ApiError
 
 
 def test_all_tools_exported():
@@ -511,4 +513,131 @@ def test_push_agent_avatar_truncated_png(mock_client, state, cache, tmp_path):
     data = json.loads(result[0].text)
     assert "error" in data
     mock_client.patch.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# export_package tests
+# ---------------------------------------------------------------------------
+
+def test_export_package_exported():
+    names = [t.name for t in TOOLS]
+    assert "export_package" in names
+
+
+def test_export_package_happy_path_first_poll(mock_client, state, cache, tmp_path):
+    """Job is done on the first poll — writes zip and returns success."""
+    zip_bytes = b"PK\x03\x04fake-zip"
+    mock_client.post.return_value = {"_id": "job-1", "status": "queued"}
+    mock_client.get.return_value = {"_id": "job-1", "status": "done"}
+    mock_client.download.return_value = zip_bytes
+    out = tmp_path / "export.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-1",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["job_id"] == "job-1"
+    assert data["bytes"] == len(zip_bytes)
+    assert out.read_bytes() == zip_bytes
+    mock_client.post.assert_called_once_with("/v2.0/packages", {"projectId": "proj-1"})
+    mock_client.download.assert_called_once_with("/v2.0/packages/job-1/download")
+
+
+def test_export_package_multi_poll(mock_client, state, cache, tmp_path):
+    """Job is queued on first two polls then done — handler waits correctly."""
+    zip_bytes = b"PK\x03\x04another-zip"
+    mock_client.post.return_value = {"_id": "job-2", "status": "queued"}
+    mock_client.get.side_effect = [
+        {"_id": "job-2", "status": "running"},
+        {"_id": "job-2", "status": "running"},
+        {"_id": "job-2", "status": "done"},
+    ]
+    mock_client.download.return_value = zip_bytes
+    out = tmp_path / "out.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-2",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert mock_client.get.call_count == 3
+
+
+def test_export_package_job_failure(mock_client, state, cache, tmp_path):
+    """Job reports status='error' — handler returns error without downloading."""
+    mock_client.post.return_value = {"_id": "job-3", "status": "queued"}
+    mock_client.get.return_value = {"_id": "job-3", "status": "error", "error": "export failed"}
+    out = tmp_path / "nope.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-3",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "export failed" in data["error"]
+    mock_client.download.assert_not_called()
+    assert not out.exists()
+
+
+def test_export_package_timeout(mock_client, state, cache, tmp_path):
+    """Job never completes — handler returns a timeout error."""
+    import cognigy_mcp.tools.file_push as fp_module
+    mock_client.post.return_value = {"_id": "job-4", "status": "queued"}
+    mock_client.get.return_value = {"_id": "job-4", "status": "running"}
+    out = tmp_path / "timeout.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"), \
+         patch.object(fp_module, "_EXPORT_TIMEOUT", 0.0):
+        result = handlers["export_package"]({
+            "project_id": "proj-4",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "timed out" in data["error"]
+    mock_client.download.assert_not_called()
+
+
+def test_export_package_post_api_error(mock_client, state, cache, tmp_path):
+    """POST /v2.0/packages fails — handler returns error immediately."""
+    mock_client.post.side_effect = Exception("network error")
+    out = tmp_path / "fail.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["export_package"]({
+        "project_id": "proj-5",
+        "output_path": str(out),
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "network error" in data["error"]
+    mock_client.get.assert_not_called()
+    mock_client.download.assert_not_called()
+
+
+def test_export_package_parent_dir_auto_created(mock_client, state, cache, tmp_path):
+    """output_path parent directories are created automatically."""
+    zip_bytes = b"PK\x03\x04zip-content"
+    mock_client.post.return_value = {"_id": "job-6", "status": "queued"}
+    mock_client.get.return_value = {"_id": "job-6", "status": "done"}
+    mock_client.download.return_value = zip_bytes
+    # Deep nested path that does not exist yet
+    out = tmp_path / "Demo Builds" / "acme-demo" / "acme-package.zip"
+    assert not out.parent.exists()
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-6",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert out.exists()
+    assert out.read_bytes() == zip_bytes
 

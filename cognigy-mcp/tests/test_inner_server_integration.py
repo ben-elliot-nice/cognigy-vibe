@@ -157,6 +157,7 @@ def test_degraded_server_tools_list_returns_expected_tools():
             "push_agent_tool", "push_agent_avatar", "talk_to_agent", "explain",
             "provision_webrtc_endpoint",
             "assign_org_llm",
+            "export_package",
         ])
         assert tool_names == expected, (
             f"tool list mismatch.\nGot:      {tool_names}\nExpected: {expected}"
