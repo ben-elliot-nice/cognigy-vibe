@@ -215,13 +215,15 @@ e.g. "AMP sounds warmer and more human than Colonial First State (institutional)
 
 The build skill keeps the interview UX. Scoping the demo — the 12 facts + design conversation — is delegated to the purpose-built sub-skill.
 
-**Working directory:** ensure the demo folder exists, then `cd` into it before invoking, so `cognigy:scope-demo` writes its output here (per its Phase 4 rule: "Write to the directory from which the user launched Claude Code"):
+**Output directory:** ensure the demo folder exists before invoking `cognigy:scope-demo`, so its Phase 4 output lands in the right place (the sub-skill's Phase 4 rule is "write to the directory from which the user launched Claude Code", i.e. cwd at invocation time). Create it with:
 
 ```bash
-mkdir -p "Demo Builds/<customer>-demo" && cd "Demo Builds/<customer>-demo"
+mkdir -p "Demo Builds/<customer>-demo"
 ```
 
 On a fresh build the folder won't exist yet — `mkdir -p` is a no-op if it does, so this is safe on re-runs too.
+
+> **Note:** Claude's cwd remains the session workspace root throughout — it does not permanently change to the demo dir. See `explain("session-workspace")` for the directory model.
 
 **Invoke in context-provided mode.** Pass the interview answers verbatim so Phase 1 has nothing to ask about. Mapping (interview Q → scope-demo Fact):
 
@@ -257,7 +259,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo folder, invoke the design orchestrator.
 
-**Working directory:** stay in `Demo Builds/<customer>-demo/`. The design sub-skills look for prior docs in CWD.
+**Output directory:** `Demo Builds/<customer>-demo/`. The design sub-skills write output files here. Claude's cwd remains the session workspace root — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
 
 **Invoke in Mode A (full workflow).** Persona → Jobs → Interfaces → Contracts. The orchestrator runs each in sequence; each reads the prior outputs from disk.
 
@@ -1085,7 +1087,7 @@ if (knowledgeRequested !== true) { skip S1.8 entirely; proceed to S1.9 }
 
 If S0.5 returned YES, the user gave a list of FAQ topic specs. **This section wires Cognigy's built-in Knowledge AI only** — author the FAQ bodies locally, then ingest them into a Cognigy knowledge store. There is no CXone Expert publishing step here: Expert publishing belongs in a future `knowledge@nice` skill and is out of scope for this orchestrator. Do not add an Expert escape hatch until that skill ships.
 
-**Working directory:** stay in `Demo Builds/<customer>-demo/`.
+**Output directory:** `Demo Builds/<customer>-demo/knowledge/`. Claude's cwd remains the session workspace root — paths below are relative to the workspace root. See `explain("session-workspace")`.
 
 **Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `Demo Builds/<customer>-demo/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 2, and they stay version-controlled in the demo folder.
 
