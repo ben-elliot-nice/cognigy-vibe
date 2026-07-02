@@ -910,7 +910,14 @@ After all build steps land:
 
    > This `baseline.md` is a **local markdown drift artifact** for the audit skills — it is NOT a Cognigy resource snapshot. Cognigy also offers project-level resource *versioning* (a `snapshot` resource via `cognigy_create`, async job) — see plugin `explain("project-snapshots")` if you want a server-side restore point. Optional.
 
-5. **Package zip export** — not currently supported via cognigy-vibe (issue #117). To create an offline backup, export manually via the Cognigy UI: **Settings → Packages → Export**. The as-built doc and baseline snapshot (steps 3–4) are the primary build record.
+5. **Package zip export** — call `export_package` to download a full project zip:
+   ```
+   export_package {
+     project_id: "<projectId>",
+     output_path: "Demo Builds/<customer>-demo/<customer>-package.zip"
+   }
+   ```
+   The tool posts an async export job, polls until complete, and writes the zip locally. The as-built doc and baseline snapshot (steps 3–4) are the primary build record; the zip is the offline backup / handoff artifact.
 
 **Cross-check before hand-back.** Open the new `FLOW_INSERTS.md` and verify against the list below.
 
@@ -1667,7 +1674,7 @@ Demo folder: Demo Builds/[customer]-demo/
   Documentation:
     - [CUSTOMER]_FLOW_INSERTS.md                  ← as-built generated from get_flow_chart
     - [customer]-baseline.md                      ← drift-detection snapshot
-    - *(optional) package zip — export manually via Cognigy UI → Settings → Packages (issue #117 tracks vibe support)*
+    - [customer]-package.zip                      ← §1.6 Step 5 via export_package tool
 
 Tools wired: <comma-separated list including end_call + end_call_resolved + transfers + any use-case tools. NO separate search_*_faqs tool — knowledge retrieval is via built-in Knowledge AI on the Job Node when S1.8 runs.>
 Init chain:  Start → Once → On First Time → Initialize Session → Set Session Config → Say Welcome → AI Agent → End

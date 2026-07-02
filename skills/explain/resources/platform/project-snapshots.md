@@ -43,3 +43,12 @@ Use at task completion milestones during multi-agent builds:
   - Before starting a major new component (safety checkpoint)
   - After a working demo state is confirmed (named "DEMO READY")
   - Before destructive operations (delete/replace flow nodes)
+
+### Exporting a full project zip (offline backup / handoff)
+Snapshots capture project state server-side; for a portable offline zip use `export_package`:
+  export_package {
+    project_id: "<projectId>",
+    output_path: "Demo Builds/<customer>-demo/<customer>-package.zip"
+  }
+The tool posts an async export job, polls until complete, and writes the zip locally.
+See the build-orchestrator skill §1.6 Step 5 for the canonical build-time usage pattern.
