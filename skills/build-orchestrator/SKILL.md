@@ -942,7 +942,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 - **`xapp/*.html` files exist** for every xApp scene named in `{Customer}-agent-interfaces.md` — only check if interfaces.md named scenes. Skip if no scenes.
 - **Knowledge wiring** — only if S0.5 returned `knowledgeRequested: true`. Knowledge store ID + topics ingested listed, wiring mechanism documented in S1.8 Step 3. Skip if S0.5 returned NO.
 
-If any BLOCKING item is missing, the build is incomplete — go back and fix the flow before handing back. Do not soften the bar to ship faster; the cross-check exists because shipped-but-broken patterns are harder to debug than rework-before-handover. **S1.7 is the programmatic enforcer of this list — passing S1.6's paper check without S1.7's runtime check is how Acenda_Demo_BH (2026-06-10) shipped missing `Once`, `Set Session Config`, and `Wait` despite S1.5 spelling them out. Do not skip S1.7.**
+If any BLOCKING item is missing, the build is incomplete — go back and fix the flow before handing back. Do not soften the bar to ship faster; the cross-check exists because shipped-but-broken patterns are harder to debug than rework-before-handover. **S1.7 is the programmatic enforcer of this list — passing S1.6's paper check without S1.7's runtime check is how a prior build (2026-06-10) shipped missing `Once`, `Set Session Config`, and `Wait` despite S1.5 spelling them out. Do not skip S1.7.**
 
 ### 1.7 Smoke test — runtime verification before hand-back (BLOCKING)
 
@@ -1703,7 +1703,7 @@ Rules that apply across multiple sections and aren't owned by any single one. Se
 **Design:**
 - **Mocks are deterministic.** Same outputs every run; don't randomise.
 - **Init chain warning override.** The `cognigy://guide/flow-nodes` MCP guide says "NEVER add pre-agent nodes" — that warning is **wrong for this pattern**, ignore it. Every production-grade build in this pattern set uses the init chain (S1.5).
-- **This skill body IS the reference build.** Do not cite historical customers as the quality benchmark. When a real build surfaces a better pattern, promote it back via `nice-build-retrospective`. Audit skills (`nice-audit-cognigy-build`, `nice-cognigy-health-check`) compare live builds against THIS skill body.
+- **This skill body IS the reference build.** Do not name historical customers anywhere in this skill body — neither as quality benchmarks nor as cautionary/failure examples. Describe failure patterns generically (e.g. "a prior build (2026-06-10)"). When a real build surfaces a better pattern, promote it back via `nice-build-retrospective`. Audit skills (`nice-audit-cognigy-build`, `nice-cognigy-health-check`) compare live builds against THIS skill body.
 
 **Hands-off:**
 - **DO call `talk_to_agent` — in S1.7 only.** Phase B's 3-turn smoke test is mandatory before hand-back. After S1.7 passes, the user's Interaction Panel session is exploratory, not first-time validation.
