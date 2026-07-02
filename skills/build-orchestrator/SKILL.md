@@ -445,7 +445,7 @@ cognigy_update {
   merge_config: true,
   body: { config: {
     memoryContextInjection: "<from {Customer}-context-schema.md, industry-shaped per S3, with {{context.customer.*}} placeholders>",
-    toolChoice: "auto"
+    toolChoice: "<buildConfig.llm.toolChoice>"
   }}
 }
 ```
