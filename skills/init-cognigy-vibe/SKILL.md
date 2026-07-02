@@ -84,7 +84,7 @@ Do not present a pre-selected default. Do not ask the user to type or paste a UU
 ### 6. Confirm + next step
 
 Report:
-- `.env` written to: `<cwd>/.env` (workspace-local — covers all Demo Builds projects in this workspace)
+- `.env` written to: `<cwd>/.env` (workspace-level — shared across all Demo Builds/ in this session — see explain("session-workspace"))
 - Config written to: `~/.config/cognigy-vibe/config.json` (global — applies to all future projects on this tenant)
 - Non-secret summary table of the written config values
 - Cloud-sync note: if cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` is synced — treat that as publishing the API key. Move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed.
@@ -93,7 +93,7 @@ Then: *"You're set up. Open a new project directory, say 'build a demo for Liber
 
 ## Notes
 
-- `.env` is per-workspace-directory (the cwd where Claude Code is launched). In the session-workspace model, one `.env` at workspace root covers all `Demo Builds/<customer>/` sub-directories — credentials are shared, and `COGNIGY_PROJECT_ID` is never written here. The Cognigy project is bound mid-session via `sync_remote_state`, not at startup. If you open a completely separate workspace (different tenant, different API key), write a new `.env` there.
+- See explain("session-workspace") for the directory model. One .env at workspace root serves all builds in a session.
 - The global `config.json` at `~/.config/cognigy-vibe/config.json` applies to all projects on the same tenant. Drop a `default-demo-config.json` into any project directory to override for that project only — must be a complete file (no field merging).
 - The live **LLM gate** (`build-orchestrator` S1.1 Step 2) still verifies the chosen generation LLM exists in the target project before generation is relied on.
 - Voice provisioning details depend on `manage_voice_gateway` capabilities — see the plugin issues filed alongside this skill.
