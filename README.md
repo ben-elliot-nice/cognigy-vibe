@@ -22,8 +22,8 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
    claude marketplace add ben-elliot-nice/nice-claude-marketplace
    claude plugin install cognigy@nice
    ```
-2. In your demo project directory, run the `cognigy:init-mcp` skill to wire up state, cache, and the MCP entry.
-3. Restart Claude Code, then ask: *"Build me a Cognigy demo for \<customer\>."*
+2. Run `cognigy:init-cognigy-vibe` to capture your Cognigy credentials and build defaults (one-time per workstation).
+3. Ask: *"Build me a Cognigy demo for \<customer\>."* — no restart required.
 
 ### Clone + local dev
 
@@ -89,7 +89,6 @@ The entry point is `cognigy:build-orchestrator` — a single-batch interview tha
 | [`design-agent-contracts`](skills/design-agent-contracts/SKILL.md) | Deterministic enforcement layer — guard sub-flows, obligation state, structured refusals. |
 | [`add-aiagent-job`](skills/add-aiagent-job/SKILL.md) | Add an AI Agent Job node (+ optional tool nodes) to an existing flow. |
 | [`init-cognigy-vibe`](skills/init-cognigy-vibe/SKILL.md) | **First-time setup wizard.** Captures every build variable once (API URL + key, LLM refs, TTS, STT, voice channel, voice preview, naming) → `.env` + `default-demo-config.json` at the `Demo Builds` workspace root. Run before your first build; `build-orchestrator` S0.0 loads it and binds projects with no restart. |
-| [`init-mcp`](skills/init-mcp/SKILL.md) | Legacy per-project `cognigy-vibe-mcp` wiring (restart path). Superseded by `init-cognigy-vibe` for the common case; used only when `cognigy-vibe` is pinned per project. |
 | [`explain`](skills/explain/SKILL.md) | Retrieve implementation guidance for Cognigy topics before brute-forcing or web-searching. |
 | [`submit-issue`](skills/submit-issue/SKILL.md) | File a bug against this plugin (MCP server or a skill). |
 
