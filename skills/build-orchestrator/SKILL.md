@@ -406,8 +406,8 @@ update_ai_agent {
     jobDescription: "<## Job Description block (2A) from {Customer}-agent-persona.md>",
     jobInstructions: "<## Job Instructions block (2B) — INCLUDING the S2.5 empathy library verbatim>",
     llmProviderReferenceId: "<buildConfig.llm.selected.referenceId — confirmed available in this project by Step 2>",
-    temperature: 0.2,        // voice/transactional default; 0.5 only if Q10 channel mix is primarily conversational chat (webchat/WhatsApp) — see buildConfig
-    maxTokens: 400
+    temperature: "<buildConfig.llm.temperatureVoice>",   // voice/transactional default; use buildConfig.llm.temperatureChat for primarily conversational chat channels (webchat/WhatsApp)
+    maxTokens: "<buildConfig.llm.maxTokens>"
   }
 }
 ```
