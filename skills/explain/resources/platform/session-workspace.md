@@ -1,3 +1,9 @@
+---
+topic: session-workspace
+description: session workspace directory model — cwd vs Demo Builds/, .env scope, sync_remote_state project binding
+group: platform
+---
+
 # session-workspace
 
 ## Directory model
