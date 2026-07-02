@@ -392,7 +392,7 @@ Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.
 4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
 
 > **Note:** Do not use `manage_packages` export/import as the primary LLM wiring path — it is a fallback for project-scoped LLMs only. `assign_org_llm` is the correct path for org-level LLMs (the default for any config populated by `init-cognigy-vibe`).
-**Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the §1.1.5 restart.
+**Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the §1.1.5 MCP wire-up step.
 
 ```
 update_ai_agent {
@@ -424,7 +424,7 @@ All §1.1 steps use cognigy-vibe directly — there is no session boundary. Afte
 2. Bind the new project: `sync_remote_state({ project_id: "<projectId from §1.1 Step 1>" })`.
 3. Proceed to S1.2 in the **same session**.
 
-If step 1 fails with a "not loaded" / missing-credentials error, fix the credentials (run `cognigy:init-cognigy-vibe`, or relaunch where the `.env` resolves) before proceeding.
+If step 1 fails with a "not loaded" / missing-credentials error, `cognigy-vibe` couldn't resolve credentials — run `cognigy:init-cognigy-vibe` to write `.env`, then retry `cognigy_list` in the same session. No restart required.
 
 > **Session resume path.** If resuming a build started in a prior session, run the S1 entry gate first (re-read all four design docs + assert fields), THEN call `sync_remote_state({ project_id: "<projectId>" })` to refresh MCP state before any S1.2+ call. Do not skip either step — design-doc drift and stale MCP state are the two most common causes of mid-session build failures on resume.
 
