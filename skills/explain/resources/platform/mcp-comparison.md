@@ -19,6 +19,7 @@ Limitations:
 - Does NOT support: once, onFirstExecution, afterwards, setSessionConfig, hangup, wait
 - Does NOT propagate persona/LLM/temperature/toolChoice to the AI Agent Job Node after creation
 - Returned endpointUrl uses cognigy-api-au1 (returns 401) — must substitute cognigy-endpoint-au1
+  - Mitigation: cognigy-vibe derives the correct endpoint host dynamically from `connection.endpointBase` — this is already handled by the MCP server; no manual fix is needed.
 - create_tool returns a field called toolId that is actually the mongo _id of the node (misleading)
 
 ### cognigy-vibe (this server)
