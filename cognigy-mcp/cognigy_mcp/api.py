@@ -63,8 +63,10 @@ class CognigyClient:
         except Exception:
             return {}
 
-    def download(self, path: str) -> bytes:
-        """Authenticated GET that returns raw bytes (for binary downloads such as zip files)."""
-        resp = self._http.get(self._base + path)
+    def download_url(self, url: str) -> bytes:
+        """GET an absolute URL and return raw bytes. Used for pre-signed download URLs
+        that are not routed through the Cognigy API base path. Sends Accept: */* to
+        avoid the default application/json header interfering with binary responses."""
+        resp = self._http.get(url, headers={"Accept": "*/*"})
         self._raise_for_status(resp)
         return resp.content

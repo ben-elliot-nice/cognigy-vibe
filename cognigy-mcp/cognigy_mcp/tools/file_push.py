@@ -314,56 +314,97 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         project_id = args["project_id"]
         output_path = Path(args["output_path"])
 
-        # Kick off the async export job
+        # Kick off the async export job — returns a Task object, not a Package.
+        # The _id in the response is the task ID, not the package ID.
         try:
             job = client.post("/v2.0/packages", {"projectId": project_id})
         except Exception as e:
             return _ok({"error": f"Failed to start export job: {e}"})
 
-        job_id = job.get("_id")
-        if not job_id:
+        task_id = job.get("_id")
+        if not task_id:
             return _ok({"error": f"Export job response missing _id: {job}"})
 
-        # Poll until the job completes or times out
+        # Poll GET /v2.0/tasks/{taskId} until the task reaches a terminal status.
+        # Terminal statuses: done, error, cancelled, cancelling.
+        # (GET /v2.0/packages/{id} returns a Package object with no status field —
+        # it cannot be used for polling.)
         deadline = time.monotonic() + _EXPORT_TIMEOUT
         while True:
             if time.monotonic() > deadline:
                 return _ok({
-                    "error": f"Export job {job_id} timed out after {_EXPORT_TIMEOUT:.0f}s",
-                    "job_id": job_id,
+                    "error": f"Export task {task_id} timed out after {_EXPORT_TIMEOUT:.0f}s",
+                    "task_id": task_id,
                 })
             time.sleep(_EXPORT_POLL_INTERVAL)
             try:
-                status = client.get(f"/v2.0/packages/{job_id}")
+                task = client.get(f"/v2.0/tasks/{task_id}")
             except Exception as e:
-                return _ok({"error": f"Failed to poll export job {job_id}: {e}", "job_id": job_id})
+                return _ok({"error": f"Failed to poll export task {task_id}: {e}", "task_id": task_id})
 
-            job_status = status.get("status", "")
-            if job_status == "error":
+            task_status = task.get("status", "")
+            if task_status == "error":
                 return _ok({
-                    "error": f"Export job failed: {status.get('error', 'unknown error')}",
-                    "job_id": job_id,
+                    "error": f"Export task failed: {task.get('failReason', 'unknown error')}",
+                    "task_id": task_id,
                 })
-            if job_status == "done":
+            if task_status in ("cancelled", "cancelling"):
+                return _ok({
+                    "error": f"Export task was cancelled (status: {task_status})",
+                    "task_id": task_id,
+                })
+            if task_status == "done":
                 break
-            # Any other status (queued, running, etc.) — keep polling
+            # queued or active — keep polling
 
-        # Download the zip
+        # Resolve the package ID: the task _id is not the package _id.
+        # List packages for this project sorted by creation time descending and
+        # take the first result — that is the package the completed task just created.
         try:
-            zip_bytes = client.download(f"/v2.0/packages/{job_id}/download")
+            packages = client.get(
+                "/v2.0/packages",
+                projectId=project_id,
+                sort="createdAt:desc",
+                limit=1,
+            )
         except Exception as e:
-            return _ok({"error": f"Failed to download package zip: {e}", "job_id": job_id})
+            return _ok({"error": f"Failed to list packages after export: {e}", "task_id": task_id})
+
+        items = packages.get("items", [])
+        if not items:
+            return _ok({"error": "No packages found for project after export completed", "task_id": task_id})
+        package_id = items[0].get("_id")
+        if not package_id:
+            return _ok({"error": f"Package listing returned item without _id: {items[0]}", "task_id": task_id})
+
+        # Obtain a pre-signed download URL via POST /v2.0/packages/{packageId}/downloadlink.
+        # The response contains {downloadLink: <uri>} — the zip must be fetched from that URI
+        # directly, not via the Cognigy API base path.
+        try:
+            link_resp = client.post(f"/v2.0/packages/{package_id}/downloadlink", {})
+        except Exception as e:
+            return _ok({"error": f"Failed to get download link for package {package_id}: {e}", "task_id": task_id})
+
+        download_link = link_resp.get("downloadLink")
+        if not download_link:
+            return _ok({"error": f"downloadlink response missing downloadLink field: {link_resp}", "task_id": task_id})
+
+        try:
+            zip_bytes = client.download_url(download_link)
+        except Exception as e:
+            return _ok({"error": f"Failed to download package zip from pre-signed URL: {e}", "task_id": task_id})
 
         # Write to disk, creating parent dirs as needed
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(zip_bytes)
         except OSError as e:
-            return _ok({"error": f"Failed to write zip to {output_path}: {e}", "job_id": job_id})
+            return _ok({"error": f"Failed to write zip to {output_path}: {e}", "task_id": task_id})
 
         return _ok({
             "success": True,
-            "job_id": job_id,
+            "task_id": task_id,
+            "package_id": package_id,
             "output_path": str(output_path),
             "bytes": len(zip_bytes),
         })

@@ -50,5 +50,6 @@ Snapshots capture project state server-side; for a portable offline zip use `exp
     project_id: "<projectId>",
     output_path: "Demo Builds/<customer>-demo/<customer>-package.zip"
   }
-The tool posts an async export job, polls until complete, and writes the zip locally.
-See the build-orchestrator skill §1.6 Step 5 for the canonical build-time usage pattern.
+The tool posts an async export job, polls a task endpoint until the task reaches a terminal
+status, resolves the resulting package ID, fetches a pre-signed download link, and writes the
+zip locally. Typical completion time is 10–60 seconds depending on project size.
