@@ -24,7 +24,7 @@ Before starting, navigate to `<plugin-root>` (two directories up from `skills/de
 
 ## Context Check
 
-Before asking any questions, look for:
+Before asking any questions, look for the following in `output_dir` if that argument was supplied, otherwise in the user's working directory:
 1. A demo plan (`*-demo-plan.md`) — read it for use cases, agent architecture, channels, integrations
 2. A persona doc (`*-agent-persona.md`) — read it for agent name, compliance framing, auth scope
 
