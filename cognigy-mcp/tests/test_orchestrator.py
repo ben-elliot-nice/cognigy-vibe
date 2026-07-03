@@ -1,6 +1,8 @@
+import inspect
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import pytest
 from pathlib import Path
@@ -189,4 +191,28 @@ def test_inner_server_stderr_appears_in_log(monkeypatch):
 
     assert any("inner-err: crash trace" in line for line in log_lines), (
         f"stderr not captured in log. Got: {log_lines}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Windows compatibility fixes
+# ---------------------------------------------------------------------------
+
+def test_log_file_is_in_system_tempdir():
+    """Log file must use tempfile.gettempdir(), not a hardcoded /tmp path."""
+    import cognigy_mcp.orchestrator as orch
+    log_path = Path(orch._LOG.name)
+    assert log_path.parent == Path(tempfile.gettempdir()), (
+        f"Expected log in {tempfile.gettempdir()!r}, got {log_path!r} — "
+        "use tempfile.gettempdir() instead of a hardcoded /tmp path"
+    )
+
+
+def test_orchestrator_run_does_not_use_select_on_stdin():
+    """run() must not call select.select() — it only accepts sockets on Windows."""
+    import cognigy_mcp.orchestrator as orch
+    source = inspect.getsource(orch._Orchestrator.run)
+    assert "select.select" not in source, (
+        "select.select() found in _Orchestrator.run — replace with a "
+        "threading.Event / queue.Queue approach that works on all platforms"
     )
