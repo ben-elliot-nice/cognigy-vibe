@@ -72,6 +72,23 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
     gh issue close <number> --comment "Resolved in PR #<pr-number>"
     ```
 
+## Hotfix Workflow
+
+For critical bugs in the current stable release (crash-on-start, data loss, security), bypass the normal dev cycle:
+
+1. Branch from `main`: `git checkout -b hotfix/<slug> main`
+2. Implement the fix with TDD (write failing test first)
+3. Bump the patch version in `pyproject.toml` and `plugin.json`
+4. PR targets `main` — this is intentional and correct
+5. After merge to `main`, cherry-pick or merge back to `dev`:
+   ```bash
+   git checkout dev
+   git merge main
+   git push
+   ```
+
+The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `main` because routing through `dev` delays the fix for all users on the current stable version.
+
 ## Documentation
 
 - **Runtime usage** (skills, MCP tools, hooks, code conventions) → document via the `cognigy:explain` skill and the MCP tool build structure (`runtime-reference/`). Do not duplicate this content in CLAUDE.md or docs/.
