@@ -24,7 +24,7 @@ Before starting, navigate to `<plugin-root>` (two directories up from `skills/de
 
 ## Context Check
 
-Before asking any questions, look for:
+Before asking any questions, look for the following in `output_dir` if that argument was supplied, otherwise in the user's working directory:
 1. A demo plan (`*-demo-plan.md`) — read it for use cases, agent architecture, channels, integrations
 2. A persona doc (`*-agent-persona.md`) — read it for agent name, compliance framing, auth scope
 
@@ -102,7 +102,7 @@ Present context schema in plain English (variable paths + descriptions) for conf
 
 ## Step 4: Write Output Documents
 
-After all three steps are confirmed, generate the following files. Write to the directory from which the user launched Claude Code — not the plugin root.
+After all three steps are confirmed, generate the following files. If an `output_dir` argument was supplied by the caller, write the files there. Otherwise write to the directory from which the user launched Claude Code — not the plugin root.
 
 ### File 1: `{CustomerName}-agent-architecture.md`
 
@@ -125,7 +125,7 @@ Sections:
 ## Notes
 
 - This skill produces design documents only — no Cognigy resources are created
-- Write output to the user's working directory, not the plugin directory
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - Tool descriptions from Step 1 should carry compliance rules at point-of-use (see `explain("agent-behavioral-rules")`)
 - For xApp, website triggers, and handover interface → `cognigy:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy:design-agent-contracts`

@@ -44,7 +44,7 @@ Collect all 12 required facts before proceeding to Phase 2.
 
 **For Fact #11 — Reusable Components:**
 
-If the user has a connected Cognigy project (`.env` present in the working directory), call the MCP tools to enumerate existing assets:
+Call `get_build_state` and check whether a project is bound (non-empty `project_id` in the state). If a project is bound, call the MCP tools to enumerate existing assets:
 
 ```
 cognigy_list(resource_type='flows')
@@ -53,7 +53,7 @@ cognigy_list(resource_type='aiagents')
 
 Present the results and ask: "Which of these are candidates for reuse in this demo?"
 
-If no `.env` is present, ask the user directly about reusable assets.
+If no project is bound, ask the user directly about reusable assets.
 
 Do not proceed to Phase 2 until all 12 facts are collected.
 
@@ -92,7 +92,7 @@ After all seven areas are agreed, ask explicitly:
 Generate the demo plan using `references/scope-demo-output-template.md` as the structure.
 
 **Filename:** `{CustomerName}-{DemoType}-demo-plan.md`
-**Location:** Write to the directory from which the user launched Claude Code — their working directory, not the plugin root. If the correct path is unclear, ask. Do NOT write files into the plugin directory.
+**Location:** If an `output_dir` argument was passed by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`), write the file there. Otherwise write to cwd — the directory from which the user launched Claude Code, not the plugin root. If the correct path is unclear, ask. Do NOT write files into the plugin directory.
 
 Populate every section. If something is unknown, state the assumption explicitly — never leave a section blank.
 

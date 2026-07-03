@@ -22,7 +22,7 @@ Before starting, navigate to `<plugin-root>` (two directories up from `skills/de
 
 ## Context Check
 
-Check whether a demo plan from `scope-demo` is available (e.g. a `*-demo-plan.md` file in the working directory). If so, read it and extract:
+Check whether a demo plan from `scope-demo` is available (e.g. a `*-demo-plan.md` file in `output_dir` if that argument was supplied, otherwise in the user's working directory). If so, read it and extract:
 - Customer name and brand
 - Primary channel(s) in scope
 - Regulatory/compliance constraints (Fact #12 from demo plan)
@@ -66,7 +66,7 @@ Confirm: "Happy with this persona? I'll lock it in."
 
 ## Step 2: Write Output
 
-Generate `{CustomerName}-agent-persona.md`. Write to the directory from which the user launched Claude Code — not the plugin root.
+Generate `{CustomerName}-agent-persona.md`. If an `output_dir` argument was supplied by the caller, write the file there. Otherwise write to the directory from which the user launched Claude Code — not the plugin root.
 
 ### Sections:
 
@@ -87,7 +87,7 @@ Generate `{CustomerName}-agent-persona.md`. Write to the directory from which th
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the user's working directory, not the plugin directory
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - For jobs, routing, and context schema → `cognigy:design-agent-jobs`
 - For xApp, bidirectional webchat, and handover context → `cognigy:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy:design-agent-contracts`

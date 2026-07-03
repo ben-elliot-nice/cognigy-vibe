@@ -48,7 +48,7 @@ Before starting, navigate to `<plugin-root>` (two directories up from `skills/de
 
 ## Context Check
 
-Look for in the working directory:
+Look for in `output_dir` if that argument was supplied, otherwise in the user's working directory:
 1. Demo plan (`*-demo-plan.md`) — for regulatory constraints (Fact #12) and scenario overview
 2. Architecture doc (`*-agent-architecture.md`) — for tool list and irreversible action flags
 
@@ -136,7 +136,7 @@ Present all guard designs for confirmation.
 
 ## Step 4: Write Output
 
-Generate `{CustomerName}-agent-contracts.md`. Write to the directory from which the user launched Claude Code — not the plugin root.
+Generate `{CustomerName}-agent-contracts.md`. If an `output_dir` argument was supplied by the caller, write the file there. Otherwise write to the directory from which the user launched Claude Code — not the plugin root.
 
 ### Sections:
 
@@ -165,7 +165,7 @@ How tool branches should call each guard (Execute Flow pattern), and where to pl
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the user's working directory, not the plugin directory
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - Guard sub-flows are reusable — one guard can be called from multiple tool branches
 - Obligations enforced here are separate from compliance language in tool descriptions — both are needed: tool descriptions inform the LLM's decision, guard sub-flows enforce the outcome
 - The LLM cannot bypass a guard — the tool branch structure is designer-controlled
