@@ -3,7 +3,9 @@ import struct
 import zlib
 import pytest
 from pathlib import Path
+from unittest.mock import patch, call
 from cognigy_mcp.tools.file_push import make_handlers, TOOLS
+from cognigy_mcp.api import ApiError
 
 
 def test_all_tools_exported():
@@ -511,4 +513,227 @@ def test_push_agent_avatar_truncated_png(mock_client, state, cache, tmp_path):
     data = json.loads(result[0].text)
     assert "error" in data
     mock_client.patch.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# export_package tests
+#
+# Corrected API flow:
+#   1. POST /v2.0/packages                            → Task {_id: task_id, status: "queued"}
+#   2. GET  /v2.0/tasks/{taskId}                      → Task {status: "done"|"error"|"cancelled"|...}
+#   3. GET  /v2.0/packages?projectId=...&sort=...     → {items: [{_id: package_id, ...}]}
+#   4. POST /v2.0/packages/{packageId}/downloadlink   → {downloadLink: "https://..."}
+#   5. client.download_url("https://...")             → zip bytes (pre-signed URL, not API path)
+# ---------------------------------------------------------------------------
+
+def _make_export_mocks(mock_client, task_id, task_status_seq, package_id, zip_bytes,
+                       task_error=None, fail_reason=None):
+    """Wire up mock_client for a standard export_package run.
+
+    task_status_seq: list of status strings returned by successive GET /v2.0/tasks calls.
+    """
+    mock_client.post.side_effect = [
+        # POST /v2.0/packages — returns Task
+        {"_id": task_id, "status": "queued"},
+        # POST /v2.0/packages/{packageId}/downloadlink — returns download link
+        {"downloadLink": "https://storage.example.com/packages/export.zip"},
+    ]
+    task_responses = []
+    for s in task_status_seq:
+        resp = {"_id": task_id, "status": s}
+        if s == "error" and fail_reason:
+            resp["failReason"] = fail_reason
+        task_responses.append(resp)
+    mock_client.get.side_effect = task_responses + [
+        # GET /v2.0/packages (list) — called once after task is done
+        {"items": [{"_id": package_id, "name": "export"}], "total": 1},
+    ]
+    mock_client.download_url.return_value = zip_bytes
+
+
+def test_export_package_exported():
+    names = [t.name for t in TOOLS]
+    assert "export_package" in names
+
+
+def test_export_package_happy_path_first_poll(mock_client, state, cache, tmp_path):
+    """Task is done on the first poll — writes zip and returns success."""
+    zip_bytes = b"PK\x03\x04fake-zip"
+    _make_export_mocks(mock_client, "task-1", ["done"], "pkg-1", zip_bytes)
+    out = tmp_path / "export.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-1",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["task_id"] == "task-1"
+    assert data["package_id"] == "pkg-1"
+    assert data["bytes"] == len(zip_bytes)
+    assert out.read_bytes() == zip_bytes
+    # Verify correct endpoint sequence
+    mock_client.post.assert_any_call("/v2.0/packages", {"projectId": "proj-1"})
+    mock_client.get.assert_any_call("/v2.0/tasks/task-1")
+    mock_client.post.assert_any_call("/v2.0/packages/pkg-1/downloadlink", {})
+    mock_client.download_url.assert_called_once_with(
+        "https://storage.example.com/packages/export.zip"
+    )
+
+
+def test_export_package_multi_poll(mock_client, state, cache, tmp_path):
+    """Task is queued/active on first two polls then done — handler waits correctly."""
+    zip_bytes = b"PK\x03\x04another-zip"
+    _make_export_mocks(mock_client, "task-2", ["queued", "active", "done"], "pkg-2", zip_bytes)
+    out = tmp_path / "out.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-2",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    # 3 task polls + 1 package list = 4 GET calls
+    assert mock_client.get.call_count == 4
+
+
+def test_export_package_task_failure(mock_client, state, cache, tmp_path):
+    """Task reports status='error' — handler returns error without downloading."""
+    mock_client.post.return_value = {"_id": "task-3", "status": "queued"}
+    mock_client.get.return_value = {"_id": "task-3", "status": "error", "failReason": "export failed"}
+    out = tmp_path / "nope.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-3",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "export failed" in data["error"]
+    mock_client.download_url.assert_not_called()
+    assert not out.exists()
+
+
+def test_export_package_task_cancelled(mock_client, state, cache, tmp_path):
+    """Task is cancelled — handler returns error immediately rather than timing out."""
+    mock_client.post.return_value = {"_id": "task-c", "status": "queued"}
+    mock_client.get.return_value = {"_id": "task-c", "status": "cancelled"}
+    out = tmp_path / "cancelled.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-c",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "cancelled" in data["error"]
+    mock_client.download_url.assert_not_called()
+    assert not out.exists()
+
+
+def test_export_package_task_cancelling(mock_client, state, cache, tmp_path):
+    """Task is in cancelling state — treated as terminal, not as transient."""
+    mock_client.post.return_value = {"_id": "task-cc", "status": "queued"}
+    mock_client.get.return_value = {"_id": "task-cc", "status": "cancelling"}
+    out = tmp_path / "cancelling.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-cc",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "cancelling" in data["error"]
+    mock_client.download_url.assert_not_called()
+
+
+def test_export_package_timeout(mock_client, state, cache, tmp_path):
+    """Task never completes — handler returns a timeout error."""
+    import cognigy_mcp.tools.file_push as fp_module
+    mock_client.post.return_value = {"_id": "task-4", "status": "queued"}
+    mock_client.get.return_value = {"_id": "task-4", "status": "active"}
+    out = tmp_path / "timeout.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"), \
+         patch.object(fp_module, "_EXPORT_TIMEOUT", 0.0):
+        result = handlers["export_package"]({
+            "project_id": "proj-4",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "timed out" in data["error"]
+    mock_client.download_url.assert_not_called()
+
+
+def test_export_package_post_api_error(mock_client, state, cache, tmp_path):
+    """POST /v2.0/packages fails — handler returns error immediately."""
+    mock_client.post.side_effect = Exception("network error")
+    out = tmp_path / "fail.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["export_package"]({
+        "project_id": "proj-5",
+        "output_path": str(out),
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "network error" in data["error"]
+    mock_client.get.assert_not_called()
+    mock_client.download_url.assert_not_called()
+
+
+def test_export_package_parent_dir_auto_created(mock_client, state, cache, tmp_path):
+    """output_path parent directories are created automatically."""
+    zip_bytes = b"PK\x03\x04zip-content"
+    _make_export_mocks(mock_client, "task-6", ["done"], "pkg-6", zip_bytes)
+    # Deep nested path that does not exist yet
+    out = tmp_path / "Demo Builds" / "acme-demo" / "acme-package.zip"
+    assert not out.parent.exists()
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        result = handlers["export_package"]({
+            "project_id": "proj-6",
+            "output_path": str(out),
+        })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert out.exists()
+    assert out.read_bytes() == zip_bytes
+
+
+def test_export_package_polls_task_endpoint_not_packages(mock_client, state, cache, tmp_path):
+    """Polling must use GET /v2.0/tasks/{taskId}, not GET /v2.0/packages/{taskId}."""
+    zip_bytes = b"PK\x03\x04zip"
+    _make_export_mocks(mock_client, "task-7", ["done"], "pkg-7", zip_bytes)
+    out = tmp_path / "poll-check.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        handlers["export_package"]({"project_id": "proj-7", "output_path": str(out)})
+    # All GET calls that are not the final package list must be to /v2.0/tasks/
+    task_get_calls = [c for c in mock_client.get.call_args_list
+                      if c[0][0].startswith("/v2.0/tasks/")]
+    assert len(task_get_calls) >= 1
+    # No GET call should target /v2.0/packages/<task-id>
+    pkg_poll_calls = [c for c in mock_client.get.call_args_list
+                      if "/v2.0/packages/task-" in c[0][0]]
+    assert len(pkg_poll_calls) == 0
+
+
+def test_export_package_download_uses_presigned_url(mock_client, state, cache, tmp_path):
+    """Download must use download_url() with the pre-signed URI, not a relative API path."""
+    zip_bytes = b"PK\x03\x04zip"
+    _make_export_mocks(mock_client, "task-8", ["done"], "pkg-8", zip_bytes)
+    out = tmp_path / "presigned-check.zip"
+    handlers = make_handlers(mock_client, state, cache)
+    with patch("cognigy_mcp.tools.file_push.time.sleep"):
+        handlers["export_package"]({"project_id": "proj-8", "output_path": str(out)})
+    # download_url must be called with an absolute URL
+    assert mock_client.download_url.call_count == 1
+    url_arg = mock_client.download_url.call_args[0][0]
+    assert url_arg.startswith("https://"), f"Expected absolute URL, got: {url_arg}"
 

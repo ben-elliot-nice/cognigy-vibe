@@ -109,3 +109,38 @@ def test_endpoint_base_url_raises_for_non_matching_url():
     c = CognigyClient(base_url="https://localhost:8080", api_key="key")
     with pytest.raises(ValueError, match="cognigy-api-"):
         _ = c.endpoint_base_url
+
+
+def test_download_url_success(client):
+    """download_url() returns raw bytes from a pre-signed absolute URL."""
+    zip_bytes = b"PK\x03\x04fake-zip-content"
+    presigned = "https://storage.example.com/packages/export.zip"
+    with respx.mock:
+        respx.get(presigned).mock(
+            return_value=httpx.Response(200, content=zip_bytes)
+        )
+        result = client.download_url(presigned)
+    assert result == zip_bytes
+
+
+def test_download_url_sends_accept_any(client):
+    """download_url() must override Accept to */* to avoid the default application/json header."""
+    presigned = "https://storage.example.com/packages/export.zip"
+    with respx.mock:
+        route = respx.get(presigned).mock(
+            return_value=httpx.Response(200, content=b"zip")
+        )
+        client.download_url(presigned)
+    assert route.calls[0].request.headers["Accept"] == "*/*"
+
+
+def test_download_url_error_raises_api_error(client):
+    """download_url() raises ApiError on HTTP 4xx/5xx."""
+    presigned = "https://storage.example.com/packages/missing.zip"
+    with respx.mock:
+        respx.get(presigned).mock(
+            return_value=httpx.Response(404, json={"error": "Not found"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.download_url(presigned)
+    assert exc.value.status_code == 404

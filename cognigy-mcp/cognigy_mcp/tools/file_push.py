@@ -3,11 +3,15 @@ import base64
 import difflib
 import json
 import struct
+import time
 from pathlib import Path
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+
+_EXPORT_POLL_INTERVAL = 3.0   # seconds between job-status polls
+_EXPORT_TIMEOUT = 300.0       # total seconds before giving up
 
 TOOLS: list[Tool] = [
     Tool(
@@ -82,6 +86,27 @@ TOOLS: list[Tool] = [
                 "agent_id": {"type": "string", "description": "Agent _id or referenceId"},
             },
             "required": ["image_file", "agent_id"],
+        },
+    ),
+    Tool(
+        name="export_package",
+        description=(
+            "Export a Cognigy project as a zip package and save it to a local file. "
+            "Initiates an async export job via POST /v2.0/packages, polls until the job "
+            "completes, then downloads the zip to the specified output path. "
+            "Parent directories are created automatically. "
+            "Typical output path: Demo Builds/<customer>-demo/<customer>-package.zip"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string", "description": "Cognigy project _id to export"},
+                "output_path": {
+                    "type": "string",
+                    "description": "Absolute or relative path where the zip file will be written",
+                },
+            },
+            "required": ["project_id", "output_path"],
         },
     ),
 ]
@@ -285,9 +310,109 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         return _ok({"success": True, "agent_id": agent_id, "bytes": len(data)})
 
+    def _export_package(args: dict) -> list[TextContent]:
+        project_id = args["project_id"]
+        output_path = Path(args["output_path"])
+
+        # Kick off the async export job — returns a Task object, not a Package.
+        # The _id in the response is the task ID, not the package ID.
+        try:
+            job = client.post("/v2.0/packages", {"projectId": project_id})
+        except Exception as e:
+            return _ok({"error": f"Failed to start export job: {e}"})
+
+        task_id = job.get("_id")
+        if not task_id:
+            return _ok({"error": f"Export job response missing _id: {job}"})
+
+        # Poll GET /v2.0/tasks/{taskId} until the task reaches a terminal status.
+        # Terminal statuses: done, error, cancelled, cancelling.
+        # (GET /v2.0/packages/{id} returns a Package object with no status field —
+        # it cannot be used for polling.)
+        deadline = time.monotonic() + _EXPORT_TIMEOUT
+        while True:
+            if time.monotonic() > deadline:
+                return _ok({
+                    "error": f"Export task {task_id} timed out after {_EXPORT_TIMEOUT:.0f}s",
+                    "task_id": task_id,
+                })
+            time.sleep(_EXPORT_POLL_INTERVAL)
+            try:
+                task = client.get(f"/v2.0/tasks/{task_id}")
+            except Exception as e:
+                return _ok({"error": f"Failed to poll export task {task_id}: {e}", "task_id": task_id})
+
+            task_status = task.get("status", "")
+            if task_status == "error":
+                return _ok({
+                    "error": f"Export task failed: {task.get('failReason', 'unknown error')}",
+                    "task_id": task_id,
+                })
+            if task_status in ("cancelled", "cancelling"):
+                return _ok({
+                    "error": f"Export task was cancelled (status: {task_status})",
+                    "task_id": task_id,
+                })
+            if task_status == "done":
+                break
+            # queued or active — keep polling
+
+        # Resolve the package ID: the task _id is not the package _id.
+        # List packages for this project sorted by creation time descending and
+        # take the first result — that is the package the completed task just created.
+        try:
+            packages = client.get(
+                "/v2.0/packages",
+                projectId=project_id,
+                sort="createdAt:desc",
+                limit=1,
+            )
+        except Exception as e:
+            return _ok({"error": f"Failed to list packages after export: {e}", "task_id": task_id})
+
+        items = packages.get("items", [])
+        if not items:
+            return _ok({"error": "No packages found for project after export completed", "task_id": task_id})
+        package_id = items[0].get("_id")
+        if not package_id:
+            return _ok({"error": f"Package listing returned item without _id: {items[0]}", "task_id": task_id})
+
+        # Obtain a pre-signed download URL via POST /v2.0/packages/{packageId}/downloadlink.
+        # The response contains {downloadLink: <uri>} — the zip must be fetched from that URI
+        # directly, not via the Cognigy API base path.
+        try:
+            link_resp = client.post(f"/v2.0/packages/{package_id}/downloadlink", {})
+        except Exception as e:
+            return _ok({"error": f"Failed to get download link for package {package_id}: {e}", "task_id": task_id})
+
+        download_link = link_resp.get("downloadLink")
+        if not download_link:
+            return _ok({"error": f"downloadlink response missing downloadLink field: {link_resp}", "task_id": task_id})
+
+        try:
+            zip_bytes = client.download_url(download_link)
+        except Exception as e:
+            return _ok({"error": f"Failed to download package zip from pre-signed URL: {e}", "task_id": task_id})
+
+        # Write to disk, creating parent dirs as needed
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(zip_bytes)
+        except OSError as e:
+            return _ok({"error": f"Failed to write zip to {output_path}: {e}", "task_id": task_id})
+
+        return _ok({
+            "success": True,
+            "task_id": task_id,
+            "package_id": package_id,
+            "output_path": str(output_path),
+            "bytes": len(zip_bytes),
+        })
+
     return {
         "push_code_node": _push_code_node,
         "push_html_node": _push_html_node,
         "push_agent_tool": _push_agent_tool,
         "push_agent_avatar": _push_agent_avatar,
+        "export_package": _export_package,
     }
