@@ -182,9 +182,8 @@ class _Orchestrator:
         stdin_q: queue.Queue[bytes] = queue.Queue()
 
         def _stdin_reader() -> None:
-            buf = sys.stdin.buffer
             while True:
-                chunk = buf.read1(65536) if hasattr(buf, "read1") else buf.read(65536)
+                chunk = sys.stdin.buffer.read1(65536)
                 if not chunk:
                     stdin_q.put(b"")
                     return
@@ -194,13 +193,14 @@ class _Orchestrator:
 
         buf = b""
         while True:
+            if self._wake_evt.is_set():
+                self._wake_evt.clear()
+                _log("wakeup received — restarting")
+                self._do_restart()
+
             try:
                 chunk = stdin_q.get(timeout=0.1)
             except queue.Empty:
-                if self._wake_evt.is_set():
-                    self._wake_evt.clear()
-                    _log("wakeup received — restarting")
-                    self._do_restart()
                 continue
 
             if not chunk:
