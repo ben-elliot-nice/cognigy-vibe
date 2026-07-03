@@ -9,7 +9,7 @@ description: Orchestrate the full Cognigy AI agent design workflow — runs desi
 
 Use this skill when you want to run the full agent design workflow in one session, or when you want to pick and choose which design stages to run.
 
-Requires a demo plan from `cognigy:scope-demo` in the working directory before starting.
+Requires a demo plan from `cognigy:scope-demo`. If an `output_dir` argument was supplied (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`), the demo plan is in that directory. Otherwise look in the user's working directory.
 
 ## Design Skills
 
@@ -26,7 +26,7 @@ The workflow is composed of four skills, each independently callable:
 
 ## Context Check
 
-Look for a demo plan (`*-demo-plan.md`) in the working directory. If none exists, stop and ask the user to run `cognigy:scope-demo` first.
+Look for a demo plan (`*-demo-plan.md`) in `output_dir` if that argument was supplied; otherwise look in the user's working directory. If none exists, stop and ask the user to run `cognigy:scope-demo` first.
 
 ---
 
@@ -52,13 +52,13 @@ Run the four skills in sequence. After each skill completes and the user confirm
 
 Invoke `cognigy:design-agent-persona`. When complete and output confirmed, proceed.
 
-**Context pass to Stage 2:** The generated `{Customer}-agent-persona.md` is available in the working directory — design-agent-jobs will read it automatically.
+**Context pass to Stage 2:** The generated `{Customer}-agent-persona.md` is in `output_dir` (or cwd if no `output_dir` was supplied) — pass the same `output_dir` to design-agent-jobs so it reads from the right location.
 
 ### Stage 2: Jobs
 
 Invoke `cognigy:design-agent-jobs`. When complete and output confirmed, proceed.
 
-**Context pass to Stage 3:** The generated architecture and context schema docs are available — design-agent-interfaces and design-agent-contracts will read them.
+**Context pass to Stage 3:** The generated architecture and context schema docs are in `output_dir` (or cwd) — pass the same `output_dir` to design-agent-interfaces and design-agent-contracts so they read from the right location.
 
 ### Stage 3: Interfaces
 
@@ -80,7 +80,7 @@ Ask which stages the user wants. Run only those, in the natural order (persona b
 
 ## Completion
 
-When all selected stages are complete, summarise the output files produced and confirm they're all in the working directory:
+When all selected stages are complete, summarise the output files produced and confirm they're all in `output_dir` (or the user's working directory if no `output_dir` was supplied):
 
 ```
 Design complete. Files produced:

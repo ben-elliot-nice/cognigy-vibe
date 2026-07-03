@@ -22,7 +22,7 @@ Before starting, navigate to `<plugin-root>` (two directories up from `skills/de
 
 ## Context Check
 
-Look for a demo plan (`*-demo-plan.md`) in the working directory. Read it for:
+Look for a demo plan (`*-demo-plan.md`) in `output_dir` if that argument was supplied, otherwise in the user's working directory. Read it for:
 - Channel(s) in scope (voice, webchat, WhatsApp)
 - Out-of-chat moments noted in Phase 3 area 5
 - xApp in scope flag from Technical Requirements
@@ -88,7 +88,7 @@ Reference `explain("agent-handover")` for the implementation template.
 
 ## Step 5: Write Output
 
-Generate `{CustomerName}-agent-interfaces.md`. Write to the directory from which the user launched Claude Code — not the plugin root.
+Generate `{CustomerName}-agent-interfaces.md`. If an `output_dir` argument was supplied by the caller, write the file there. Otherwise write to the directory from which the user launched Claude Code — not the plugin root.
 
 ### Sections:
 

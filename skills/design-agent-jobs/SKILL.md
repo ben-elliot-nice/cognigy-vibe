@@ -102,7 +102,7 @@ Present context schema in plain English (variable paths + descriptions) for conf
 
 ## Step 4: Write Output Documents
 
-After all three steps are confirmed, generate the following files. Write to the directory from which the user launched Claude Code — not the plugin root.
+After all three steps are confirmed, generate the following files. If an `output_dir` argument was supplied by the caller, write the files there. Otherwise write to the directory from which the user launched Claude Code — not the plugin root.
 
 ### File 1: `{CustomerName}-agent-architecture.md`
 

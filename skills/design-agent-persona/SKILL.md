@@ -22,7 +22,7 @@ Before starting, navigate to `<plugin-root>` (two directories up from `skills/de
 
 ## Context Check
 
-Check whether a demo plan from `scope-demo` is available (e.g. a `*-demo-plan.md` file in the working directory). If so, read it and extract:
+Check whether a demo plan from `scope-demo` is available (e.g. a `*-demo-plan.md` file in `output_dir` if that argument was supplied, otherwise in the user's working directory). If so, read it and extract:
 - Customer name and brand
 - Primary channel(s) in scope
 - Regulatory/compliance constraints (Fact #12 from demo plan)
@@ -66,7 +66,7 @@ Confirm: "Happy with this persona? I'll lock it in."
 
 ## Step 2: Write Output
 
-Generate `{CustomerName}-agent-persona.md`. Write to the directory from which the user launched Claude Code — not the plugin root.
+Generate `{CustomerName}-agent-persona.md`. If an `output_dir` argument was supplied by the caller, write the file there. Otherwise write to the directory from which the user launched Claude Code — not the plugin root.
 
 ### Sections:
 
