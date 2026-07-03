@@ -5,7 +5,7 @@
 This plugin gives Claude Code structured access to the Cognigy API for building AI agent demos. It is built in two layers: a Python MCP server and a set of composite skills.
 
 ```
-Composite skills       add-aiagent-job, design-agent-*, scope-demo
+Composite skills       add-aiagent-job, design-agent-*, init-cognigy-vibe, scope-demo
       ↓ call MCP tools
 cognigy-vibe MCP       cognigy_create, cognigy_update, get_flow_chart, push_code_node, explain ...
       ↓ calls
@@ -87,7 +87,7 @@ Per-project state lives in `~/.config/cognigy-mcp/<project-id>/`:
     └── ...
 ```
 
-State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls.
+State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls. The `~/.config/cognigy-mcp/<project-id>/` directory is auto-created by the MCP server on first use of any stateful tool for that project.
 
 ### Reference docs (runtime guidance)
 

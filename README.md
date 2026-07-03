@@ -23,7 +23,7 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
    claude plugin install cognigy@nice
    ```
 2. Run `cognigy:init-cognigy-vibe` to capture your Cognigy credentials and build defaults (one-time per workstation).
-3. Ask: *"Build me a Cognigy demo for \<customer\>."* — no restart required.
+3. Ask: *"Build me a Cognigy demo for \<customer\>."* — no restart required after `.env` is in place.
 
 ### Clone + local dev
 

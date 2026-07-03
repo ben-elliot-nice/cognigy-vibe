@@ -84,7 +84,7 @@ Do not present a pre-selected default. Do not ask the user to type or paste a UU
 ### 6. Confirm + next step
 
 Report:
-- `.env` written to: `<cwd>/.env` (project-local — credentials for this Cognigy project only)
+- `.env` written to: `<cwd>/.env` (workspace-local — covers all Demo Builds projects in this workspace)
 - Config written to: `~/.config/cognigy-vibe/config.json` (global — applies to all future projects on this tenant)
 - Non-secret summary table of the written config values
 - Cloud-sync note: if cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` is synced — treat that as publishing the API key. Move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed.
