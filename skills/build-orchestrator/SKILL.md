@@ -406,8 +406,8 @@ update_ai_agent {
     jobDescription: "<## Job Description block (2A) from {Customer}-agent-persona.md>",
     jobInstructions: "<## Job Instructions block (2B) — INCLUDING the S2.5 empathy library verbatim>",
     llmProviderReferenceId: "<buildConfig.llm.selected.referenceId — confirmed available in this project by Step 2>",
-    temperature: 0.2,        // voice/transactional default; 0.5 only if Q10 channel mix is primarily conversational chat (webchat/WhatsApp) — see buildConfig
-    maxTokens: 400
+    temperature: "<buildConfig.llm.temperatureVoice>",   // voice/transactional default; use buildConfig.llm.temperatureChat for primarily conversational chat channels (webchat/WhatsApp)
+    maxTokens: "<buildConfig.llm.maxTokens>"
   }
 }
 ```
@@ -445,7 +445,7 @@ cognigy_update {
   merge_config: true,
   body: { config: {
     memoryContextInjection: "<from {Customer}-context-schema.md, industry-shaped per S3, with {{context.customer.*}} placeholders>",
-    toolChoice: "auto"
+    toolChoice: "<buildConfig.llm.toolChoice>"
   }}
 }
 ```
@@ -797,6 +797,7 @@ cognigy_create {
       sttLanguage: "<from buildConfig.stt.language>",
       sttLabel: "<from buildConfig.stt.label>",
       sttHints: ["<Customer brand name>", "<Persona name>", "<domain term 1>", "<domain term 2>", "<domain term 3>"],
+      locale: "<buildConfig.locale>",
       bargeInMinWordCount: 2,
       bargeInOnSpeech: false,
       bargeInOnDtmf: false,
@@ -846,8 +847,7 @@ cognigy_create {
       preventTranscript: false,
       generativeAI_rephraseOutputMode: "none",
       generativeAI_amountOfLastUserInputs: 5,
-      generativeAI_customInputs: [],
-      generativeAI_temperature: 0.7
+      generativeAI_customInputs: []
     }
   }
 }
@@ -974,7 +974,7 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
    | 3 | The `once` node's `next` resolves to a node of type `aiAgentJob` | S1.5(a) target — Once likely appended after the wrong node |
    | 4 | `onFirstExecution.next` chain = `code` (label contains "Initialize Session") → `setSessionConfig` → `say` (label contains "Welcome") — exact order, no extras, no gaps | S1.5(b)–(d) — re-create the missing node(s) |
    | 5 | The Initialize Session `code` node has non-empty `config.code` AND its body assigns `context.customer` and `context.call` per S3 CRM template | S1.5(b) + `push_code_node` of the canonical CRM template |
-   | 6 | `setSessionConfig.config` has `ttsVendor`, `ttsVoice`, `sttVendor`, `sttLanguage` matching `buildConfig.tts.*` and `buildConfig.stt.*` | S1.5(c) — patch the node's config |
+   | 6 | `setSessionConfig.config` has `ttsVendor`, `ttsVoice`, `sttVendor`, `sttLanguage` matching `buildConfig.tts.*` and `buildConfig.stt.*`; AND `locale` is set and matches `buildConfig.locale` | S1.5(c) — patch the node's config |
    | 7 | `setSessionConfig.config.sttHints` is a non-empty array containing the customer brand name AND the persona name AND ≥3 domain terms derived from the agent's tools | S1.5(c) — populate sttHints |
    | 8 | Say Welcome `config.say.text` is an array of ≥2 variants, each containing `{{context.customer.firstName}}` | S1.5(d) — re-write the say config |
    | 9 | For every `aiAgentJobTool` child of the `aiAgentJob`, a well-formed branch exists per S1.4 (Shape B for transactional, reversed for transfers, end-call shape for end_call/end_call_resolved); AND every `aiAgentToolAnswer` node in the branch has a non-empty `config.answer` field (use `cognigy_get` on the node to confirm — an empty string or missing field means the Resolve node was created with bare `config: {}` and the LLM will see nothing back) | S1.4 / S6 — re-run the tool-branch build; re-create any unpopulated `aiAgentToolAnswer` nodes with `config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 }` |
