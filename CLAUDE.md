@@ -65,6 +65,23 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 11. **Report to user** — final CI status (`success` / `failure`), PR URL, and any actions taken (rebases, force-pushes, re-runs).
 
+## Hotfix Workflow
+
+For critical bugs in the current stable release (crash-on-start, data loss, security), bypass the normal dev cycle:
+
+1. Branch from `main`: `git checkout -b hotfix/<slug> main`
+2. Implement the fix with TDD (write failing test first)
+3. Bump the patch version in `pyproject.toml` and `plugin.json`
+4. PR targets `main` — this is intentional and correct
+5. After merge to `main`, cherry-pick the fix commit(s) back to `dev` — **do not** `git merge main`, as that pulls in the version bump and CI will reject it:
+   ```bash
+   git checkout dev
+   git cherry-pick <hotfix-commit-sha>
+   git push
+   ```
+
+The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `main` because routing through `dev` delays the fix for all users on the current stable version.
+
 ## Rules
 
 - **Composite skills call atomic skills** (`cognigy:get`, `cognigy:create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.

@@ -3,15 +3,21 @@ from __future__ import annotations
 
 import json
 import os
-import select
+import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-_LOG = open("/tmp/cognigy-mcp.log", "a", buffering=1)
+_LOG = open(os.path.join(tempfile.gettempdir(), "cognigy-mcp.log"), "a", buffering=1)
+
+# Sentinel enqueued by _monitor_child when the inner server exits with rc=42.
+# Routing through the same queue as stdin bytes makes restart delivery FIFO,
+# eliminates the threading.Event TOCTOU race, and removes the 100ms poll timeout.
+_RESTART = object()
 
 
 def _log(msg: str) -> None:
@@ -51,7 +57,7 @@ class _Orchestrator:
         self._init_params: dict | None = None
         self._mode: str = "unknown"
         self._pending_call: bytes | None = None
-        self._wake_w: int = -1
+        self._stdin_q: queue.Queue = queue.Queue()
         self._write_lock = threading.Lock()
 
     def _spawn(self) -> subprocess.Popen:
@@ -139,8 +145,8 @@ class _Orchestrator:
             _log(f"child pid={c.pid} exited rc={c.returncode}")
             if c.returncode == 42:
                 sys.stderr.write("[orchestrator] inner server requested restart\n")
-                _log("writing wakeup byte")
-                os.write(self._wake_w, b"\x00")
+                _log("enqueuing _RESTART sentinel")
+                self._stdin_q.put(_RESTART)
 
         threading.Thread(target=_watch, args=(child,), daemon=True).start()
 
@@ -171,31 +177,52 @@ class _Orchestrator:
         _log("do_restart: complete")
         sys.stderr.write("[orchestrator] restart complete\n")
 
+    def _write_to_child(self, raw_line: bytes, msg: object) -> None:
+        child = self._child
+        try:
+            child.stdin.write(raw_line)
+            child.stdin.flush()
+        except BrokenPipeError:
+            _log("BrokenPipeError writing to child")
+            rid = msg.get("id") if isinstance(msg, dict) else None
+            if rid is not None:
+                err = json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": rid,
+                    "error": {"code": -32603, "message": "Server restarting, please retry"},
+                })
+                with self._write_lock:
+                    sys.stdout.buffer.write((err + "\n").encode())
+                    sys.stdout.buffer.flush()
+
     def run(self) -> None:
         self._child = self._spawn()
         self._start_reader(self._child)
         self._monitor_child(self._child)
 
-        # Wakeup pipe: monitor thread writes a byte here when rc=42 fires,
-        # unblocking select() without waiting for the next stdin message.
-        wake_r, wake_w = os.pipe()
-        self._wake_w = wake_w
+        # stdin is read on a dedicated thread so we never call select() on a pipe fd,
+        # which is unsupported on Windows. Restart signals arrive as _RESTART sentinels
+        # in the same queue, so get() blocks indefinitely — no polling required.
+        def _stdin_reader() -> None:
+            while True:
+                chunk = sys.stdin.buffer.read1(65536)
+                if not chunk:
+                    self._stdin_q.put(b"")
+                    return
+                self._stdin_q.put(chunk)
 
-        stdin_fd = sys.stdin.fileno()
+        threading.Thread(target=_stdin_reader, daemon=True).start()
 
         buf = b""
         while True:
-            ready, _, _ = select.select([stdin_fd, wake_r], [], [])
+            item = self._stdin_q.get()
 
-            if wake_r in ready:
-                os.read(wake_r, 1)  # drain
+            if item is _RESTART:
                 _log("wakeup received — restarting")
                 self._do_restart()
-
-            if stdin_fd not in ready:
                 continue
 
-            chunk = os.read(stdin_fd, 65536)
+            chunk = item
             if not chunk:
                 break
             buf += chunk
@@ -231,12 +258,7 @@ class _Orchestrator:
                             sys.stdout.buffer.flush()
                     continue
 
-                child = self._child
-                try:
-                    child.stdin.write(raw_line)
-                    child.stdin.flush()
-                except BrokenPipeError:
-                    _log("BrokenPipeError writing to child — restart pending")
+                self._write_to_child(raw_line, msg)
 
 
 def main() -> None:
