@@ -87,7 +87,7 @@ Generate `{CustomerName}-agent-persona.md`. Write to the directory from which th
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the user's working directory, not the plugin directory
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - For jobs, routing, and context schema → `cognigy:design-agent-jobs`
 - For xApp, bidirectional webchat, and handover context → `cognigy:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy:design-agent-contracts`

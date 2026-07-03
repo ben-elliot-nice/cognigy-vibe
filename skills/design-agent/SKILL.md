@@ -96,6 +96,6 @@ Design complete. Files produced:
 ## Notes
 
 - This skill does not create or modify any Cognigy resources
-- Output files are written to the user's working directory, not the plugin directory
+- Output files are written to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise written to the user's working directory. Pass `output_dir` through to each sub-skill invocation. Never write into the plugin directory.
 - Each sub-skill can also be invoked directly without going through this orchestrator
 - To build after designing → use `cognigy:add-aiagent-job` (creates nodes via MCP tools)

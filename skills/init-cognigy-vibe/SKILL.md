@@ -93,7 +93,7 @@ Then: *"You're set up. Open a new project directory, say 'build a demo for Liber
 
 ## Notes
 
-- See explain("session-workspace") for the directory model. One .env at workspace root serves all builds in a session.
+- See explain("session-workspace") for the directory model. One `.env` at workspace root serves all builds in a session. If you need to work against a completely separate tenant, open a different workspace directory and run this wizard there — see "Cross-workspace and different-tenant sessions" in that topic.
 - The global `config.json` at `~/.config/cognigy-vibe/config.json` applies to all projects on the same tenant. Drop a `default-demo-config.json` into any project directory to override for that project only — must be a complete file (no field merging).
 - The live **LLM gate** (`build-orchestrator` S1.1 Step 2) still verifies the chosen generation LLM exists in the target project before generation is relied on.
 - Voice provisioning details depend on `manage_voice_gateway` capabilities — see the plugin issues filed alongside this skill.

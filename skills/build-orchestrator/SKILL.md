@@ -215,15 +215,15 @@ e.g. "AMP sounds warmer and more human than Colonial First State (institutional)
 
 The build skill keeps the interview UX. Scoping the demo — the 12 facts + design conversation — is delegated to the purpose-built sub-skill.
 
-**Output directory:** ensure the demo folder exists before invoking `cognigy:scope-demo`, so its Phase 4 output lands in the right place (the sub-skill's Phase 4 rule is "write to the directory from which the user launched Claude Code", i.e. cwd at invocation time). Create it with:
+**Output directory:** create the demo folder before invoking `cognigy:scope-demo`, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default, which is always the session workspace root):
 
 ```bash
 mkdir -p "Demo Builds/<customer>-demo"
 ```
 
-On a fresh build the folder won't exist yet — `mkdir -p` is a no-op if it does, so this is safe on re-runs too.
+Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
 
-> **Note:** Claude's cwd remains the session workspace root throughout — it does not permanently change to the demo dir. See `explain("session-workspace")` for the directory model.
+> **Note:** Claude's cwd remains the session workspace root throughout — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
 
 **Invoke in context-provided mode.** Pass the interview answers verbatim so Phase 1 has nothing to ask about. Mapping (interview Q → scope-demo Fact):
 
@@ -259,7 +259,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo folder, invoke the design orchestrator.
 
-**Output directory:** `Demo Builds/<customer>-demo/`. The design sub-skills write output files here. Claude's cwd remains the session workspace root — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
+**Output directory:** `Demo Builds/<customer>-demo/`. Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. Claude's cwd remains the session workspace root throughout. See `explain("session-workspace")` for the directory model.
 
 **Invoke in Mode A (full workflow).** Persona → Jobs → Interfaces → Contracts. The orchestrator runs each in sequence; each reads the prior outputs from disk.
 

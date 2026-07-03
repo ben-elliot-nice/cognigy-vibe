@@ -125,7 +125,7 @@ Sections:
 ## Notes
 
 - This skill produces design documents only — no Cognigy resources are created
-- Write output to the user's working directory, not the plugin directory
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - Tool descriptions from Step 1 should carry compliance rules at point-of-use (see `explain("agent-behavioral-rules")`)
 - For xApp, website triggers, and handover interface → `cognigy:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy:design-agent-contracts`

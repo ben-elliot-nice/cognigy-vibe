@@ -64,18 +64,11 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 
 ### 2. Cascade discovery order
 
-Handled by `server.py` at startup. **First file found wins — no field merging between layers.**
+See `explain("session-workspace")` — "Config cascade" section — for the authoritative cascade definition (four steps, walk semantics, no field merging). The key points relevant to config file authoring:
 
-1. `<cwd>/default-demo-config.json`
-2. Walk up from `cwd` toward `$HOME`, checking each directory — first match wins
-3. `~/.config/cognigy-vibe/config.json`
-4. Nothing found → `config_loaded: false`; server runs normally; skills fall back to hardcoded defaults
-
-**Boundaries and semantics:**
-- Walk stops at `$HOME`. Never traverses above it.
-- Loaded **once** at server startup. A config change requires a session restart — there is no hot-reload.
-- A project-level file must be **complete** if it exists. There is no field-level merging. Partial files are not supported.
 - The path of the winning file is reported as `config_source` in `get_build_state`.
+- A project-level file must be **complete** if it exists. There is no field-level merging. Partial files are not supported.
+- Loaded **once** at server startup. A config change requires a session restart — there is no hot-reload.
 
 **Writing:** `cognigy:init-cognigy-vibe` always writes `.env` to `cwd` — this is the session workspace root, not a per-build demo directory. `.env` is workspace-level and shared across all `Demo Builds/` in this session (see `explain("session-workspace")`). On first-time setup it writes the non-secret config to `~/.config/cognigy-vibe/config.json` (global). For a workspace-level override, write a complete `default-demo-config.json` to `cwd` — it will win over the global config on next session start.
 
