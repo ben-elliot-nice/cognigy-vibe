@@ -14,12 +14,9 @@ uvx cognigy-vibe-mcp==1.7.0rc1                          # specific RC (check PyP
 
 ## Quick start
 
-In your demo project directory, run the `cognigy:init-mcp` skill in Claude Code. It will:
+Run `cognigy:init-cognigy-vibe` in Claude Code to capture your Cognigy credentials and build defaults. It writes `.env` at your workspace root and `~/.config/cognigy-vibe/config.json` globally. No restart required.
 
-1. Create `~/.config/cognigy-mcp/<project-id>/` for state and cache
-2. Write the MCP server entry to `.mcp.json`
-
-Restart Claude Code. If credentials aren't configured yet, the server starts in degraded mode — all tools are visible but every call returns setup guidance until you create a `.env`. Once the file exists, retry the same tool call and it executes immediately without restarting.
+If credentials aren't configured yet, the server starts in degraded mode — all tools are visible but every call returns setup guidance until you create a `.env`. Once the file exists, retry the same tool call and it executes immediately without restarting.
 
 Once connected, call `sync_remote_state` to populate state from your Cognigy project.
 

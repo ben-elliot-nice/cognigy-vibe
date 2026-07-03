@@ -5,7 +5,7 @@ description: End-to-end Cognigy AI Agent demo builder — the orchestrator that 
 
 # Build Orchestrator — end-to-end Cognigy AI Agent demo builder
 
-> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`, `cognigy:init-mcp`. The orchestrator delegates to these by name; it does not vendor their content.
+> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`. The orchestrator delegates to these by name; it does not vendor their content.
 >
 > **`cognigy-vibe-mcp` install.** `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after) — always run the latest. This skill relies on: file-backed tool authoring via `push_agent_tool` (canonical S1.3/S6 path), `push_code_node` CREATE mode (single-call create+position+push — S1.5(b), S6), IF/Once branch-marker insertion (S1.4b — `explain("node-positioning")`), the say-node string-array + `generativeAI_customInputs: []` shape (S1.5(d) — `explain("say-node")`), the xApp inbound event path (S1.4b / S1.7 — `explain("xapp-event-handling")`), in-session project binding via `sync_remote_state` (S1.1.5), and the `explain()` topics referenced throughout (`project-snapshots`, `voice-silence-timeout`, `output-formats`, `knowledge-store`, `llm-resources`).
 This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Agent demo from scratch. It produces a complete build adhering to the patterns documented in this skill body — full init chain, voice config, Shape-B tool branches with the plugin-canonical `aiAgentToolAnswer` terminal, transfer + end-call patterns, deterministic mocks, conditional-push xApp HTML, as-built docs generated from the live flow chart, drift baseline, package zip backup — for any industry, with the CRM shape adapting to the domain.
@@ -416,7 +416,7 @@ The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Ste
 
 > **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
 
-### 1.1.5 — Wire up cognigy-vibe MCP for this project (delegate to `cognigy:init-mcp`)
+### 1.1.5 — Bind cognigy-vibe to the new project (in-session, no restart)
 
 All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 3:
 
