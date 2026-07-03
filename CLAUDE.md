@@ -73,10 +73,10 @@ For critical bugs in the current stable release (crash-on-start, data loss, secu
 2. Implement the fix with TDD (write failing test first)
 3. Bump the patch version in `pyproject.toml` and `plugin.json`
 4. PR targets `main` — this is intentional and correct
-5. After merge to `main`, cherry-pick or merge back to `dev`:
+5. After merge to `main`, cherry-pick the fix commit(s) back to `dev` — **do not** `git merge main`, as that pulls in the version bump and CI will reject it:
    ```bash
    git checkout dev
-   git merge main
+   git cherry-pick <hotfix-commit-sha>
    git push
    ```
 
