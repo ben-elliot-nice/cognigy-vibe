@@ -83,13 +83,13 @@ Pass: `✅ P3  Demo URL active (webRTC widget enabled)`
 Warn: `⚠️  P3  Demo URL not active — webrtcWidgetConfig.active is false or urlToken is empty`
 → Enable the webRTC widget in the Cognigy UI: Endpoints → [endpoint name] → webRTC Widget → set Active to on. Re-run this checklist to confirm the `urlToken` is then present.
 
-### P4 — Agent description ≤ 1000 chars · FAIL if over
+### P4 — Agent description and instructions ≤ 1000 chars each · FAIL if over
 
-**Check:** `agent.description.length <= 1000`.
+**Check:** Both `agent.description.length <= 1000` AND `agent.instructions.length <= 1000`.
 
-Pass: `✅ P4  Agent description within 1000-char cap ([N] chars)`
-Fail: `❌ P4  Agent description over 1000-char cap ([N] chars)`
-→ Condense the `## Persona` block in the agent description. The cap is a hard platform limit — over-length silently fails on save. See build-orchestrator S1.1 pre-flight gate.
+Pass: `✅ P4  Agent description ([N] chars) and instructions ([N] chars) within 1000-char cap`
+Fail: `❌ P4  Agent field(s) over 1000-char cap: [list: description ([N] chars) / instructions ([N] chars)]`
+→ Condense the over-length field(s): `## Persona` block for description (1A), `## Special Instructions` block for instructions (1B). The cap is a hard platform limit — over-length silently fails on save. See build-orchestrator S1.1 pre-flight gate.
 
 ---
 
@@ -107,7 +107,7 @@ Fail: `❌ F1  No Once node found near start of flow`
 
 ### F2 — Set Session Config present · FAIL if missing
 
-**Check:** The `once` node's `onFirstExecution` branch contains a node of type `setSessionConfig`.
+**Check:** The `once` node's `onFirstExecution` branch contains, anywhere in its `next` chain, a node of type `setSessionConfig`.
 
 Pass: `✅ F2  Set Session Config present in OnFirstExecution branch`
 Fail: `❌ F2  No Set Session Config node found in OnFirstExecution branch`
@@ -154,7 +154,7 @@ Warn: `⚠️  F6  Say Welcome missing firstName interpolation`
 
 ### F7 — End-call pair present · FAIL if neither; WARN if only one
 
-**Check:** Scan all `aiAgentJobTool` children of the `aiAgentJob` node for tool branches named `end_call` and `end_call_resolved`. Each valid branch must contain a `hangup` node before the `aiAgentToolAnswer`.
+**Check:** Scan all `aiAgentJobTool` children of the `aiAgentJob` node for tool branches where `config.toolId` is `end_call` and `end_call_resolved` respectively. Each valid branch must contain a `hangup` node before the `aiAgentToolAnswer`.
 
 - Both `end_call` and `end_call_resolved` present with Hangup → PASS
 - Only one present with Hangup → WARN
@@ -174,15 +174,16 @@ Pass: `✅ F8  All tool answer nodes populated`
 Fail: `❌ F8  [N] aiAgentToolAnswer node(s) have empty config.answer: [list node IDs or labels]`
 → Open each flagged node in the Cognigy Flow Editor and set the Answer field to `{{JSON.stringify(context.toolResponse)}}` with Max Loops set to `4`. Or call `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <nodeId>, merge_config: true, body: { config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 } })`. See `build-orchestrator` S1.4.
 
-### F9 — AI Agent Job production flags · FAIL if any debug flag is on
+### F9 — AI Agent Job production flags · FAIL if any flag is wrong
 
 **Check:** On the `aiAgentJob` node:
+- `config.outputImmediately` is `true` or absent (default is true)
 - `config.debugLogSystemPrompt` is `false` or absent (default is false)
 - `config.debugResult` is `false` or absent (default is false)
 
 Pass: `✅ F9  AI Agent Job production flags correct`
-Fail: `❌ F9  AI Agent Job has debug flags enabled: [list flagged fields]`
-→ Open the AI Agent Job node in the Cognigy Flow Editor and uncheck "Debug Log System Prompt" and "Debug Result" in the node config. Or call `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <aiAgentJobNodeId>, merge_config: true, body: { config: { debugLogSystemPrompt: false, debugResult: false } })`.
+Fail: `❌ F9  AI Agent Job has production flags misconfigured: [list flagged fields]`
+→ Open the AI Agent Job node in the Cognigy Flow Editor and check "Output Immediately" is on, "Debug Log System Prompt" and "Debug Result" are off. Or call `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <aiAgentJobNodeId>, merge_config: true, body: { config: { outputImmediately: true, debugLogSystemPrompt: false, debugResult: false } })`.
 
 ---
 
