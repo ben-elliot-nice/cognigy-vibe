@@ -106,6 +106,7 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 - **`/review <N>` posts findings as a PR comment** — never just output to the terminal. Use `gh pr review <N> --comment -b "..."` after completing the review.
 - **Byline**: `/review` signs as `*— Claude Reviewer*`. The implementer loop (applying fixes) signs as `*— claude implementer*`.
 - Both bylines go at the bottom of the comment body.
+- **After implementer fixes**: check the implementer's follow-up comment, then post `LGTM — all findings addressed.\n\n*— Claude Reviewer*` if satisfied.
 
 ## OpenAPI Spec
 
