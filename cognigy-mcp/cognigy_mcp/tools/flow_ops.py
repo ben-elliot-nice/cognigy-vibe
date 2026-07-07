@@ -421,8 +421,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 })
             if body.get("type") == "say" and "config" in body:
                 body = {**body, "config": _normalise_say_config(body["config"])}
-            if body.get("type") == "aiAgentToolAnswer" and "config" in body:
-                body = {**body, "config": _normalise_answer_config(body["config"])}
+            if body.get("type") == "aiAgentToolAnswer":
+                body = {**body, "config": _normalise_answer_config(body.get("config", {}))}
             body = _inject_extension(body, state.get("extension_map") or {})
             path = f"/v2.0/flows/{m.flow_id}/chart/nodes"
         else:

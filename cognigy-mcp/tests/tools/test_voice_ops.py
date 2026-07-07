@@ -177,18 +177,21 @@ def test_connection_post_body(mock_client, state, cache, monkeypatch):
     assert conn_body["fields"]["region"] == "eastus"
 
 
-def test_endpoint_base_url_raises_propagates_before_api_calls(mock_client, state, cache, monkeypatch):
-    """ValueError from endpoint_base_url raises immediately — no API calls made."""
+def test_endpoint_base_url_raises_returns_error_before_api_calls(mock_client, state, cache, monkeypatch):
+    """ValueError from endpoint_base_url is caught and returned as an error dict — no API calls made."""
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
     type(mock_client).endpoint_base_url = PropertyMock(side_effect=ValueError("no cognigy-api- in URL"))
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(ValueError):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "p", "flow_id": "f", "flow_reference_id": "r",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "p", "flow_id": "f", "flow_reference_id": "r",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
 
+    import json
+    response = json.loads(result[0].text)
+    assert "error" in response
+    assert "no cognigy-api- in URL" in response["error"]
     mock_client.post.assert_not_called()
     mock_client.delete.assert_not_called()
 

@@ -40,19 +40,25 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         m, err = validate(ProvisionWebrtcEndpointArgs, args)
         if err:
             return err
-        endpoint_base = client.endpoint_base_url
+        try:
+            endpoint_base = client.endpoint_base_url
+        except ValueError as e:
+            return _ok({"error": str(e)})
         api_key = os.environ.get("COGNIGY_VOICE_PREVIEW_API_KEY")
         is_dummy = not bool(api_key)
         effective_key = api_key if api_key else "dummy"
 
-        conn_result = client.post("/v2.0/connections", {
-            "name": m.connection_name,
-            "extension": "@cognigy/audio-preview-provider",
-            "type": "MicrosoftSpeechProvider",
-            "resourceLevel": "project",
-            "projectId": m.project_id,
-            "fields": {"apiKey": effective_key, "region": m.region},
-        })
+        try:
+            conn_result = client.post("/v2.0/connections", {
+                "name": m.connection_name,
+                "extension": "@cognigy/audio-preview-provider",
+                "type": "MicrosoftSpeechProvider",
+                "resourceLevel": "project",
+                "projectId": m.project_id,
+                "fields": {"apiKey": effective_key, "region": m.region},
+            })
+        except Exception as e:
+            return _ok({"error": f"Failed to create speech connection: {e}"})
         connection_id = conn_result["_id"]
 
         try:

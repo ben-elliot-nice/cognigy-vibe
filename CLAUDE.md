@@ -19,7 +19,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
    # EnterWorktree will create .claude/worktrees/feat/98-my-feature on a new branch
    ```
 
-4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written. The plan **must** include a task to find and fix related documentation (CLAUDE.md, runtime-reference, explain topics, contributor guides). See [§Documentation](#documentation) for content guidelines.
+4. **Plan before code** — run `superpowers:brainstorming` then `superpowers:writing-plans`. Do not touch implementation files until the plan is written. The plan **must** include a task to find and fix related documentation (CLAUDE.md, runtime-reference, explain topics, contributor guides). See [Documentation](#documentation) for content guidelines.
 
 5. **Specs and plans are locally tracked only** — `docs/superpowers/` is intentionally gitignored. No commit is needed or possible. This is expected; do not ask or warn about it.
 

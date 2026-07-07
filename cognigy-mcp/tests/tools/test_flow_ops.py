@@ -329,8 +329,8 @@ def test_aiagenttooltanswer_existing_answer_unchanged(mock_client, state, cache)
     assert call_body["config"]["maxLoops"] == 8
 
 
-def test_aiagenttooltanswer_no_config_key_unchanged(mock_client, state, cache):
-    """If no config key at all, normalization must not add one (body sent as-is)."""
+def test_aiagenttooltanswer_no_config_key_injects_defaults(mock_client, state, cache):
+    """If no config key at all, normalization injects canonical answer + maxLoops defaults."""
     mock_client.post.return_value = {"_id": "answer-1", "type": "aiAgentToolAnswer"}
     handlers = make_handlers(mock_client, state, cache)
     handlers["cognigy_create"]({
@@ -339,7 +339,9 @@ def test_aiagenttooltanswer_no_config_key_unchanged(mock_client, state, cache):
         "body": {"type": "aiAgentToolAnswer", "mode": "append", "target": "code-1"},
     })
     call_body = mock_client.post.call_args[0][1]
-    assert "config" not in call_body
+    assert "config" in call_body
+    assert call_body["config"]["answer"] == "{{JSON.stringify(context.toolResponse)}}"
+    assert call_body["config"]["maxLoops"] == 4
 
 
 def test_inject_extension_uses_dynamic_map_as_fallback(mock_client, state, cache):

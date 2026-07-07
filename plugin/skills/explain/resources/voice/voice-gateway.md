@@ -28,7 +28,7 @@ widget requires `COGNIGY_VOICE_PREVIEW_API_KEY` in `.env` (captured by
 `init-cognigy-vibe`).
 
 The webRTC demo URL is `{COGNIGY_ENDPOINT_BASE}/demo/{URLToken}`.
-See `build-orchestrator §1.5(g)` for build-context usage.
+See `build-orchestrator S1.5(g)` for build-context usage.
 
 ### DTMF input
 Comes in via: input.data.dtmf (string, e.g. "1" or "2")

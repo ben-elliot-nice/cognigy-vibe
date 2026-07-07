@@ -1674,7 +1674,7 @@ Demo folder: Demo Builds/[customer]-demo/
   Documentation:
     - [CUSTOMER]_FLOW_INSERTS.md                  ← as-built generated from get_flow_chart
     - [customer]-baseline.md                      ← drift-detection snapshot
-    - [customer]-package.zip                      ← §1.6 Step 5 via export_package tool
+    - [customer]-package.zip                      ← S1.6 Step 5 via export_package tool
 
 Tools wired: <comma-separated list including end_call + end_call_resolved + transfers + any use-case tools. NO separate search_*_faqs tool — knowledge retrieval is via built-in Knowledge AI on the Job Node when S1.8 runs.>
 Init chain:  Start → Once → On First Time → Initialize Session → Set Session Config → Say Welcome → AI Agent → End

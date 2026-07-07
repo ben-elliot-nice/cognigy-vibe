@@ -154,7 +154,7 @@ def _create_full_server() -> tuple[Server, list[types.Tool]]:
             )]
 
         state.touch_interaction()
-        result = handler(arguments or {})
+        result = await asyncio.to_thread(handler, arguments or {})
 
         if auto_synced and isinstance(result, list) and result:
             try:
