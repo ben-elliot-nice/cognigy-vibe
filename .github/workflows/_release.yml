@@ -74,7 +74,6 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
           python3 << 'PYTHON'
           import json, pathlib, sys, os
           p = pathlib.Path("plugin/.claude-plugin/plugin.json")
