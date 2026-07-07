@@ -17,7 +17,7 @@ This is an alias for flow-chart-reading + extension-map combined.
   question          Question + input capture
   httpRequest       Outbound HTTP
   setContext        Set context variables
-  if                Conditional — create via cognigy_create (type string "if")
+  if                Conditional (NOT "ifThenElse") — create via cognigy_create
   ifThenElse        Conditional created via Cognigy UI or cognigy-plugin — both exist in real charts
   lookup            Pattern-match branch
   setSessionConfig  Voice Gateway config (extension: @cognigy/voicegateway2)

@@ -9,7 +9,7 @@ group: nodes
 ### Verified node type strings (exact, case-sensitive)
 Core types (no extension needed):
   say, question, code, setContext, goTo, once, lookup, log, stopBot, httpRequest
-  if          (created via cognigy_create — type string is "if")
+  if (note: NOT "ifThenElse")  (created via cognigy_create)
   ifThenElse  (created via Cognigy UI or cognigy-plugin — both exist in real charts)
 
 AI Agent types (extension: "@cognigy/basic-nodes"):
