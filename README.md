@@ -95,7 +95,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 
 1. `mise trust` (once per clone).
 2. `cp .env.example .env` and fill in your Cognigy credentials.
-3. [`.mcp.json`](.mcp.json) uses `uvx cognigy-vibe-mcp` (same as installed users). To develop against local source with hot-reload, see the [Dev mode](CLAUDE.md#dev-mode-server-contributors-only) section in CLAUDE.md.
+3. [`.mcp.json`](.mcp.json) is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` are baked in. Start Claude Code and it picks up local source automatically. See [Local Development Testing](CLAUDE.md#local-development-testing) for details.
 
 ### Contributing
 
