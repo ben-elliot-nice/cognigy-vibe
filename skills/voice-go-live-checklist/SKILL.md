@@ -172,7 +172,7 @@ Fail: `❌ F7  No end-call branches found — both end_call and end_call_resolve
 
 Pass: `✅ F8  All tool answer nodes populated`
 Fail: `❌ F8  [N] aiAgentToolAnswer node(s) have empty config.answer: [list node IDs or labels]`
-→ For each flagged node, call `cognigy_update` with `body: { config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 } }`. See `build-orchestrator` S1.4.
+→ Open each flagged node in the Cognigy Flow Editor and set the Answer field to `{{JSON.stringify(context.toolResponse)}}` with Max Loops set to `4`. Or call `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <nodeId>, merge_config: true, body: { config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 } })`. See `build-orchestrator` S1.4.
 
 ### F9 — AI Agent Job production flags · FAIL if any debug flag is on
 
