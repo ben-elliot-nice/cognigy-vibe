@@ -50,7 +50,7 @@ After install:
 If you have access to the NICE Claude Marketplace:
 
 ```bash
-claude marketplace add ben-elliot-nice/nice-claude-marketplace
+claude plugin marketplace add ben-elliot-nice/nice-claude-marketplace
 claude plugin install cognigy@nice
 ```
 
