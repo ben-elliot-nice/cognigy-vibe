@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import sys
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 
 def _get_version() -> str:
-    return version("cognigy-vibe-mcp")
+    try:
+        return version("cognigy-vibe-mcp")
+    except PackageNotFoundError:
+        return "dev"
 
 
 def main() -> None:
