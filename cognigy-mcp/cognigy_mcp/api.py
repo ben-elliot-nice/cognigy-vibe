@@ -62,7 +62,10 @@ class CognigyClient:
             msg = resp.text
         if resp.status_code == 429:
             raw = resp.headers.get("Retry-After")
-            retry_after = float(raw) if raw is not None else None
+            try:
+                retry_after = float(raw)
+            except (TypeError, ValueError):
+                retry_after = None
             raise RetriableApiError(resp.status_code, msg, retry_after=retry_after)
         if resp.status_code >= 500:
             raise RetriableApiError(resp.status_code, msg, retry_after=None)

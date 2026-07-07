@@ -174,6 +174,18 @@ def test_raise_for_status_401_raises_plain_api_error(client):
     assert exc.value.status_code == 401
 
 
+def test_raise_for_status_429_with_http_date_retry_after_falls_back_to_none(client):
+    resp = httpx.Response(
+        429,
+        json={"error": "rate limited"},
+        headers={"Retry-After": "Wed, 09 Jul 2025 12:00:00 GMT"},
+    )
+    with pytest.raises(RetriableApiError) as exc:
+        client._raise_for_status(resp)
+    assert exc.value.status_code == 429
+    assert exc.value.retry_after is None
+
+
 # --- Retry integration tests ---
 
 @patch("time.sleep")
