@@ -39,7 +39,8 @@ extension for any node type that extension defines — no manual lookup needed.
   question            Ask a question and capture input
   httpRequest         Make an outbound HTTP call
   setContext          Set context variables
-  if                  Conditional branch (NOT "ifThenElse") — create via cognigy_create
+  if                  Conditional branch — create via cognigy_create (type string "if")
+  ifThenElse          Conditional branch created via Cognigy UI or cognigy-plugin — both appear in real charts
   lookup              Pattern-match branch
 
 ### Custom extension nodes
