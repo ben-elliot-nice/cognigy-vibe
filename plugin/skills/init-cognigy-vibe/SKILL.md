@@ -1,17 +1,17 @@
 ---
 name: init-cognigy-vibe
-description: First-time-user setup wizard for the Cognigy-Vibe plugin. Run once per workstation to capture every variable a demo build needs — Cognigy API URL + key, LLM reference IDs, TTS, STT, voice channel (VoiceGateway webRTC), and voice-preview settings — and write them as reusable defaults. After this runs, `cognigy:build-orchestrator` builds for any customer with zero further manual setup. Triggers — "/init-cognigy-vibe", "set up cognigy vibe", "set up cognigy vibe MCP", "set up the cognigy plugin", "cognigy first-time setup", "configure my demo build defaults", "show/edit my Cognigy build config". Also auto-delegated by `build-orchestrator` S0.0 when no workspace config is found. Writes a non-secret `default-demo-config.json` to `~/.config/cognigy-vibe/config.json` and a secret `.env` to cwd; never commits secrets.
+description: First-time-user setup wizard for the Cognigy-Vibe plugin. Run once per workstation to capture every variable a demo build needs — Cognigy API URL + key, LLM reference IDs, TTS, STT, voice channel (VoiceGateway webRTC), and voice-preview settings — and write them as reusable defaults. After this runs, `cognigy-vibe:build-orchestrator` builds for any customer with zero further manual setup. Triggers — "/init-cognigy-vibe", "set up cognigy vibe", "set up cognigy vibe MCP", "set up the cognigy plugin", "cognigy first-time setup", "configure my demo build defaults", "show/edit my Cognigy build config". Also auto-delegated by `build-orchestrator` S0.0 when no workspace config is found. Writes a non-secret `default-demo-config.json` to `~/.config/cognigy-vibe/config.json` and a secret `.env` to cwd; never commits secrets.
 ---
 
-# cognigy:init-cognigy-vibe — first-time setup wizard
+# cognigy-vibe:init-cognigy-vibe — first-time setup wizard
 
-This is the **front door** for a new Cognigy-Vibe user. It captures, once, everything a build needs and stores the non-secret config globally at `~/.config/cognigy-vibe/config.json` and credentials in `.env` at cwd. From then on, `cognigy:build-orchestrator` reads these defaults and never re-asks for tenant, credentials, LLM, voice, or naming.
+This is the **front door** for a new Cognigy-Vibe user. It captures, once, everything a build needs and stores the non-secret config globally at `~/.config/cognigy-vibe/config.json` and credentials in `.env` at cwd. From then on, `cognigy-vibe:build-orchestrator` reads these defaults and never re-asks for tenant, credentials, LLM, voice, or naming.
 
 > **Run order.** Run this **before your first build**, or just start a build — `build-orchestrator` S0.0 auto-delegates here if no workspace config exists. Re-run any time to view or change your defaults.
 
 > **Secrets & cloud sync.** `COGNIGY_API_KEY` is the one true secret. It is written **only** to `.env` in cwd. If cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` syncs — treat that as publishing the key. Inform the user to move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed. Never write the API key into `default-demo-config.json` and never commit it.
 
-> **Dependency:** Read `cognigy:build-config` before proceeding — it is the canonical reference for the schema, all field descriptions, cascade discovery order, and where to write each file. The wizard steps below assume that context.
+> **Dependency:** Read `cognigy-vibe:build-config` before proceeding — it is the canonical reference for the schema, all field descriptions, cascade discovery order, and where to write each file. The wizard steps below assume that context.
 
 ## Steps
 
@@ -25,7 +25,7 @@ Call `cognigy_list { resource_type: "projects" }`.
 
 - **Success** → proceed to Step 3.
 - **Failure** → **Hard stop:**
-  > "MCP connection required before setup can continue. Check that `COGNIGY_BASE_URL` and `COGNIGY_API_KEY` are set in your `.env` file, restart the Claude Code session, and re-run `cognigy:init-cognigy-vibe`."
+  > "MCP connection required before setup can continue. Check that `COGNIGY_BASE_URL` and `COGNIGY_API_KEY` are set in your `.env` file, restart the Claude Code session, and re-run `cognigy-vibe:init-cognigy-vibe`."
 
   Do not fall through to manual LLM entry. There is no manual entry path for LLMs.
 

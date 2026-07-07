@@ -1,19 +1,19 @@
 ---
 name: design-agent-persona
-description: Design the Cognigy AI agent's identity and behavioural standing orders — brand voice, compliance framing, channel formatting, and auth scope. Produces agent-level description and instructions fields. Run cognigy:design-agent-jobs for job definitions, routing, and context schema.
+description: Design the Cognigy AI agent's identity and behavioural standing orders — brand voice, compliance framing, channel formatting, and auth scope. Produces agent-level description and instructions fields. Run cognigy-vibe:design-agent-jobs for job definitions, routing, and context schema.
 ---
 
 # Design Agent Persona
 
 ## When to Use
 
-Use this skill to design the AI Agent resource's identity layer — the `description` and `instructions` fields that all specialist jobs inherit. Run after `cognigy:scope-demo` when a demo plan is available.
+Use this skill to design the AI Agent resource's identity layer — the `description` and `instructions` fields that all specialist jobs inherit. Run after `cognigy-vibe:scope-demo` when a demo plan is available.
 
-**This skill covers persona only.** For job definitions, routing architecture, and context schema → `cognigy:design-agent-jobs`. For xApp and channel interfaces → `cognigy:design-agent-interfaces`. For contract enforcement → `cognigy:design-agent-contracts`.
+**This skill covers persona only.** For job definitions, routing architecture, and context schema → `cognigy-vibe:design-agent-jobs`. For xApp and channel interfaces → `cognigy-vibe:design-agent-interfaces`. For contract enforcement → `cognigy-vibe:design-agent-contracts`.
 
 ## Reference Docs
 
-Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-persona/`) and read:
+Before starting, navigate to `<plugin-root>` (three directories up from `plugin/skills/design-agent-persona/`) and read:
 
 - `explain("agent-persona-authoring")` — field purposes, description/instructions structure, speaking style fields
 - `explain("agent-behavioral-rules")` — silent execution, outcome-based framing, tool descriptions as contracts
@@ -87,9 +87,9 @@ Generate `{CustomerName}-agent-persona.md`. If an `output_dir` argument was supp
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
-- For jobs, routing, and context schema → `cognigy:design-agent-jobs`
-- For xApp, bidirectional webchat, and handover context → `cognigy:design-agent-interfaces`
-- For deterministic contract enforcement → `cognigy:design-agent-contracts`
-- For the full design workflow in one go → `cognigy:design-agent`
-- To build after designing → use `cognigy:add-aiagent-job` (creates nodes via MCP tools)
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
+- For jobs, routing, and context schema → `cognigy-vibe:design-agent-jobs`
+- For xApp, bidirectional webchat, and handover context → `cognigy-vibe:design-agent-interfaces`
+- For deterministic contract enforcement → `cognigy-vibe:design-agent-contracts`
+- For the full design workflow in one go → `cognigy-vibe:design-agent`
+- To build after designing → use `cognigy-vibe:add-aiagent-job` (creates nodes via MCP tools)

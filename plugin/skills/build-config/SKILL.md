@@ -1,9 +1,9 @@
 ---
 name: build-config
-description: Canonical reference for `default-demo-config.json` ($schemaVersion: 2). Covers the full field schema, cascade discovery order, which build steps consume which fields, `get_build_state` config output, and common failure modes. Read this skill before writing, validating, or consuming the build config. When invoked by a user, outputs the reference content and points to `get_build_state` (check what's loaded) and `cognigy:init-cognigy-vibe` (write or edit). Triggers — "build config schema", "what's in the build config", "how does config discovery work", "default-demo-config schema", "what fields does the build config have".
+description: Canonical reference for `default-demo-config.json` ($schemaVersion: 2). Covers the full field schema, cascade discovery order, which build steps consume which fields, `get_build_state` config output, and common failure modes. Read this skill before writing, validating, or consuming the build config. When invoked by a user, outputs the reference content and points to `get_build_state` (check what's loaded) and `cognigy-vibe:init-cognigy-vibe` (write or edit). Triggers — "build config schema", "what's in the build config", "how does config discovery work", "default-demo-config schema", "what fields does the build config have".
 ---
 
-# cognigy:build-config — build config reference
+# cognigy-vibe:build-config — build config reference
 
 ## When invoked
 
@@ -11,7 +11,7 @@ Output the schema reference below. Do not call any MCP tools. Do not redirect to
 
 Tell the user:
 - To check what config is currently loaded: call `get_build_state` (no filter) and inspect `config_loaded`, `config_source`, and `config_summary`.
-- To write or edit their config: run `cognigy:init-cognigy-vibe`.
+- To write or edit their config: run `cognigy-vibe:init-cognigy-vibe`.
 
 ## Schema reference
 
@@ -27,10 +27,10 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `connection.baseUrl` | string | required | Cognigy API base URL for this tenant | `"https://cognigy-api-au1.nicecxone.com"` |
 | `connection.endpointBase` | string | required | Cognigy endpoint host for this tenant | `"https://cognigy-endpoint-au1.nicecxone.com"` |
 | `connection.region` | string | required | Short region tag; used in summary display and as-built docs | `"au1"` |
-| `llm.default` | string | required | Label of the default LLM — must match an `llm.options[].label` value exactly | populated by `cognigy:init-cognigy-vibe` from live discovery — do not hand-edit |
+| `llm.default` | string | required | Label of the default LLM — must match an `llm.options[].label` value exactly | populated by `cognigy-vibe:init-cognigy-vibe` from live discovery — do not hand-edit |
 | `llm.options` | array | required | List of available generation LLMs for this tenant | see rows below |
 | `llm.options[].label` | string | required | Human-readable LLM name | `"Azure GPT-4o"` |
-| `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | populated by `cognigy:init-cognigy-vibe` from live discovery — do not hand-edit |
+| `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | populated by `cognigy-vibe:init-cognigy-vibe` from live discovery — do not hand-edit |
 | `llm.options[].id` | string | required | MongoDB `_id` of the LLM — used by `assign_org_llm` without re-lookup | `"699ed916..."` |
 | `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives §1.1 Step 2 assignment branch | `"organisation"` |
 | `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (§0.5 / §1.8) | `{ "label": "...", "referenceId": "" }` |
@@ -70,7 +70,7 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 - A project-level file must be **complete** if it exists. There is no field-level merging. Partial files are not supported.
 - Loaded **once** at server startup. A config change requires a session restart — there is no hot-reload.
 
-**Writing:** `cognigy:init-cognigy-vibe` always writes `.env` to `cwd` — this is the session workspace root, not a per-build demo directory. `.env` is workspace-level and shared across all `Demo Builds/` in this session (see `explain("session-workspace")`). On first-time setup it writes the non-secret config to `~/.config/cognigy-vibe/config.json` (global). For a workspace-level override, write a complete `default-demo-config.json` to `cwd` — it will win over the global config on next session start.
+**Writing:** `cognigy-vibe:init-cognigy-vibe` always writes `.env` to `cwd` — this is the session workspace root, not a per-build demo directory. `.env` is workspace-level and shared across all `Demo Builds/` in this session (see `explain("session-workspace")`). On first-time setup it writes the non-secret config to `~/.config/cognigy-vibe/config.json` (global). For a workspace-level override, write a complete `default-demo-config.json` to `cwd` — it will win over the global config on next session start.
 
 ### 3. Field → build step map
 
@@ -109,7 +109,7 @@ Three fields are injected into every `get_build_state` response:
 
 These fields are always included even when a `resource_type` filter is passed.
 
-When `config_loaded: false`, `config_source` and `config_summary` are absent. Run `cognigy:init-cognigy-vibe` to create a config.
+When `config_loaded: false`, `config_source` and `config_summary` are absent. Run `cognigy-vibe:init-cognigy-vibe` to create a config.
 
 ### 5. Common failure modes
 
@@ -117,7 +117,7 @@ When `config_loaded: false`, `config_source` and `config_summary` are absent. Ru
 |---|---|---|
 | `config_loaded: false` after wizard ran | Config written to wrong location, or session not restarted after write | Check `~/.config/cognigy-vibe/config.json` exists and parses; restart the Claude Code session |
 | Agent generates empty output despite config loaded | Stale `llm.options[].referenceId` — LLM exists in config but not in this project | Run S1.1 Step 2 LLM gate; import LLM via `manage_packages` or `setup_llm` |
-| Set Session Config uses wrong voice | `tts.label` or `stt.label` doesn't match a real connection in this project | Re-run `cognigy:init-cognigy-vibe` and pick correct connection labels from live list |
+| Set Session Config uses wrong voice | `tts.label` or `stt.label` doesn't match a real connection in this project | Re-run `cognigy-vibe:init-cognigy-vibe` and pick correct connection labels from live list |
 | Project-level config ignored | Project `default-demo-config.json` is a partial file | File must be complete — no field merging. Write a full file or delete it to fall through to global. |
 | Config change not reflected mid-session | Config loaded once at startup; hot-reload not supported | Restart the Claude Code session after editing the config file |
 | Wrong region values (TTS/STT/endpoint) | Global config has AU1 values but build targets a different region | Write a project-level `default-demo-config.json` with the correct region values, restart session |

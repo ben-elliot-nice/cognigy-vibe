@@ -3,7 +3,7 @@ name: submit-issue
 description: When you encounter a bug or unexpected behaviour in this plugin (MCP server or a skill), use this skill to file a detailed GitHub issue from conversation context — no user input required.
 ---
 
-# cognigy:submit-issue
+# cognigy-vibe:submit-issue
 
 File a GitHub issue for a bug or unexpected behaviour in this plugin (an MCP server tool or a cognigy skill). Synthesises all relevant context from the current conversation and submits directly — no user input required.
 
