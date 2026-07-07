@@ -210,3 +210,29 @@ def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, m
         })
 
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
+
+
+def test_provision_webrtc_endpoint_missing_project_id_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "flow_id": "flow-hex",
+        "flow_reference_id": "flow-uuid",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "project_id" for d in data["details"])
+
+
+def test_provision_webrtc_endpoint_missing_flow_reference_id_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_id": "flow-hex",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "flow_reference_id" for d in data["details"])
