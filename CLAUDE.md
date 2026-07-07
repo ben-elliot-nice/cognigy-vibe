@@ -128,7 +128,7 @@ This project uses two Claude Code plugins. `.claude/settings.json` enables them 
 
 **Superpowers** (`superpowers@superpowers-dev`) — workflow skills (brainstorming, planning, TDD, etc.):
 ```bash
-claude marketplace add superpowers-dev github:obra/superpowers
+claude plugin marketplace add superpowers-dev github:obra/superpowers
 claude plugin install superpowers@superpowers-dev
 ```
 
@@ -141,7 +141,7 @@ claude plugin install github:ben-elliot-nice/cognigy-claude-plugin
 
 Or via the NICE Claude Marketplace (if you have `nice-claude-marketplace` checked out):
 ```bash
-claude marketplace add nice directory:/path/to/nice-claude-marketplace
+claude plugin marketplace add nice directory:/path/to/nice-claude-marketplace
 claude plugin install cognigy@nice
 ```
 
