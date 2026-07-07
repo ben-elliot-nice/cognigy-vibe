@@ -101,6 +101,12 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 - **Do not bump versions in `dev` PRs.** CI will reject any PR to `dev` that changes the version in `cognigy-mcp/pyproject.toml` or `.claude-plugin/plugin.json`. Version bumps are pushed **directly to `dev`** (it is unprotected) as part of initiating a prerelease cycle — not via PR.
 - **Shell commands:** if Claude is constructing the command, run each step as a separate Bash call. If a compound command is explicitly defined in a CLAUDE.md, run it as written.
 
+## Code Review
+
+- **`/review <N>` posts findings as a PR comment** — never just output to the terminal. Use `gh pr review <N> --comment -b "..."` after completing the review.
+- **Byline**: `/review` signs as `*— Claude Reviewer*`. The implementer loop (applying fixes) signs as `*— claude implementer*`.
+- Both bylines go at the bottom of the comment body.
+
 ## OpenAPI Spec
 
 The Cognigy OpenAPI spec is available per environment (not vendored):
