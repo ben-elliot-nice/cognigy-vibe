@@ -47,7 +47,7 @@ Credentials are read from a `.env` file in the project root (see Environment var
 | `COGNIGY_VIBE_RESYNC_HOURS` | No | `4` | Hours of idle before auto-resync |
 | `COGNIGY_VIBE_CACHE_TTL` | No | `300` | Resource cache TTL in seconds |
 | `COGNIGY_VIBE_DEV` | No | — | Set to `1` to enable dev mode (requires credentials configured) |
-| `COGNIGY_VIBE_SOURCE_DIR` | No | — | Absolute path to `cognigy-mcp/`; required when `COGNIGY_VIBE_DEV=1` |
+| `COGNIGY_VIBE_SOURCE_DIR` | No | — | Path to `cognigy-mcp/` source tree; required when `COGNIGY_VIBE_DEV=1`. Relative paths are resolved from CWD (e.g. `./cognigy-mcp` works when Claude Code opens the repo root). |
 
 ## Startup modes
 

@@ -150,6 +150,8 @@ Copy `.env.example` to `.env` and fill in your Cognigy credentials — `mise` au
 
 `.mcp.json` is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` are baked in. Claude Code picks it up automatically on next start. The server runs from local source (`./cognigy-mcp`) with `reload_mcp` available. After editing source files, call `reload_mcp` — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
 
+If you are only using the skills (not developing the MCP server), you can opt out of dev mode by adding `COGNIGY_VIBE_DEV=` (empty value) to your `.env` — `load_dotenv` override takes effect on the next spawn.
+
 ### Plugin conflict (if you have the cognigy plugin installed)
 
 If you have the cognigy plugin installed at user level, Claude Code loads both the plugin-defined server (`mcp__plugin_<marketplace>__cognigy-vibe__*`) and the `.mcp.json` dev server (`mcp__cognigy-vibe__*`) simultaneously. To avoid namespace ambiguity during MCP development, disable the plugin locally by adding to your `.claude/settings.local.json`:
