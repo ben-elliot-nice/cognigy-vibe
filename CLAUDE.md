@@ -1,6 +1,6 @@
 # Cognigy Claude Plugin
 
-Read `docs/architecture.md` at the start of every new session. **Note: architecture.md is significantly out of date — treat structural claims skeptically and prefer the live code.** See TODO item #1.
+Read `docs/architecture.md` at the start of every new session. **Note: architecture.md is significantly out of date — treat structural claims skeptically and prefer the live code.**
 
 ## Git Worktrees
 
@@ -78,7 +78,7 @@ For critical bugs in the current stable release (crash-on-start, data loss, secu
 
 1. Branch from `main`: `git checkout -b hotfix/<slug> main`
 2. Implement the fix with TDD (write failing test first)
-3. Bump the patch version in `pyproject.toml` and `plugin.json`
+3. Bump the patch version in `pyproject.toml` and `plugin/.claude-plugin/plugin.json`
 4. PR targets `main` — this is intentional and correct
 5. After merge to `main`, cherry-pick the fix commit(s) back to `dev` — **do not** `git merge main`, as that pulls in the version bump and CI will reject it:
    ```bash
@@ -91,14 +91,14 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 
 ## Documentation
 
-- **Runtime usage** (skills, MCP tools, hooks, code conventions) → document via the `cognigy:explain` skill and the MCP tool build structure (`runtime-reference/`). Do not duplicate this content in CLAUDE.md or docs/.
+- **Runtime usage** (skills, MCP tools, hooks, code conventions) → document via the `cognigy-vibe:explain` skill and the `explain()` MCP tool topics. Do not duplicate this content in CLAUDE.md or docs/.
 - **Modular architecture** — atomic pieces of knowledge are their own explain topic. Higher-order and orchestration skills reference those topics by name instead of duplicating their content. Design atomic topics with this in mind: one concern per topic, reusable across contexts.
 - **Find-and-fix scope** — during any docs update, flag to the user any opportunities to restructure explain topics (especially extracting atomic topics from higher-order or orchestration skills) and ask whether restructuring is in scope before acting.
 
 ## Rules
 
-- **Composite skills call atomic skills** (`cognigy:get`, `cognigy:create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.
-- **Do not bump versions in `dev` PRs.** CI will reject any PR to `dev` that changes the version in `cognigy-mcp/pyproject.toml` or `.claude-plugin/plugin.json`. Version bumps are pushed **directly to `dev`** (it is unprotected) as part of initiating a prerelease cycle — not via PR.
+- **Composite skills call atomic MCP tools** (`cognigy_get`, `cognigy_create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.
+- **Do not bump versions in `dev` PRs.** CI will reject any PR to `dev` that changes the version in `cognigy-mcp/pyproject.toml` or `plugin/.claude-plugin/plugin.json`. Version bumps are pushed **directly to `dev`** (it is unprotected) as part of initiating a prerelease cycle — not via PR.
 - **Shell commands:** if Claude is constructing the command, run each step as a separate Bash call. If a compound command is explicitly defined in a CLAUDE.md, run it as written.
 
 ## Code Review
@@ -116,15 +116,9 @@ The Cognigy OpenAPI spec is available per environment (not vendored):
 - JP1: `GET https://cognigy-api-jp1.nicecxone.com/openapi/openapi-viewer.json`
 - Trial: `GET https://api-trial.cognigy.ai/openapi/openapi-viewer.json`
 
-## Runtime Reference
-
-The `runtime-reference/` directory contains usage documentation for the MCP server and skills (Cognigy API runtime objects, channel output formats, code conventions). These reference docs are consumed at runtime — skills instruct Claude to read them before writing code.
-
-This content is distinct from the `docs/` directory, which covers plugin development (architecture, shared design patterns, design specs/plans).
-
 ## Required Plugins
 
-This project uses two Claude Code plugins. `.claude/settings.json` enables them — Superpowers requires its marketplace; Cognigy can be installed directly from GitHub (see below).
+This project uses two Claude Code plugins. `.claude/settings.json` enables them.
 
 **Superpowers** (`superpowers@superpowers-dev`) — workflow skills (brainstorming, planning, TDD, etc.):
 ```bash
@@ -174,7 +168,7 @@ The following items are tracked but not currently in scope. If you ask Claude to
 
 Prereleases are **not** published automatically on every `dev` push. To cut a prerelease:
 
-1. Bump `cognigy-mcp/pyproject.toml` and `.claude-plugin/plugin.json` to the intended next version (e.g. `1.7.0`) — push directly to `dev` (not via PR).
+1. Bump `cognigy-mcp/pyproject.toml` and `plugin/.claude-plugin/plugin.json` to the intended next version (e.g. `1.7.0`) — push directly to `dev` (not via PR).
 2. Trigger one of:
    - **Dispatch:** GitHub Actions UI → "Release (prerelease)" → Run workflow on `dev`
    - **Tag:** `git tag v1.7.0rc1 && git push origin v1.7.0rc1`
@@ -186,4 +180,4 @@ uvx cognigy-vibe-mcp==1.7.0rc1      # specific RC
 uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
 ```
 
-**Merge to `main`** (stable release only) — the stable version is published to PyPI. The marketplace submodule reference must be updated manually (see TODO item #1 — automation not yet implemented).
+**Merge to `main`** (stable release only) — the stable version is published to PyPI.
