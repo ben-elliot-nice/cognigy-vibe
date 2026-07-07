@@ -35,3 +35,19 @@ Get referenceId from cognigy_get(resource_type="flows", resource_id=...) → res
 ### Chart endpoint returns metadata only
 GET /v2.0/flows/{id}/chart returns node structure and positions only.
 Node config fields are NOT included — use cognigy_get(resource_type="node", ...) to read config.
+
+### setContext node: one entry per node
+
+The setContext node stores only the FIRST entry in `contextEntries`, even if multiple
+are provided. Additional entries are silently ignored.
+
+  WRONG — only "greeting" is written, "authenticated" is dropped:
+  { "contextEntries": [{ "key": "greeting", "value": "Hi" }, { "key": "authenticated", "value": "false" }] }
+
+  CORRECT — one setContext node per value:
+  Node 1: { "contextEntries": [{ "key": "greeting", "value": "Hi" }] }
+  Node 2: { "contextEntries": [{ "key": "authenticated", "value": "false" }] }
+
+  ALSO CORRECT — use a Code node to write multiple values at once:
+  context.greeting = "Hi";
+  context.authenticated = false;
