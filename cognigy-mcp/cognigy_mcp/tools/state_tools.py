@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 import os
 from importlib.metadata import version as pkg_version
 from pathlib import Path

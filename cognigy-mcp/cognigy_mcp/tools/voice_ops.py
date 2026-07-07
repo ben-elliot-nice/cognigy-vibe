@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 import os
 from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
