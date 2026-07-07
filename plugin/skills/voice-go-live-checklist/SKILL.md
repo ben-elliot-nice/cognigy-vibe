@@ -36,7 +36,7 @@ Make these three calls in order. Capture all results — they are used across al
 ```
 cognigy_get(resource_type: "aiagents", resource_id: agentId)
 ```
-Capture: `agent.llmId`, `agent.description`
+Capture: `agent.llmId`, `agent.description`, `agent.instructions`
 
 **B. Endpoints:**
 ```
