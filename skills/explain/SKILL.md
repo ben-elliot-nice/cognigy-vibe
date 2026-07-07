@@ -20,7 +20,7 @@ aiagent:
   agent-handover             Escalation to human pattern and handover context artefact design (two-consumer model)
   agent-persona-authoring    AI Agent description and instructions field authoring — structure, constraints, speaking style
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
-  agent-tool-json            .tool.json convention for defining AI agent tools locally
+  agent-tool-json            .tool.json convention — field reference, toolType selection, toolId uniqueness rule
   agent-tool-patterns        Tool granularity options (granular/consolidated/action-parameterized) and context.toolResponse channel
   multi-agent-architecture   Concierge + Specialists pattern, specialist job types, routing, context schema, stub agent
   tool-conditions            CognigyScript condition field, hiding tools from LLM
