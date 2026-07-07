@@ -174,6 +174,14 @@ def test_raise_for_status_401_raises_plain_api_error(client):
     assert exc.value.status_code == 401
 
 
+def test_raise_for_status_501_raises_plain_api_error(client):
+    resp = httpx.Response(501, json={"error": "not implemented"})
+    with pytest.raises(ApiError) as exc:
+        client._raise_for_status(resp)
+    assert type(exc.value) is ApiError
+    assert exc.value.status_code == 501
+
+
 def test_raise_for_status_429_with_http_date_retry_after_falls_back_to_none(client):
     resp = httpx.Response(
         429,
@@ -300,3 +308,35 @@ def test_download_url_error_raises_api_error(client):
         with pytest.raises(ApiError) as exc:
             client.download_url(presigned)
     assert exc.value.status_code == 404
+
+
+@patch("time.sleep")
+def test_get_429_with_zero_retry_after_uses_floor(mock_sleep, client):
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/flows/flow-123").mock(side_effect=[
+            httpx.Response(429, json={"error": "rate limited"}, headers={"Retry-After": "0"}),
+            httpx.Response(200, json={"_id": "flow-123"}),
+        ])
+        result = client.get("/v2.0/flows/flow-123")
+    assert result["_id"] == "flow-123"
+    mock_sleep.assert_called_once_with(1.0)
+
+
+def test_post_5xx_raises_immediately_without_retry(client):
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/flows").mock(
+            return_value=httpx.Response(503, json={"error": "unavailable"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.post("/v2.0/flows", {"name": "Test"})
+    assert exc.value.status_code == 503
+    assert route.call_count == 1
+
+
+def test_delete_404_treated_as_success(client):
+    with respx.mock:
+        respx.delete(f"{BASE}/v2.0/flows/flow-123").mock(
+            return_value=httpx.Response(404, json={"error": "Not found"})
+        )
+        result = client.delete("/v2.0/flows/flow-123")
+    assert result == {}

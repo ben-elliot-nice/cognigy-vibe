@@ -19,7 +19,7 @@ class RetriableApiError(ApiError):
 def _retry_wait(retry_state: tenacity.RetryCallState) -> float:
     exc = retry_state.outcome.exception()
     if isinstance(exc, RetriableApiError) and exc.retry_after is not None:
-        return exc.retry_after
+        return max(exc.retry_after, 1.0)
     return min(2 ** (retry_state.attempt_number - 1), 30)
 
 
@@ -58,7 +58,7 @@ class CognigyClient:
         try:
             body = resp.json()
             msg = body.get("error") or body.get("message") or resp.text
-        except Exception:
+        except (ValueError, AttributeError):
             msg = resp.text
         if resp.status_code == 429:
             raw = resp.headers.get("Retry-After")
@@ -67,7 +67,7 @@ class CognigyClient:
             except (TypeError, ValueError):
                 retry_after = None
             raise RetriableApiError(resp.status_code, msg, retry_after=retry_after)
-        if resp.status_code >= 500:
+        if resp.status_code in (500, 502, 503, 504):
             raise RetriableApiError(resp.status_code, msg, retry_after=None)
         raise ApiError(resp.status_code, msg)
 
@@ -77,7 +77,6 @@ class CognigyClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    @_RETRY
     def post(self, path: str, body: dict) -> dict:
         resp = self._http.post(self._base + path, json=body)
         self._raise_for_status(resp)
@@ -94,7 +93,12 @@ class CognigyClient:
     @_RETRY
     def delete(self, path: str) -> dict:
         resp = self._http.delete(self._base + path)
-        self._raise_for_status(resp)
+        try:
+            self._raise_for_status(resp)
+        except ApiError as e:
+            if e.status_code == 404:
+                return {}
+            raise
         try:
             return resp.json()
         except Exception:
@@ -105,6 +109,8 @@ class CognigyClient:
         """GET an absolute URL and return raw bytes. Used for pre-signed download URLs
         that are not routed through the Cognigy API base path. Sends Accept: */* to
         avoid the default application/json header interfering with binary responses."""
+        # Pre-signed URLs typically have short TTLs; 5xx retries are safe because the URL
+        # has not been consumed on failure, but a large Retry-After could outlive the TTL.
         resp = self._http.get(url, headers={"Accept": "*/*"})
         self._raise_for_status(resp)
         return resp.content
