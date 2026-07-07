@@ -349,7 +349,8 @@ def test_assign_org_llm_in_tools_list():
 def test_resolve_resource_missing_name_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["resolve_resource"]({})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "name" for d in data["details"])
 
@@ -357,6 +358,7 @@ def test_resolve_resource_missing_name_returns_validation_error(mock_client, sta
 def test_assign_org_llm_missing_project_id_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["assign_org_llm"]({"llm_id": "llm-1"})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "project_id" for d in data["details"])

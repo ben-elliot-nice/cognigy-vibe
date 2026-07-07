@@ -741,7 +741,8 @@ def test_export_package_download_uses_presigned_url(mock_client, state, cache, t
 def test_push_code_node_missing_script_file_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["push_code_node"]({"flow_id": "flow-1"})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "script_file" for d in data["details"])
 
@@ -749,7 +750,8 @@ def test_push_code_node_missing_script_file_returns_validation_error(mock_client
 def test_push_html_node_missing_flow_id_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["push_html_node"]({"html_file": "/tmp/x.html", "node_id": "node-1"})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "flow_id" for d in data["details"])
 
@@ -757,7 +759,8 @@ def test_push_html_node_missing_flow_id_returns_validation_error(mock_client, st
 def test_export_package_missing_output_path_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["export_package"]({"project_id": "proj-1"})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "output_path" for d in data["details"])
 

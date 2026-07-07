@@ -573,5 +573,5 @@ def test_explain_with_empty_args_returns_orientation(mock_client, state, cache):
 def test_explain_topic_wrong_type_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["explain"]({"topic": 123})
-    # Pydantic coerces int → str in lax mode; confirm no crash and some response returned
-    assert len(result) == 1
+    assert result.isError is True
+    assert len(result.content) == 1

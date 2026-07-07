@@ -711,7 +711,8 @@ def test_cognigy_invoke_strips_internal_fields(mock_client, state, cache):
 def test_cognigy_get_missing_required_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["cognigy_get"]({})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "resource_type" for d in data["details"])
 
@@ -723,7 +724,8 @@ def test_cognigy_get_fields_wrong_type_returns_validation_error(mock_client, sta
         "resource_id": "id-1",
         "fields": "not-a-list",
     })
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "fields" for d in data["details"])
 
@@ -731,7 +733,8 @@ def test_cognigy_get_fields_wrong_type_returns_validation_error(mock_client, sta
 def test_cognigy_list_missing_required_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["cognigy_list"]({})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "resource_type" for d in data["details"])
 
@@ -739,6 +742,7 @@ def test_cognigy_list_missing_required_returns_validation_error(mock_client, sta
 def test_cognigy_create_missing_body_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["cognigy_create"]({"resource_type": "flows"})
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "body" for d in data["details"])

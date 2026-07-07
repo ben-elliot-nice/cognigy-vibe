@@ -220,7 +220,8 @@ def test_provision_webrtc_endpoint_missing_project_id_returns_validation_error(m
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
     })
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "project_id" for d in data["details"])
 
@@ -233,6 +234,7 @@ def test_provision_webrtc_endpoint_missing_flow_reference_id_returns_validation_
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
     })
-    data = json.loads(result[0].text)
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "flow_reference_id" for d in data["details"])
