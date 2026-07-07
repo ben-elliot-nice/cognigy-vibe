@@ -91,37 +91,29 @@ State is loaded at startup by deep-merging seed into runtime. `sync_remote_state
 
 ### Reference docs (runtime guidance)
 
-**Location:** `runtime-reference/`
+The `explain` tool carries a 37-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
 
-These files contain domain knowledge read by skills before generating code or content. Skills read them via the `Base directory for this skill:` path injected at skill load time.
-
-| File | Purpose |
-|---|---|
-| `runtime-reference/cognigy-api-reference.md` | Runtime objects (`input`, `context`, `profile`), all `api.*` functions, available libraries |
-| `runtime-reference/cognigy-output-formats.md` | Channel output structures and code examples |
-| `runtime-reference/cognigy-code-conventions.md` | Code node structural conventions |
-
-The `explain` tool carries a 21-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
+Topic source files live at `plugin/skills/explain/resources/` and are compiled into the MCP server by `scripts/build_explain_topics.py`. Edit the resource markdown files and re-run the script to update both the skill and the in-server library.
 
 ---
 
 ## Layer 2: Composite Skills
 
-**Location:** `skills/`
+**Location:** `plugin/skills/`
 
 Skills orchestrate MCP tool calls and user interaction to accomplish higher-level goals. They call MCP tools by name — never make API calls directly.
 
 | Skill | Purpose |
 |---|---|
-| `cognigy:add-aiagent-job` | Add an AI Agent Job node + tool nodes to an existing flow |
-| `cognigy:scope-demo` | Four-phase discovery → demo plan document |
-| `cognigy:design-agent` | Orchestrate full agent design workflow |
-| `cognigy:design-agent-persona` | Agent identity, brand voice, compliance framing |
-| `cognigy:design-agent-jobs` | Job definitions, routing architecture, context schema |
-| `cognigy:design-agent-interfaces` | xApp scenes, webchat patterns, handover context |
-| `cognigy:design-agent-contracts` | Guard sub-flows, obligation state, structured refusals |
+| `cognigy-vibe:add-aiagent-job` | Add an AI Agent Job node + tool nodes to an existing flow |
+| `cognigy-vibe:scope-demo` | Four-phase discovery → demo plan document |
+| `cognigy-vibe:design-agent` | Orchestrate full agent design workflow |
+| `cognigy-vibe:design-agent-persona` | Agent identity, brand voice, compliance framing |
+| `cognigy-vibe:design-agent-jobs` | Job definitions, routing architecture, context schema |
+| `cognigy-vibe:design-agent-interfaces` | xApp scenes, webchat patterns, handover context |
+| `cognigy-vibe:design-agent-contracts` | Guard sub-flows, obligation state, structured refusals |
 
-`cognigy:scope-demo` has a `references/` subdirectory (`skills/scope-demo/references/`) containing `cognigy-capabilities.md`, `scope-demo-discovery-questions.md`, and `scope-demo-output-template.md` — referenced at runtime by the skill.
+`cognigy-vibe:scope-demo` has a `references/` subdirectory (`plugin/skills/scope-demo/references/`) containing `cognigy-capabilities.md`, `scope-demo-discovery-questions.md`, and `scope-demo-output-template.md` — referenced at runtime by the skill.
 
 ### The key rule: skills call MCP tools, not the API
 
@@ -139,12 +131,12 @@ Call the cognigy-vibe MCP tool cognigy_create with resource_type="node" and body
 
 ## Hooks
 
-**Location:** `hooks/`
+**Location:** `plugin/hooks/`
 
 | File | Purpose |
 |---|---|
-| `hooks/hooks.json` | Hook registration — `PreToolUse` on `mcp__cognigy-vibe__.*` |
-| `hooks/onboarding-gate.sh` | Injects architectural primer on the first Cognigy MCP call per session |
+| `plugin/hooks/hooks.json` | Hook registration — `PreToolUse` on `mcp__cognigy-vibe__.*` |
+| `plugin/hooks/onboarding-gate.sh` | Injects architectural primer on the first Cognigy MCP call per session |
 
 The onboarding gate fires before any `cognigy-vibe` tool call. On the first call in a session it denies the tool call and injects a primer (project/flow/node/agent hierarchy, key tool guidance) as `additionalContext`. On all subsequent calls it exits immediately. `explain` calls bypass the gate unconditionally.
 
@@ -162,9 +154,9 @@ The onboarding gate fires before any `cognigy-vibe` tool call. On the first call
 
 ## Plugin registration
 
-**Location:** `.claude-plugin/plugin.json`
+**Marketplace manifest:** `.claude-plugin/marketplace.json` — defines the `cognigy-vibe` marketplace, pointing to `./plugin`.
 
-Declares the plugin name, description, version, and author. Version must be bumped (patch) on every change to `cli/` or `skills/`.
+**Plugin manifest:** `plugin/.claude-plugin/plugin.json` — declares the plugin name (`cognigy-vibe`), description, version, and author. Version must be bumped (patch) on every change to `plugin/`.
 
 ---
 
@@ -174,7 +166,7 @@ Declares the plugin name, description, version, and author. Version must be bump
 2. Add a handler function and register it in `make_handlers()`
 3. Add tests in `cognigy-mcp/tests/tools/`
 4. If it covers new Cognigy API patterns, add an `explain` topic in `explain.py`
-5. Bump the patch version in `cognigy-mcp/pyproject.toml` and `.claude-plugin/plugin.json`
+5. Bump the patch version in `cognigy-mcp/pyproject.toml` and `plugin/.claude-plugin/plugin.json`
 
 For new node types, add the type → extension mapping to `_NODE_EXTENSION_MAP` in `flow_ops.py` — no other changes needed.
 
@@ -183,6 +175,6 @@ For new node types, add the type → extension mapping to `_NODE_EXTENSION_MAP` 
 ## Adding a New Composite Skill
 
 1. Identify which MCP tools it will call
-2. Write `skills/<skill-name>/SKILL.md` — call MCP tools by name, never construct HTTP requests
-3. Register it in `.claude-plugin/plugin.json`
-4. Bump the patch version in `.claude-plugin/plugin.json`
+2. Write `plugin/skills/<skill-name>/SKILL.md` — call MCP tools by name, never construct HTTP requests
+3. Register it in `plugin/.claude-plugin/plugin.json`
+4. Bump the patch version in `plugin/.claude-plugin/plugin.json`
