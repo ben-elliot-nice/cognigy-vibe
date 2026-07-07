@@ -56,3 +56,9 @@ def test_config_mock_non_dict_is_left_alone():
     data = {"_id": "x", "config": {"mock": None}}
     result = strip_response(data)
     assert result["config"]["mock"] is None
+
+
+def test_config_null_does_not_crash():
+    data = {"_id": "x", "config": None}
+    result = strip_response(data)
+    assert result["config"] is None
