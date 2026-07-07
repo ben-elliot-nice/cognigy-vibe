@@ -63,7 +63,7 @@ Evaluate each assertion and record PASS / FAIL / WARN. Do not stop on failure �
 
 Pass: `✅ P1  LLM connected`
 Fail: `❌ P1  No LLM connected to AI Agent`
-→ `cognigy_update(resource_type: "aiagents", resource_id: agentId, body: { llmId: "<llm-id>" })` — or wire the LLM in the Cognigy UI under Agent → LLM settings.
+→ Wire the LLM in the Cognigy UI: Agent → LLM settings → select an LLM. Or call `cognigy_update(resource_type: "aiagents", resource_id: agentId, body: { llmId: "<llm-id>" })` if you prefer the API path.
 
 ### P2 — VoiceGateway2 endpoint bound · FAIL if missing
 
@@ -81,7 +81,7 @@ Fail: `❌ P2  No VoiceGateway2 endpoint bound to this flow`
 
 Pass: `✅ P3  Demo URL active (webRTC widget enabled)`
 Warn: `⚠️  P3  Demo URL not active — webrtcWidgetConfig.active is false or urlToken is empty`
-→ `cognigy_update` the endpoint: `body: { webrtcWidgetConfig: { active: true } }`. Then retrieve the `urlToken` via `cognigy_get` on the endpoint and confirm it is non-empty.
+→ Enable the webRTC widget in the Cognigy UI: Endpoints → [endpoint name] → webRTC Widget → set Active to on. Re-run this checklist to confirm the `urlToken` is then present.
 
 ### P4 — Agent description ≤ 1000 chars · FAIL if over
 
