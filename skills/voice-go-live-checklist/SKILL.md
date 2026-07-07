@@ -182,7 +182,7 @@ Fail: `❌ F8  [N] aiAgentToolAnswer node(s) have empty config.answer: [list nod
 
 Pass: `✅ F9  AI Agent Job production flags correct`
 Fail: `❌ F9  AI Agent Job has debug flags enabled: [list flagged fields]`
-→ `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <aiAgentJobNodeId>, merge_config: true, body: { config: { debugLogSystemPrompt: false, debugResult: false } })`
+→ Open the AI Agent Job node in the Cognigy Flow Editor and uncheck "Debug Log System Prompt" and "Debug Result" in the node config. Or call `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <aiAgentJobNodeId>, merge_config: true, body: { config: { debugLogSystemPrompt: false, debugResult: false } })`.
 
 ---
 
