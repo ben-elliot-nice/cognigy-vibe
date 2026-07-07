@@ -1,6 +1,6 @@
 ---
 topic: node-positioning
-description: append vs appendChild modes, child branch population for Once and IF nodes
+description: append vs appendChild modes, child branch population for Once, IF, ifThenElse nodes, lookup default branch
 group: nodes
 ---
 
@@ -57,3 +57,28 @@ Example: IF node "if-abc" with childIds ["then-xyz", "else-xyz"]
   - To add a Code node to Else: mode="append", target="else-xyz"
 
 Common pitfall: targeting the IF node's own _id ("if-abc") instead of the branch marker.
+
+### ifThenElse branch population
+
+Same append-not-appendChild rule as Once and IF nodes.
+
+**ifThenElse** auto-creates: `then` and `else` child branch markers
+
+Steps to populate a branch:
+1. Create the `if` node (type string `"if"` via `cognigy_create`) or work with a UI-created `ifThenElse` node
+2. List nodes to find the auto-created child IDs: `cognigy_list` or `get_flow_chart`
+3. Create content nodes with `mode: "append"`, `target: <branch-child-_id>`
+
+Example — add a Say node to the `then` branch:
+  // ifThenElse node "ifte-abc" has childIds ["then-xyz", "else-xyz"]
+  cognigy_create(body={"type": "say", "mode": "append", "target": "then-xyz", "flowId": "..."})
+
+**Type string note:** `ifThenElse` (UI-created) and `if` (API-created via `cognigy_create`)
+are distinct type strings — both exist in real charts, same branch population rules apply.
+
+### lookup node branches
+
+`lookup` auto-creates a `default` branch marker at creation time. Additional `case` branches
+are user-defined. The `default` branch follows the same append-after-marker rule as all other
+branch types. Creating programmatic case branches is not documented here — use the Cognigy UI
+for case branch management or consult the OpenAPI spec for the cases config schema.

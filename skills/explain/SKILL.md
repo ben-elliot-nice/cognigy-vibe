@@ -20,7 +20,7 @@ aiagent:
   agent-handover             Escalation to human pattern and handover context artefact design (two-consumer model)
   agent-persona-authoring    AI Agent description and instructions field authoring — structure, constraints, speaking style
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
-  agent-tool-json            .tool.json convention for defining AI agent tools locally
+  agent-tool-json            .tool.json convention — field reference, toolType selection, toolId uniqueness rule
   agent-tool-patterns        Tool granularity options (granular/consolidated/action-parameterized) and context.toolResponse channel
   multi-agent-architecture   Concierge + Specialists pattern, specialist job types, routing, context schema, stub agent
   tool-conditions            CognigyScript condition field, hiding tools from LLM
@@ -29,7 +29,7 @@ aiagent:
   two-pass-confirm           inter-turn flag management, STOP gate wording
 
 code:
-  code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
+  code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest response shape and storage config
   cognigyScript              interpolation contexts, what works where
   function-execution         async pattern, inject-back via sessions API
   output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
@@ -39,7 +39,7 @@ code:
 nodes:
   flow-chart-reading         reading chart output, node type strings, extension field
   node-config-update         full-replace semantics, merge_config pattern, silent field deletion
-  node-positioning           append vs appendChild modes, child branch population for Once and IF nodes
+  node-positioning           append vs appendChild modes, child branch population for Once, IF, ifThenElse nodes, lookup default branch
   node-types                 quick reference for all node type strings
   node-wiring                chart structure, relations array, sequential vs child chains
 

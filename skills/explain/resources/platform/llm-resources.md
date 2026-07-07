@@ -98,3 +98,19 @@ Both are returned by `cognigy_list`. Store both in `buildConfig.llm.options[]` (
 ### Confirming the resource path per region
 
 `largelanguagemodels` is the standard path across regions. If a `cognigy_list` returns unexpected results on a non-AU1 tenant, confirm the exact collection name against that environment's OpenAPI spec (`GET https://cognigy-api-<region>.nicecxone.com/openapi/openapi-viewer.json`) — the spec is the source of truth for resource paths.
+
+### Connections are project-scoped
+
+Every Cognigy Connection belongs to exactly one project. A `connectionId` from project A
+cannot be used in project B — it will fail with "Connection does not exist".
+
+This is why `manage_packages` exports BOTH the LLM resource and its connection together.
+Passing a cross-project `connectionId` directly to any tool (Knowledge AI settings,
+direct API calls, etc.) will always fail.
+
+Rules:
+- Never reuse a `connectionId` across projects
+- When exporting an LLM for transfer, always include its connection in the same package
+- When multiple LLMs share one connection in the source project, export all of them
+  together with that single connection in one package — do not re-import the same
+  connection in a separate package later

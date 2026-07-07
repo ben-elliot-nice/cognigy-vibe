@@ -1,6 +1,6 @@
 ---
 topic: code-node-patterns
-description: api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
+description: api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest response shape and storage config
 group: code
 ---
 
@@ -151,9 +151,33 @@ For modifying input objects, use the setVar/mergeVar utility functions:
 
 ### httpRequest Node Response Wrapping
 
-The httpRequest node wraps its response body under a `.result` key.
-  const body = context.httpResponse.result;   // NOT context.httpResponse directly
-  // httpResponse shape: {result: {...actualBody}, status: 200, headers: {...}}
+The httpRequest node stores its response as a wrapper object. The default identifier
+is `httprequest`, stored in `input` by default. Set `contextStore` on the node config
+to store to context instead.
+
+**Node config storage options:**
+  { "contextStore": "httpResponse" }  → stores to context.httpResponse
+  (no config)                         → stores to input.httprequest (default)
+
+**Response object shape** (same regardless of storage location):
+  {
+    result:          <parsed body — object for JSON responses, string otherwise>,
+    statusCode:      200,
+    length:          <bytes>,
+    responseHeaders: { "content-type": "application/json", ... }
+  }
+
+**Reading examples:**
+  // Default (input) — no node config needed:
+  const body = input.httprequest.result;
+  const status = input.httprequest.statusCode;
+
+  // Custom context key — requires contextStore: "httpResponse" on the node:
+  const body = context.httpResponse.result;
+
+The key gotcha: the response body is at `.result`, not directly on the wrapper object.
+  WRONG: input.httprequest.meals
+  RIGHT: input.httprequest.result.meals
 
 ### Standard Structure
 
