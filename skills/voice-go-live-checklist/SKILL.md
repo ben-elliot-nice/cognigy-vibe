@@ -90,3 +90,96 @@ Warn: `⚠️  P3  Demo URL not active — webrtcWidgetConfig.active is false or
 Pass: `✅ P4  Agent description within 1000-char cap ([N] chars)`
 Fail: `❌ P4  Agent description over 1000-char cap ([N] chars)`
 → Condense the `## Persona` block in the agent description. The cap is a hard platform limit — over-length silently fails on save. See build-orchestrator S1.1 pre-flight gate.
+
+---
+
+## Step 4: Flow structure assertions (F1–F9)
+
+All checks use `chart` from Step 2C. Walk node types and relations — do not rely on node labels, which the user may have customised.
+
+### F1 — Once gate present · FAIL if missing
+
+**Check:** Walking from the `start` node via `next` links, a node of type `once` is reachable within the first 3 hops.
+
+Pass: `✅ F1  Once gate present`
+Fail: `❌ F1  No Once node found near start of flow`
+→ Re-run `build-orchestrator` S1.5(a), or manually add a Once node after the Start node.
+
+### F2 — Set Session Config present · FAIL if missing
+
+**Check:** The `once` node's `onFirstExecution` branch contains a node of type `setSessionConfig`.
+
+Pass: `✅ F2  Set Session Config present in OnFirstExecution branch`
+Fail: `❌ F2  No Set Session Config node found in OnFirstExecution branch`
+→ Re-run `build-orchestrator` S1.5(c), or manually add a Set Session Config node (extension: `@cognigy/voicegateway2`) in the OnFirstExecution branch.
+
+### F3 — TTS/STT fields non-placeholder · FAIL if any empty or placeholder
+
+**Precondition:** F2 passed. If F2 failed, mark F3 as SKIP.
+
+**Check:** On the `setSessionConfig` node's config, all of these fields are non-empty and none equals the literal string `"<placeholder>"`:
+- `ttsVendor`, `ttsVoice`, `sttVendor`, `sttLanguage`, `locale`
+
+Pass: `✅ F3  TTS/STT fields configured (non-placeholder)`
+Fail: `❌ F3  TTS/STT fields contain placeholder or empty values: [list the failing fields]`
+→ Populate the flagged fields in the Set Session Config node. See `explain("voice-gateway")` for the expected field shapes.
+
+### F4 — sttHints populated · FAIL if empty or contains blank entries
+
+**Precondition:** F2 passed. If F2 failed, mark F4 as SKIP.
+
+**Check:** `setSessionConfig.config.sttHints` is a non-empty array and contains no empty-string entries.
+
+Pass: `✅ F4  sttHints populated ([N] hints)`
+Fail: `❌ F4  sttHints empty or contains blank entries`
+→ Populate `sttHints` with the customer brand name, the persona name, and ≥3 domain terms from the agent's tool set (e.g. tool names and their key nouns). See `build-orchestrator` S1.5(c).
+
+### F5 — Silence handling wired · FAIL if neither condition met
+
+**Check:** Either condition is true:
+1. `setSessionConfig.config.userNoInputTimeoutEnable` is `true`, OR
+2. A node in the flow handles the `noUserInput` system intent (look for an intent node or default reply referencing `noUserInput`, or an ifThenElse checking `input.data.event === "USER_INPUT_TIMEOUT"`).
+
+Pass: `✅ F5  Silence handling wired`
+Fail: `❌ F5  No silence/no-input handling detected`
+→ Set `userNoInputTimeoutEnable: true` in Set Session Config, or wire a `noUserInput` system intent handler. See `explain("voice-silence-timeout")` for the reprompt-then-escalate pattern.
+
+### F6 — Say Welcome with name interpolation · WARN if missing
+
+**Check:** In the `onFirstExecution` branch, a node of type `say` exists whose `config.say.text` array contains at least one entry with the substring `{{context.customer.firstName}}`.
+
+Pass: `✅ F6  Say Welcome contains firstName interpolation`
+Warn: `⚠️  F6  Say Welcome missing firstName interpolation`
+→ Add `{{context.customer.firstName}}` to at least one variant in the Say Welcome node's text array.
+
+### F7 — End-call pair present · FAIL if neither; WARN if only one
+
+**Check:** Scan all `aiAgentJobTool` children of the `aiAgentJob` node for tool branches named `end_call` and `end_call_resolved`. Each valid branch must contain a `hangup` node before the `aiAgentToolAnswer`.
+
+- Both `end_call` and `end_call_resolved` present with Hangup → PASS
+- Only one present with Hangup → WARN
+- Neither present → FAIL
+
+Pass: `✅ F7  End-call pair present (end_call + end_call_resolved with Hangup)`
+Warn: `⚠️  F7  Only one end-call branch present ([name]) — add the missing counterpart`
+→ Re-run `build-orchestrator` S5, or manually add the missing end-call branch with a Hangup node (extension: `@cognigy/voicegateway2`) before the aiAgentToolAnswer.
+Fail: `❌ F7  No end-call branches found — both end_call and end_call_resolved are missing`
+→ Re-run `build-orchestrator` S5.
+
+### F8 — No unpopulated tool answers · FAIL if any empty
+
+**Check:** Every node of type `aiAgentToolAnswer` in the flow has `config.answer` that is non-null and non-empty string.
+
+Pass: `✅ F8  All tool answer nodes populated`
+Fail: `❌ F8  [N] aiAgentToolAnswer node(s) have empty config.answer: [list node IDs or labels]`
+→ For each flagged node, call `cognigy_update` with `body: { config: { answer: "{{JSON.stringify(context.toolResponse)}}", maxLoops: 4 } }`. See `build-orchestrator` S1.4.
+
+### F9 — AI Agent Job production flags · FAIL if any debug flag is on
+
+**Check:** On the `aiAgentJob` node:
+- `config.debugLogSystemPrompt` is `false` or absent (default is false)
+- `config.debugResult` is `false` or absent (default is false)
+
+Pass: `✅ F9  AI Agent Job production flags correct`
+Fail: `❌ F9  AI Agent Job has debug flags enabled: [list flagged fields]`
+→ `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <aiAgentJobNodeId>, merge_config: true, body: { config: { debugLogSystemPrompt: false, debugResult: false } })`
