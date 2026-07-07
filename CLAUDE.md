@@ -132,17 +132,10 @@ claude plugin marketplace add superpowers-dev github:obra/superpowers
 claude plugin install superpowers@superpowers-dev
 ```
 
-**Cognigy** (`cognigy@nice`) — Cognigy-specific skills. Two install options:
-
-Direct from GitHub (recommended — no marketplace required):
+**Cognigy** (`cognigy-vibe@cognigy-vibe`) — Cognigy-specific skills:
 ```bash
-claude plugin install github:ben-elliot-nice/cognigy-claude-plugin
-```
-
-Or via the NICE Claude Marketplace (if you have `nice-claude-marketplace` checked out):
-```bash
-claude plugin marketplace add nice directory:/path/to/nice-claude-marketplace
-claude plugin install cognigy@nice
+claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
+claude plugin install cognigy-vibe@cognigy-vibe
 ```
 
 ## Local Development Testing
@@ -175,8 +168,7 @@ If you have the cognigy plugin installed at user level, Claude Code loads both t
 
 The following items are tracked but not currently in scope. If you ask Claude to work on this project, Claude may ask whether these TODOs are in scope for the current session before proceeding.
 
-1. **GitHub Actions: auto-update marketplace parent repo** — When this plugin is committed and pushed, the parent repo (`nice-claude-marketplace`) should automatically pull the submodule update via CI instead of manual command above.
-2. **CI documentation audit** (issue #102) — Find and update all documentation that still references the old auto-publish-on-dev-push CI flow.
+1. **CI documentation audit** (issue #102) — Find and update all documentation that still references the old auto-publish-on-dev-push CI flow.
 
 ## Prerelease flow
 

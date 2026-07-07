@@ -45,17 +45,6 @@ After install:
 4. Run `cognigy:init-cognigy-vibe` to capture your build defaults (one-time per workstation).
 5. Ask: *"Build me a Cognigy demo for \<customer\>."*
 
-### Marketplace (NICE internal)
-
-If you have access to the NICE Claude Marketplace:
-
-```bash
-claude plugin marketplace add ben-elliot-nice/nice-claude-marketplace
-claude plugin install cognigy@nice
-```
-
-Then follow steps 1–5 above.
-
 ### Clone + local dev
 
 For contributors running from source — the repo is configured to run the MCP server directly, no install step required.
