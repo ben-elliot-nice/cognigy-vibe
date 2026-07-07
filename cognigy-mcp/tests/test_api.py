@@ -1,7 +1,8 @@
 import pytest
 import httpx
 import respx
-from cognigy_mcp.api import CognigyClient, ApiError
+from unittest.mock import patch
+from cognigy_mcp.api import CognigyClient, ApiError, RetriableApiError
 
 BASE = "https://cognigy-api-au1.nicecxone.com"
 
@@ -90,7 +91,8 @@ def test_auth_header_sent(client):
     assert route.calls[0].request.headers["X-API-Key"] == "test-key"
 
 
-def test_non_json_error_body_raises_api_error(client):
+@patch("time.sleep")
+def test_non_json_error_body_raises_api_error(mock_sleep, client):
     with respx.mock:
         respx.get(f"{BASE}/v2.0/flows/bad").mock(
             return_value=httpx.Response(
@@ -103,9 +105,6 @@ def test_non_json_error_body_raises_api_error(client):
             client.get("/v2.0/flows/bad")
     assert exc.value.status_code == 500
     assert "Internal Server Error" in str(exc.value)
-
-
-from cognigy_mcp.api import RetriableApiError
 
 
 # --- RetriableApiError exception hierarchy ---
@@ -173,6 +172,81 @@ def test_raise_for_status_401_raises_plain_api_error(client):
         client._raise_for_status(resp)
     assert type(exc.value) is ApiError
     assert exc.value.status_code == 401
+
+
+# --- Retry integration tests ---
+
+@patch("time.sleep")
+def test_get_retries_on_5xx_and_succeeds(mock_sleep, client):
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/flows/flow-123").mock(side_effect=[
+            httpx.Response(503, json={"error": "unavailable"}),
+            httpx.Response(200, json={"_id": "flow-123"}),
+        ])
+        result = client.get("/v2.0/flows/flow-123")
+    assert result["_id"] == "flow-123"
+    assert mock_sleep.call_count == 1
+
+
+@patch("time.sleep")
+def test_get_raises_after_3_failed_attempts(mock_sleep, client):
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/flows/flow-123").mock(
+            return_value=httpx.Response(503, json={"error": "unavailable"})
+        )
+        with pytest.raises(RetriableApiError) as exc:
+            client.get("/v2.0/flows/flow-123")
+    assert exc.value.status_code == 503
+    assert mock_sleep.call_count == 2
+
+
+@patch("time.sleep")
+def test_get_429_respects_retry_after_header(mock_sleep, client):
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/flows/flow-123").mock(side_effect=[
+            httpx.Response(429, json={"error": "rate limited"}, headers={"Retry-After": "7"}),
+            httpx.Response(200, json={"_id": "flow-123"}),
+        ])
+        result = client.get("/v2.0/flows/flow-123")
+    assert result["_id"] == "flow-123"
+    mock_sleep.assert_called_once_with(7.0)
+
+
+@patch("time.sleep")
+def test_get_429_without_retry_after_uses_exponential_backoff(mock_sleep, client):
+    with respx.mock:
+        respx.get(f"{BASE}/v2.0/flows/flow-123").mock(side_effect=[
+            httpx.Response(429, json={"error": "rate limited"}),
+            httpx.Response(200, json={"_id": "flow-123"}),
+        ])
+        result = client.get("/v2.0/flows/flow-123")
+    assert result["_id"] == "flow-123"
+    mock_sleep.assert_called_once_with(1.0)
+
+
+def test_get_404_does_not_retry(client):
+    with respx.mock:
+        route = respx.get(f"{BASE}/v2.0/flows/missing").mock(
+            return_value=httpx.Response(404, json={"error": "Not found"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.get("/v2.0/flows/missing")
+    assert exc.value.status_code == 404
+    assert route.call_count == 1
+
+
+@patch("time.sleep")
+def test_download_url_retries_on_5xx_and_succeeds(mock_sleep, client):
+    presigned = "https://storage.example.com/packages/export.zip"
+    zip_bytes = b"PK\x03\x04fake-zip-content"
+    with respx.mock:
+        respx.get(presigned).mock(side_effect=[
+            httpx.Response(503, json={"error": "unavailable"}),
+            httpx.Response(200, content=zip_bytes),
+        ])
+        result = client.download_url(presigned)
+    assert result == zip_bytes
+    assert mock_sleep.call_count == 1
 
 
 def test_endpoint_base_url_raises_for_non_matching_url():
