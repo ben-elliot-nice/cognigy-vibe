@@ -132,7 +132,14 @@ claude marketplace add superpowers-dev github:obra/superpowers
 claude plugin install superpowers@superpowers-dev
 ```
 
-**Cognigy** (`cognigy@nice`) — Cognigy-specific skills. Installed from the NICE Claude Marketplace, which is the parent repo of this plugin. If you have `nice-claude-marketplace` checked out:
+**Cognigy** (`cognigy@nice`) — Cognigy-specific skills. Two install options:
+
+Direct from GitHub (recommended — no marketplace required):
+```bash
+claude plugin install github:ben-elliot-nice/cognigy-claude-plugin
+```
+
+Or via the NICE Claude Marketplace (if you have `nice-claude-marketplace` checked out):
 ```bash
 claude marketplace add nice directory:/path/to/nice-claude-marketplace
 claude plugin install cognigy@nice
