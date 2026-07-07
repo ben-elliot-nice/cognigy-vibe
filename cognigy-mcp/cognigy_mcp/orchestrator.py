@@ -24,12 +24,15 @@ def _log(msg: str) -> None:
     _LOG.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
 
 
+# Only credential keys are popped on each _spawn() so they reload from .env on restart.
+# COGNIGY_VIBE_DEV and COGNIGY_VIBE_SOURCE_DIR are structural config injected by .mcp.json
+# and must NOT be popped — they survive in os.environ across restarts. A contributor who
+# wants to opt out of dev mode can set COGNIGY_VIBE_DEV= in their .env (load_dotenv
+# override=True will clear it).
 _ENV_KEYS = frozenset([
     "COGNIGY_BASE_URL",
     "COGNIGY_API_KEY",
     "COGNIGY_PROJECT_ID",
-    "COGNIGY_VIBE_DEV",
-    "COGNIGY_VIBE_SOURCE_DIR",
 ])
 
 
@@ -60,7 +63,8 @@ def _inner_command(mode: str) -> list[str]:
         if not source_dir:
             sys.stderr.write("[orchestrator] COGNIGY_VIBE_SOURCE_DIR must be set for dev mode\n")
             sys.exit(1)
-        return ["uv", "run", "--directory", source_dir, "-m", "cognigy_mcp.server"]
+        # Resolve relative paths (e.g. ./cognigy-mcp from .mcp.json) against CWD.
+        return ["uv", "run", "--directory", str(Path(source_dir).resolve()), "-m", "cognigy_mcp.server"]
     return [sys.executable, "-m", "cognigy_mcp.server"]
 
 

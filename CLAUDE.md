@@ -146,18 +146,23 @@ First time in a new clone, trust the mise config:
 mise trust
 ```
 
-`.mcp.json` uses `uvx cognigy-vibe-mcp` (the published package) — same as an installed user. Credentials must be in the shell environment before starting Claude. Copy `.env.example` to `.env`, fill in your values, and `mise` will auto-source it when you enter the directory.
+Copy `.env.example` to `.env` and fill in your Cognigy credentials — `mise` auto-sources it when you enter the directory. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
 
-### Dev mode (server contributors only)
+`.mcp.json` is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` are baked in. Claude Code picks it up automatically on next start. The server runs from local source (`./cognigy-mcp`) with `reload_mcp` available. After editing source files, call `reload_mcp` — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
 
-To develop against local MCP source instead of the published package, add these vars to your project `.env` (credentials must already be configured):
+If you are only using the skills (not developing the MCP server), you can opt out of dev mode by adding `COGNIGY_VIBE_DEV=` (empty value) to your `.env` — `load_dotenv` override takes effect on the next spawn.
 
-```env
-COGNIGY_VIBE_DEV=1
-COGNIGY_VIBE_SOURCE_DIR=/absolute/path/to/cognigy-claude-plugin/cognigy-mcp
+### Plugin conflict (if you have the cognigy plugin installed)
+
+If you have the cognigy plugin installed at user level, Claude Code loads both the plugin-defined server (`mcp__plugin_<marketplace>__cognigy-vibe__*`) and the `.mcp.json` dev server (`mcp__cognigy-vibe__*`) simultaneously. To avoid namespace ambiguity during MCP development, disable the plugin locally by adding to your `.claude/settings.local.json`:
+
+```json
+{
+  "enabledPlugins": {
+    "cognigy@nice": false
+  }
+}
 ```
-
-The orchestrator detects these on startup and spawns from local source via `uv run`. After editing source files, ask Claude to call the `reload_mcp` tool — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
 
 ## TODO
 
