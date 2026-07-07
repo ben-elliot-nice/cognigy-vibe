@@ -5,10 +5,62 @@ import json
 import struct
 import time
 from pathlib import Path
+from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+from cognigy_mcp.validation import _ok, validate, make_schema
+
+
+class PushCodeNodeArgs(BaseModel):
+    script_file: str = Field(description="Absolute path to .js or .ts file")
+    flow_id: str
+    node_id: str | None = Field(
+        None,
+        description="ID of an existing code node to update. Omit to create a new node.",
+    )
+    mode: str | None = Field(
+        None,
+        description="Required when creating: appendChild or append (see node-positioning)",
+    )
+    target: str | None = Field(
+        None,
+        description="Required when creating: ID of the reference node for positioning",
+    )
+    label: str | None = Field(None, description="Node label when creating (default: 'Code')")
+
+
+class PushHtmlNodeArgs(BaseModel):
+    html_file: str = Field(description="Absolute path to .html file")
+    node_id: str
+    flow_id: str
+
+
+class PushAgentToolArgs(BaseModel):
+    tool_file: str = Field(description="Absolute path to .tool.json file")
+    flow_id: str
+    node_id: str | None = Field(
+        None,
+        description="ID of an existing aiAgentJobTool node to update. Omit to create.",
+    )
+    job_node_id: str | None = Field(
+        None,
+        description="Required when creating: ID of the parent aiAgentJob node",
+    )
+
+
+class PushAgentAvatarArgs(BaseModel):
+    image_file: str = Field(description="Absolute path to a 136×184px PNG file")
+    agent_id: str = Field(description="Agent _id or referenceId")
+
+
+class ExportPackageArgs(BaseModel):
+    project_id: str = Field(description="Cognigy project _id to export")
+    output_path: str = Field(
+        description="Absolute or relative path where the zip file will be written",
+    )
+
 
 _EXPORT_POLL_INTERVAL = 3.0   # seconds between job-status polls
 _EXPORT_TIMEOUT = 300.0       # total seconds before giving up
@@ -22,32 +74,13 @@ TOOLS: list[Tool] = [
                     "(2) CREATE — omit node_id and provide mode + target to create a new code node and push in one step. "
                     "Conflict detection: if the remote node was edited in the Cognigy UI since the last push, "
                     "the operation is blocked and a diff is returned.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "script_file": {"type": "string", "description": "Absolute path to .js or .ts file"},
-                "flow_id": {"type": "string"},
-                "node_id": {"type": "string", "description": "ID of an existing code node to update. Omit to create a new node."},
-                "mode": {"type": "string", "description": "Required when creating: appendChild or append (see node-positioning)"},
-                "target": {"type": "string", "description": "Required when creating: ID of the reference node for positioning"},
-                "label": {"type": "string", "description": "Node label when creating (default: 'Code')"},
-            },
-            "required": ["script_file", "flow_id"],
-        },
+        inputSchema=make_schema(PushCodeNodeArgs),
     ),
     Tool(
         name="push_html_node",
         description="Read a local .html file and push it to a Cognigy setHTMLAppState node. "
                     "Automatically sets mode='full'.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "html_file": {"type": "string", "description": "Absolute path to .html file"},
-                "node_id": {"type": "string"},
-                "flow_id": {"type": "string"},
-            },
-            "required": ["html_file", "node_id", "flow_id"],
-        },
+        inputSchema=make_schema(PushHtmlNodeArgs),
     ),
     Tool(
         name="push_agent_tool",
@@ -60,16 +93,7 @@ TOOLS: list[Tool] = [
             "parameters (JSON Schema object) and condition (CognigyScript) are optional. "
             "See explain('agent-tool-json') for the .tool.json file convention."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "tool_file": {"type": "string", "description": "Absolute path to .tool.json file"},
-                "flow_id": {"type": "string"},
-                "node_id": {"type": "string", "description": "ID of an existing aiAgentJobTool node to update. Omit to create."},
-                "job_node_id": {"type": "string", "description": "Required when creating: ID of the parent aiAgentJob node"},
-            },
-            "required": ["tool_file", "flow_id"],
-        },
+        inputSchema=make_schema(PushAgentToolArgs),
     ),
     Tool(
         name="push_agent_avatar",
@@ -79,14 +103,7 @@ TOOLS: list[Tool] = [
             "Encodes to base64 data URI and PATCHes the agent resource. "
             "See explain('agent-avatar-image') for the full avatar spec."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image_file": {"type": "string", "description": "Absolute path to a 136×184px PNG file"},
-                "agent_id": {"type": "string", "description": "Agent _id or referenceId"},
-            },
-            "required": ["image_file", "agent_id"],
-        },
+        inputSchema=make_schema(PushAgentAvatarArgs),
     ),
     Tool(
         name="export_package",
@@ -97,23 +114,9 @@ TOOLS: list[Tool] = [
             "Parent directories are created automatically. "
             "Typical output path: Demo Builds/<customer>-demo/<customer>-package.zip"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "project_id": {"type": "string", "description": "Cognigy project _id to export"},
-                "output_path": {
-                    "type": "string",
-                    "description": "Absolute or relative path where the zip file will be written",
-                },
-            },
-            "required": ["project_id", "output_path"],
-        },
+        inputSchema=make_schema(ExportPackageArgs),
     ),
 ]
-
-
-def _ok(data: dict) -> list[TextContent]:
-    return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
 
 def _diff_summary(old: str, new: str) -> str:
@@ -134,24 +137,26 @@ def _diff_summary(old: str, new: str) -> str:
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _push_code_node(args: dict) -> list[TextContent]:
-        path = Path(args["script_file"])
-        node_id = args.get("node_id")
-        flow_id = args["flow_id"]
+        m, err = validate(PushCodeNodeArgs, args)
+        if err:
+            return err
+        path = Path(m.script_file)
+        node_id = m.node_id
+        flow_id = m.flow_id
 
         if not path.exists():
             return _ok({"error": f"File not found: {path}"})
 
         local_content = path.read_text()
 
-        # Creation path: no node_id provided — create then push
         if not node_id:
-            mode = args.get("mode")
-            target = args.get("target")
+            mode = m.mode
+            target = m.target
             if not mode or not target:
                 return _ok({"error": "Provide node_id to update an existing code node, or mode + target to create a new one"})
             body = {
                 "type": "code",
-                "label": args.get("label", "Code"),
+                "label": m.label or "Code",
                 "mode": mode,
                 "target": target,
                 "extension": "@cognigy/basic-nodes",
@@ -162,13 +167,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             except Exception as e:
                 return _ok({"error": f"Failed to create code node: {e}"})
             node_id = result["_id"]
-            label = args.get("label", "Code")
+            label = m.label or "Code"
             cache.set("nodes", node_id, result)
             cache.set_node_snapshot(node_id, local_content)
             state.set("nodes", label, value={"id": node_id, "flowId": flow_id})
             return _ok({"success": True, "node_id": node_id, "created": True, "bytes": len(local_content)})
 
-        # Update path: push to existing node with conflict detection
         try:
             remote = client.get(f"/v2.0/flows/{flow_id}/chart/nodes/{node_id}")
         except Exception as e:
@@ -197,9 +201,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({"success": True, "node_id": node_id, "bytes": len(local_content)})
 
     def _push_html_node(args: dict) -> list[TextContent]:
-        path = Path(args["html_file"])
-        node_id = args["node_id"]
-        flow_id = args["flow_id"]
+        m, err = validate(PushHtmlNodeArgs, args)
+        if err:
+            return err
+        path = Path(m.html_file)
+        node_id = m.node_id
+        flow_id = m.flow_id
 
         if not path.exists():
             return _ok({"error": f"File not found: {path}"})
@@ -216,9 +223,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({"success": True, "node_id": node_id, "bytes": len(html)})
 
     def _push_agent_tool(args: dict) -> list[TextContent]:
-        path = Path(args["tool_file"])
-        node_id = args.get("node_id")
-        flow_id = args["flow_id"]
+        m, err = validate(PushAgentToolArgs, args)
+        if err:
+            return err
+        path = Path(m.tool_file)
+        node_id = m.node_id
+        flow_id = m.flow_id
 
         if not path.exists():
             return _ok({"error": f"File not found: {path}"})
@@ -249,7 +259,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             config["parameters"] = json.dumps(parameters, separators=(",", ":"))
 
         if not node_id:
-            job_node_id = args.get("job_node_id")
+            job_node_id = m.job_node_id
             if not job_node_id:
                 return _ok({"error": "Provide node_id to update an existing tool node, or job_node_id to create a new one"})
             body = {
@@ -275,8 +285,11 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({"success": True, "node_id": node_id, "updated": True})
 
     def _push_agent_avatar(args: dict) -> list[TextContent]:
-        path = Path(args["image_file"])
-        agent_id = args["agent_id"]
+        m, err = validate(PushAgentAvatarArgs, args)
+        if err:
+            return err
+        path = Path(m.image_file)
+        agent_id = m.agent_id
 
         if not path.exists():
             return _ok({"error": f"File not found: {path}"})
@@ -294,7 +307,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         if w != 136 or h != 184:
             ratio = w / h if h else 0
-            target_ratio = 136 / 184  # ≈ 0.7391
+            target_ratio = 136 / 184
             if abs(ratio - target_ratio) <= 0.01:
                 return _ok({"error": f"Image is {w}×{h}px. Correct ratio — resize to 136×184 and re-run."})
             return _ok({"error": f"Image is {w}×{h}px. Expected 136×184px."})
@@ -311,8 +324,11 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok({"success": True, "agent_id": agent_id, "bytes": len(data)})
 
     def _export_package(args: dict) -> list[TextContent]:
-        project_id = args["project_id"]
-        output_path = Path(args["output_path"])
+        m, err = validate(ExportPackageArgs, args)
+        if err:
+            return err
+        project_id = m.project_id
+        output_path = Path(m.output_path)
 
         # Kick off the async export job — returns a Task object, not a Package.
         # The _id in the response is the task ID, not the package ID.
