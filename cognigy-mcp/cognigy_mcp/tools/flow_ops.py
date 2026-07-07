@@ -4,6 +4,7 @@ from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState, _deep_merge
+from cognigy_mcp.filters import strip_response
 
 TOOLS: list[Tool] = [
     Tool(
@@ -363,6 +364,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         fields = args.get("fields")
         if fields:
             data = {k: data[k] for k in fields if k in data}
+        data = strip_response(data)
         return _ok({**data, "_source": source})
 
     def _cognigy_list(args: dict) -> list[TextContent]:
@@ -402,6 +404,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             items = result_data.get("items", [])
             filtered = [{k: item[k] for k in fields if k in item} for item in items]
             result_data = {"items": filtered, "count": len(filtered)}
+        if full_objects:
+            items = result_data.get("items", [])
+            result_data = {**result_data, "items": [strip_response(item) for item in items]}
         return _ok(result_data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
@@ -456,7 +461,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if resource_id:
             cache.set(rtype, resource_id, result)
         if args.get("return_full_object"):
-            return _ok(result)
+            return _ok(strip_response(result))
         minimal = {
             "_id": result.get("_id"),
             "referenceId": result.get("referenceId"),
@@ -501,7 +506,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         result = client.patch(path, body)
         cache.set(rtype, rid, result)
         if args.get("return_full_object"):
-            return _ok(result)
+            return _ok(strip_response(result))
         minimal = {
             "_id": result.get("_id"),
             "type": result.get("type"),
@@ -540,10 +545,17 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             hierarchy = _build_hierarchy(chart)
             return _ok({"hierarchy": hierarchy})
         elif fmt == "raw":
-            return _ok({"nodes": chart.get("nodes", []), "relations": chart.get("relations", [])})
+            return _ok({
+                "nodes": [strip_response(n) for n in chart.get("nodes", [])],
+                "relations": chart.get("relations", []),
+            })
         else:
             hierarchy = _build_hierarchy(chart)
-            return _ok({"relations": chart.get("relations", []), "nodes": chart.get("nodes", []), "hierarchy": hierarchy})
+            return _ok({
+                "relations": chart.get("relations", []),
+                "nodes": [strip_response(n) for n in chart.get("nodes", [])],
+                "hierarchy": hierarchy,
+            })
 
     return {
         "cognigy_get": _cognigy_get,
