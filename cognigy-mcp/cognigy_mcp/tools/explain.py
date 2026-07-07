@@ -1,14 +1,20 @@
 # cognigy_mcp/tools/explain.py
 from __future__ import annotations
+from pydantic import BaseModel
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+from cognigy_mcp.validation import validate, make_schema
 from cognigy_mcp.tools._explain_topics_generated import (
     TOPICS,
     _TOPIC_INDEX,
     _CONTENT,
 )
+
+
+class ExplainArgs(BaseModel):
+    topic: str = ""
 
 TOOLS: list[Tool] = [
     Tool(
@@ -19,15 +25,7 @@ TOOLS: list[Tool] = [
             "Call explain() for orientation and topic descriptions.\n"
             "Call explain(\"topic\") for full reference on that topic."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "topic": {
-                    "type": "string",
-                    "description": "Topic name from the list above. Omit for orientation overview.",
-                },
-            },
-        },
+        inputSchema=make_schema(ExplainArgs),
     ),
 ]
 
@@ -39,7 +37,10 @@ def _ok(text: str) -> list[TextContent]:
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _explain(args: dict) -> list[TextContent]:
-        topic = args.get("topic", "").strip()
+        m, err = validate(ExplainArgs, args)
+        if err:
+            return err
+        topic = m.topic.strip()
         if not topic:
             return _ok("# cognigy-vibe-mcp Reference Library\n\n" + _TOPIC_INDEX)
         content = _CONTENT.get(topic)

@@ -216,3 +216,21 @@ def test_talk_to_agent_message_optional_when_data_provided(real_client, state, c
         })
     data = json.loads(result[0].text)
     assert "error" not in data, f"Should not error on missing message: {data}"
+
+
+def test_talk_to_agent_missing_session_id_returns_validation_error(real_client, state, cache):
+    handlers = make_handlers(real_client, state, cache)
+    result = handlers["talk_to_agent"]({"user_id": "user-1"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "session_id" for d in data["details"])
+
+
+def test_talk_to_agent_missing_user_id_returns_validation_error(real_client, state, cache):
+    handlers = make_handlers(real_client, state, cache)
+    result = handlers["talk_to_agent"]({"session_id": "sess-1"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "user_id" for d in data["details"])
