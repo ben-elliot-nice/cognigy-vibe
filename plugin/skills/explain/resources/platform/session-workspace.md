@@ -77,11 +77,9 @@ Each workspace directory has its own `.env` (and optionally its own `default-dem
 
 ## Legacy model (superseded)
 
-The flat-structure model — where cwd was the demo directory, `COGNIGY_PROJECT_ID` was pinned in `.env`, and `cognigy-vibe:init-mcp` was run per project — is superseded by the session-workspace model. In the current model:
+The flat-structure model — where cwd was the demo directory, `COGNIGY_PROJECT_ID` was pinned in `.env`, and an init skill was run per project — is superseded by the session-workspace model. In the current model:
 
 - No `COGNIGY_PROJECT_ID` pinned in `.env` at session start (it is written dynamically by `sync_remote_state` — see `.env` scope above)
 - No per-build `.claude/mcp.json`
-- No `cognigy-vibe:init-mcp` per project
+- No per-project init skill
 - No session restart between builds
-
-`cognigy-vibe:init-mcp` remains available for edge cases (non-plugin users who want a single-project flat directory with `COGNIGY_PROJECT_ID` pinned at session start), but is not part of the standard demo-build workflow.

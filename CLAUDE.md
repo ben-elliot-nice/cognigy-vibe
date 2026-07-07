@@ -118,7 +118,7 @@ The Cognigy OpenAPI spec is available per environment (not vendored):
 
 ## Required Plugins
 
-This project uses two Claude Code plugins. `.claude/settings.json` enables them.
+This project uses two Claude Code plugins. `.claude/settings.json` enables them — both must be installed before opening Claude Code in this repo.
 
 **Superpowers** (`superpowers@superpowers-dev`) — workflow skills (brainstorming, planning, TDD, etc.):
 ```bash
