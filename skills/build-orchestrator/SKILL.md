@@ -1687,6 +1687,7 @@ Smoke test: Phase A 13/13 ✓ (incl. agent description & instructions ≤1000 ch
 - [ ] **Voice Preview configured** — required for WebRTC demoing (Settings → Voice Preview → Microsoft in the Cognigy UI). Build completes without it; demo fails without it.
 - [ ] **Debug flags clean** — Phase A assertion 13 confirmed `outputImmediately: true`, `debugLogSystemPrompt: false`, `debugResult: false`. If the assertion auto-fixed them, verify the patch landed via `cognigy_get` on the Job Node before the session.
 - [ ] **Phase B advisories reviewed** — any probabilistic WARN entries above should be manually validated in the Interaction Panel before presenting to a customer.
+- [ ] **Voice go-live checklist** — run `cognigy:voice-go-live-checklist` before the first live demo to catch any post-build drift or config gaps not covered by the smoke test.
 
 Next steps (manual, in the Cognigy UI):
 - Open the Interaction Panel on the [Persona] agent to smoke-test conversation flow
