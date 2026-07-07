@@ -3,10 +3,36 @@ import json
 import os
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient, ApiError
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
+from cognigy_mcp.validation import _ok, validate, make_schema
+
+
+class SyncRemoteStateArgs(BaseModel):
+    project_id: str | None = Field(
+        None,
+        description="Cognigy project ID. Optional if COGNIGY_PROJECT_ID is set in environment.",
+    )
+
+
+class GetBuildStateArgs(BaseModel):
+    resource_type: str | None = Field(
+        None,
+        description="Filter to one resource category: flows, agents, endpoints, tools, nodes, jobs",
+    )
+
+
+class ResolveResourceArgs(BaseModel):
+    name: str
+    resource_type: str = Field(description="One of: flows, agents, endpoints, tools, nodes, jobs")
+
+
+class AssignOrgLlmArgs(BaseModel):
+    project_id: str = Field(description="Cognigy project _id to assign the LLM to")
+    llm_id: str = Field(description="MongoDB _id of the org-level LLM (not referenceId)")
 
 
 _RESOURCE_TYPE_ALIASES: dict[str, str] = {
@@ -48,15 +74,7 @@ TOOLS: list[Tool] = [
         description="Hard reset: wipe local cache and repopulate from Cognigy remote. "
                     "Runs automatically after session idle > threshold. Call manually "
                     "after making changes in the Cognigy UI.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "project_id": {
-                    "type": "string",
-                    "description": "Cognigy project ID. Optional if COGNIGY_PROJECT_ID is set in environment.",
-                },
-            },
-        },
+        inputSchema=make_schema(SyncRemoteStateArgs),
     ),
     Tool(
         name="get_build_state",
@@ -64,31 +82,13 @@ TOOLS: list[Tool] = [
                     "Pass resource_type to scope the response and avoid context overflow on large projects. "
                     "Example: get_build_state(resource_type='flows') returns ~50 tokens vs ~500 for full state. "
                     "Filter values: flows, agents, endpoints, tools, nodes, jobs.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "resource_type": {
-                    "type": "string",
-                    "description": "Filter to one resource category: flows, agents, endpoints, tools, nodes, jobs",
-                },
-            },
-        },
+        inputSchema=make_schema(GetBuildStateArgs),
     ),
     Tool(
         name="resolve_resource",
         description="Fast lookup of a Cognigy resource ID by friendly name from .state.json. "
                     "No API call. Returns the full state entry for that resource.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "resource_type": {
-                    "type": "string",
-                    "description": "One of: flows, agents, endpoints, tools, nodes, jobs",
-                },
-            },
-            "required": ["name", "resource_type"],
-        },
+        inputSchema=make_schema(ResolveResourceArgs),
     ),
     Tool(
         name="assign_org_llm",
@@ -98,26 +98,9 @@ TOOLS: list[Tool] = [
             "Use after create_ai_agent to ensure the new project can use an org-level LLM. "
             "Errors if the LLM is project-scoped (use manage_packages instead) or not found."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "project_id": {
-                    "type": "string",
-                    "description": "Cognigy project _id to assign the LLM to",
-                },
-                "llm_id": {
-                    "type": "string",
-                    "description": "MongoDB _id of the org-level LLM (not referenceId)",
-                },
-            },
-            "required": ["project_id", "llm_id"],
-        },
+        inputSchema=make_schema(AssignOrgLlmArgs),
     ),
 ]
-
-
-def _ok(data: dict) -> list[TextContent]:
-    return [TextContent(type="text", text=json.dumps(data, indent=2))]
 
 
 def _make_config_summary(config: dict) -> dict:
@@ -138,10 +121,12 @@ def make_handlers(
     config_source: "str | None" = None,
 ) -> dict:
     def _sync_remote_state(args: dict) -> list[TextContent]:
-        project_id = args.get("project_id") or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
+        m, err = validate(SyncRemoteStateArgs, args)
+        if err:
+            return err
+        project_id = m.project_id or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
 
         if not project_id:
-            # List projects to help the agent pick one
             try:
                 projects_resp = client.get("/v2.0/projects")
                 projects = [{"id": p["_id"], "name": p["name"]} for p in projects_resp.get("items", [])]
@@ -153,17 +138,11 @@ def make_handlers(
                 "available_projects": projects,
             })
 
-        # Write to .env if not already there
         _write_to_dotenv("COGNIGY_PROJECT_ID", project_id)
-
-        # Bind the live state instance to this project so the rest of this session
-        # is scoped correctly (no restart required).
         state.bind_project(project_id)
-
         cache.invalidate_all()
         errors: list[str] = []
 
-        # Flows — projectId is a query param
         flows: list = []
         try:
             flows_resp = client.get("/v2.0/flows", projectId=project_id, limit=100)
@@ -175,7 +154,6 @@ def make_handlers(
             state.set("flows", flow["name"], value={"id": flow["_id"]})
             cache.set("flows", flow["_id"], flow)
 
-        # Extensions — build type → extension_name index for custom node auto-injection
         ext_map: dict[str, str] = {}
         try:
             exts_resp = client.get("/v2.0/extensions", projectId=project_id, limit=100)
@@ -192,7 +170,6 @@ def make_handlers(
             errors.append(f"extensions: {exc}")
         state.set("extension_map", value=ext_map)
 
-        # Per-flow discovery: aiAgentJobTool nodes + AI Agent definitions
         seen_agents: set = set()
         for flow in flows:
             try:
@@ -221,7 +198,6 @@ def make_handlers(
             except Exception:
                 pass
 
-        # Endpoints — projectId is a query param
         try:
             eps_resp = client.get("/v2.0/endpoints", projectId=project_id, limit=100)
             for ep in eps_resp.get("items", []):
@@ -241,35 +217,37 @@ def make_handlers(
         return _ok(result)
 
     def _get_build_state(args: dict) -> list[TextContent]:
-        resource_type = args.get("resource_type")
+        m, err = validate(GetBuildStateArgs, args)
+        if err:
+            return err
         full_state = state.as_dict()
-
         config_fields: dict = {"config_loaded": build_config is not None}
         if build_config is not None:
             config_fields["config_source"] = config_source or ""
             config_fields["config_summary"] = _make_config_summary(build_config)
-
-        if resource_type:
-            filtered = full_state.get(resource_type, {})
-            return _ok({resource_type: filtered, "_filtered": True, **config_fields})
+        if m.resource_type:
+            filtered = full_state.get(m.resource_type, {})
+            return _ok({m.resource_type: filtered, "_filtered": True, **config_fields})
         return _ok({**full_state, "_version": pkg_version("cognigy-vibe-mcp"), **config_fields})
 
     def _resolve_resource(args: dict) -> list[TextContent]:
-        name = args["name"]
-        rtype = args["resource_type"]
-        entry = state.get(rtype, name)
+        m, err = validate(ResolveResourceArgs, args)
+        if err:
+            return err
+        entry = state.get(m.resource_type, m.name)
         if entry is None:
-            return _ok({"error": f"'{name}' not found in {rtype}"})
+            return _ok({"error": f"'{m.name}' not found in {m.resource_type}"})
         return _ok(entry)
 
     def _assign_org_llm(args: dict) -> list[TextContent]:
-        project_id = args["project_id"]
-        llm_id = args["llm_id"]
+        m, err = validate(AssignOrgLlmArgs, args)
+        if err:
+            return err
         try:
-            llm = client.get(f"/v2.0/largelanguagemodels/{llm_id}")
+            llm = client.get(f"/v2.0/largelanguagemodels/{m.llm_id}")
         except ApiError as exc:
             if exc.status_code == 404:
-                return _ok({"error": "llm_not_found", "llm_id": llm_id})
+                return _ok({"error": "llm_not_found", "llm_id": m.llm_id})
             return _ok({"error": "get_failed", "status": exc.status_code, "detail": str(exc)})
         except Exception as exc:
             return _ok({"error": "get_failed", "detail": str(exc)})
@@ -279,18 +257,18 @@ def make_handlers(
                 "hint": "Use manage_packages to import a project-scoped LLM instead",
             })
         assigned: list = llm.get("assignedToProjects") or []
-        if project_id in assigned:
+        if m.project_id in assigned:
             return _ok({"already_assigned": True, "llm_name": llm.get("name", "")})
         try:
             client.patch(
-                f"/v2.0/largelanguagemodels/{llm_id}",
-                {"assignedToProjects": assigned + [project_id]},
+                f"/v2.0/largelanguagemodels/{m.llm_id}",
+                {"assignedToProjects": assigned + [m.project_id]},
             )
         except ApiError as exc:
             return _ok({"error": "patch_failed", "status": exc.status_code, "detail": str(exc)})
         except Exception as exc:
             return _ok({"error": "patch_failed", "detail": str(exc)})
-        return _ok({"assigned": True, "llm_name": llm.get("name", ""), "project_id": project_id})
+        return _ok({"assigned": True, "llm_name": llm.get("name", ""), "project_id": m.project_id})
 
     return {
         "sync_remote_state": _sync_remote_state,
