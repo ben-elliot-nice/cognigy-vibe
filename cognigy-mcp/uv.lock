@@ -126,7 +126,7 @@ wheels = [
 
 [[package]]
 name = "cognigy-vibe-mcp"
-version = "1.7.0"
+version = "1.5.7"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -144,8 +144,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx", specifier = ">=0.27.0,<1.0.0" },
-    { name = "mcp", specifier = ">=1.0.0,<2.0.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "mcp", specifier = ">=1.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
