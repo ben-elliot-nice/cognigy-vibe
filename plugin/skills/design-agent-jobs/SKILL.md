@@ -1,19 +1,19 @@
 ---
 name: design-agent-jobs
-description: Design Cognigy AI agent specialist jobs, routing architecture, and context schema — produces agent architecture and context schema markdown documents. Run after cognigy:design-agent-persona.
+description: Design Cognigy AI agent specialist jobs, routing architecture, and context schema — produces agent architecture and context schema markdown documents. Run after cognigy-vibe:design-agent-persona.
 ---
 
 # Design Agent Jobs
 
 ## When to Use
 
-Use this skill to design the specialist job layer — what each job does, how jobs route between each other, and what data flows through the conversation. Run after `cognigy:design-agent-persona` when the persona document is available.
+Use this skill to design the specialist job layer — what each job does, how jobs route between each other, and what data flows through the conversation. Run after `cognigy-vibe:design-agent-persona` when the persona document is available.
 
 **This skill does not create or modify any Cognigy resources.**
 
 ## Reference Docs
 
-Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-jobs/`) and read:
+Before starting, navigate to `<plugin-root>` (three directories up from `plugin/skills/design-agent-jobs/`) and read:
 
 - `explain("agent-behavioral-rules")` — silent execution, outcome-based framing, tool descriptions as contracts
 - `explain("multi-agent-architecture")` — Concierge + Specialists, specialist job types, context schema
@@ -28,7 +28,7 @@ Before asking any questions, look for the following in `output_dir` if that argu
 1. A demo plan (`*-demo-plan.md`) — read it for use cases, agent architecture, channels, integrations
 2. A persona doc (`*-agent-persona.md`) — read it for agent name, compliance framing, auth scope
 
-If neither exists, ask the user to run `cognigy:scope-demo` and `cognigy:design-agent-persona` first.
+If neither exists, ask the user to run `cognigy-vibe:scope-demo` and `cognigy-vibe:design-agent-persona` first.
 
 ---
 
@@ -125,8 +125,8 @@ Sections:
 ## Notes
 
 - This skill produces design documents only — no Cognigy resources are created
-- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - Tool descriptions from Step 1 should carry compliance rules at point-of-use (see `explain("agent-behavioral-rules")`)
-- For xApp, website triggers, and handover interface → `cognigy:design-agent-interfaces`
-- For deterministic contract enforcement → `cognigy:design-agent-contracts`
+- For xApp, website triggers, and handover interface → `cognigy-vibe:design-agent-interfaces`
+- For deterministic contract enforcement → `cognigy-vibe:design-agent-contracts`
 - Mermaid diagrams use `graph TD` format

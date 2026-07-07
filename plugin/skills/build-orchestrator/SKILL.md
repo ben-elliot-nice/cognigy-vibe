@@ -1,11 +1,11 @@
 ---
 name: build-orchestrator
-description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy:scope-demo` and design to `cognigy:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by S0.5; if opened, wired via Cognigy's built-in Knowledge AI (cognigy-vibe knowledge-store API) in S1.8. Smoke test runs in S1.7 before hand-back — Phase A structural verification against `get_flow_chart` (13 assertions, incl. a ≤1000-char agent-field cap and production config check) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant S1.5 / S1.4 / S5 step; only hands back when both phases are green.
+description: End-to-end Cognigy AI Agent demo builder — the orchestrator that drives the full cognigy plugin stack (scope → design → build). Use when the user says "build a Cognigy demo for <customer>", "scaffold an agent for X", "new customer agent for X", "set up a Cognigy build for X", "new AI Agent demo — <customer>". Overarching orchestrator — runs a single-batch interview, then delegates scoping to `cognigy-vibe:scope-demo` and design to `cognigy-vibe:design-agent` (persona/jobs/interfaces/contracts), then builds: project + AI Agent + Job Node patch + init chain (Once → Initialize Session → Set Session Config → Say Welcome) + tool branches (Say filler → Code mock → Resolve, reversed for transfers) + end-call pair + as-built from `get_flow_chart` + drift baseline + package zip. Tools authored as `.tool.json` files then pushed via `push_agent_tool`. xApp HTML moments pushed via `push_html_node`. Industry-flexible CRM (insurance / telco / retail / banking / health). Knowledge gated by S0.5; if opened, wired via Cognigy's built-in Knowledge AI (cognigy-vibe knowledge-store API) in S1.8. Smoke test runs in S1.7 before hand-back — Phase A structural verification against `get_flow_chart` (13 assertions, incl. a ≤1000-char agent-field cap and production config check) + Phase B 3-turn `talk_to_agent` runtime check. Auto-loops on failure back to the relevant S1.5 / S1.4 / S5 step; only hands back when both phases are green.
 ---
 
 # Build Orchestrator — end-to-end Cognigy AI Agent demo builder
 
-> **Requires:** marketplace plugin `cognigy@nice` — provides sub-skills `cognigy:scope-demo`, `cognigy:design-agent`, `cognigy:design-agent-persona`, `cognigy:design-agent-jobs`, `cognigy:design-agent-interfaces`, `cognigy:design-agent-contracts`. The orchestrator delegates to these by name; it does not vendor their content.
+> **Requires:** marketplace plugin `cognigy-vibe@cognigy-vibe` — provides sub-skills `cognigy-vibe:scope-demo`, `cognigy-vibe:design-agent`, `cognigy-vibe:design-agent-persona`, `cognigy-vibe:design-agent-jobs`, `cognigy-vibe:design-agent-interfaces`, `cognigy-vibe:design-agent-contracts`. The orchestrator delegates to these by name; it does not vendor their content.
 >
 > **`cognigy-vibe-mcp` install.** `uv tool install cognigy-vibe-mcp` (first time) or `uv tool upgrade cognigy-vibe-mcp` (after) — always run the latest. This skill relies on: file-backed tool authoring via `push_agent_tool` (canonical S1.3/S6 path), `push_code_node` CREATE mode (single-call create+position+push — S1.5(b), S6), IF/Once branch-marker insertion (S1.4b — `explain("node-positioning")`), the say-node string-array + `generativeAI_customInputs: []` shape (S1.5(d) — `explain("say-node")`), the xApp inbound event path (S1.4b / S1.7 — `explain("xapp-event-handling")`), in-session project binding via `sync_remote_state` (S1.1.5), and the `explain()` topics referenced throughout (`project-snapshots`, `voice-silence-timeout`, `output-formats`, `knowledge-store`, `llm-resources`).
 This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Agent demo from scratch. It produces a complete build adhering to the patterns documented in this skill body — full init chain, voice config, Shape-B tool branches with the plugin-canonical `aiAgentToolAnswer` terminal, transfer + end-call patterns, deterministic mocks, conditional-push xApp HTML, as-built docs generated from the live flow chart, drift baseline, package zip backup — for any industry, with the CRM shape adapting to the domain.
@@ -14,8 +14,8 @@ This is the go-to orchestrator for scaffolding a customer-specific Cognigy AI Ag
 
 **This skill is the overarching builder.** It keeps the single-batch interview UX the user likes, then delegates scoping and design to purpose-built sub-skills before running the build sequence:
 
-- **`cognigy:scope-demo`** → produces `{Customer}-demo-plan.md` (12 facts, design conversation, demo plan)
-- **`cognigy:design-agent`** → orchestrates four sub-skills that produce persona, architecture + context schema, interfaces, and contracts docs
+- **`cognigy-vibe:scope-demo`** → produces `{Customer}-demo-plan.md` (12 facts, design conversation, demo plan)
+- **`cognigy-vibe:design-agent`** → orchestrates four sub-skills that produce persona, architecture + context schema, interfaces, and contracts docs
 - **cognigy-vibe knowledge-store API** → only if S0.5 gate opens, ingests locally-authored FAQ bodies into a Cognigy knowledge store and enables built-in Knowledge AI on the agent (S1.8)
 
 Voice-preview provisioning is explicitly **out of scope** — that happens manually in the Cognigy UI. `talk_to_agent` smoke testing is **in scope** as of v4 — S1.7 runs Phase A structural + Phase B 3-turn runtime verification automatically before hand-back.
@@ -38,17 +38,17 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
 ## S0.0 — Load build config (BLOCKING preflight — runs before the interview)
 
-**Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy:init-cognigy-vibe` to initialise the tenant config before proceeding.
+**Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
 **Step 2 — Interview.** Run the S0 interview (below) to collect customer and build details.
 
 **Step 3 — Live LLM refresh + confirm.**
 
-- **`config_loaded: false`** → delegate to `cognigy:init-cognigy-vibe`:
-  > "I don't have your workspace build defaults yet. I'll run `cognigy:init-cognigy-vibe` once to capture them — after that every build needs zero manual config."
+- **`config_loaded: false`** → delegate to `cognigy-vibe:init-cognigy-vibe`:
+  > "I don't have your workspace build defaults yet. I'll run `cognigy-vibe:init-cognigy-vibe` once to capture them — after that every build needs zero manual config."
 
   After the wizard completes, call `get_build_state` once more. If `config_loaded` is still `false` → **hard stop**:
-  > "Config setup did not complete. Please run `cognigy:init-cognigy-vibe` before starting a build."
+  > "Config setup did not complete. Please run `cognigy-vibe:init-cognigy-vibe` before starting a build."
 
   Do **not** fall back silently to the hardcoded AU1 values in the "Default build values" table.
 
@@ -73,14 +73,14 @@ Ask: *"Proceed with these defaults, switch LLM to a listed alternate, or overrid
 
 Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 2 reads; it is always set before S1 runs.
 
-Per-build overrides update `buildConfig` in memory for this run only — they do not rewrite the config file. To permanently change defaults, the user re-runs `cognigy:init-cognigy-vibe`.
+Per-build overrides update `buildConfig` in memory for this run only — they do not rewrite the config file. To permanently change defaults, the user re-runs `cognigy-vibe:init-cognigy-vibe`.
 
 `buildConfig` (plus any per-build overrides) feeds S1.1 / S1.2 / S1.5. Where the "Default build values" table is cited downstream, read the corresponding `buildConfig` field instead.
 
 ---
 
 ## S0 — Interview (one batch via AskUserQuestion)
-This single batch collects everything `cognigy:scope-demo` + the four `cognigy:design-agent-*` sub-skills need, so they produce their artifacts in context-provided mode (no re-interview).
+This single batch collects everything `cognigy-vibe:scope-demo` + the four `cognigy-vibe:design-agent-*` sub-skills need, so they produce their artifacts in context-provided mode (no re-interview).
 
 | # | Question | Header | Required |
 |---|---|---|---|
@@ -96,7 +96,7 @@ This single batch collects everything `cognigy:scope-demo` + the four `cognigy:d
 | 10 | Channel mix — voice / webchat / WhatsApp / mixed. **Drives `design-agent-interfaces` xApp + channel-formatting decisions and `design-agent-persona` channel rules.** Default: voice. | Channels | Yes |
 | 11 | Compliance posture — regulated industry? mandatory disclaimers / recording notices / fair-dealing constraints / one-offer limits? "No regulated constraints" is a valid answer. **Feeds `design-agent-persona` compliance framing and `design-agent-contracts` obligation catalogue.** | Compliance | Yes |
 | 12 | Obligation / guard surface — beyond the S2.5 empathy triggers, are there topics the agent must refuse, hard-handover triggers, or actions that need deterministic guards (e.g. cancellation staging, irreversible commits)? **Feeds `design-agent-contracts`.** | Guards | Optional |
-| 13 | Reusable assets — any prior demo / project to fork from? (e.g. "fork the IAG agent, swap branding"). **Feeds `cognigy:scope-demo` reuse check and unlocks the `cognigy_invoke clone` fork lane in S1.0.** | Reuse | Optional |
+| 13 | Reusable assets — any prior demo / project to fork from? (e.g. "fork the IAG agent, swap branding"). **Feeds `cognigy-vibe:scope-demo` reuse check and unlocks the `cognigy_invoke clone` fork lane in S1.0.** | Reuse | Optional |
 
 After Q13 the skill runs **S0.5 (knowledge gate — BLOCKING decision)** and **S0.6 (brand research)**, then derives the **transfer-tool set (S1.3)** and the **persona descriptors** (Q4 + brand-voice research) — both cheap to compute and the two inputs most likely to be wrong.
 
@@ -168,7 +168,7 @@ The persona must reflect the customer's actual brand, not a generic Australian-f
 
 ```markdown
 # <Customer> — Brand Research Snapshot
-*Generated <date> by cognigy:build-orchestrator S0.6*
+*Generated <date> by cognigy-vibe:build-orchestrator S0.6*
 
 ## Brand voice — descriptors
 3–6 adjectives drawn from the customer's own copy (NOT your guesses). Quote the source.
@@ -211,17 +211,17 @@ e.g. "AMP sounds warmer and more human than Colonial First State (institutional)
 
 ---
 
-## SA — Scope (delegate to `cognigy:scope-demo`)
+## SA — Scope (delegate to `cognigy-vibe:scope-demo`)
 
 The build skill keeps the interview UX. Scoping the demo — the 12 facts + design conversation — is delegated to the purpose-built sub-skill.
 
-**Output directory:** create the demo folder before invoking `cognigy:scope-demo`, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default, which is always the session workspace root):
+**Output directory:** create the demo folder before invoking `cognigy-vibe:scope-demo`, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default, which is always the session workspace root):
 
 ```bash
 mkdir -p "Demo Builds/<customer>-demo"
 ```
 
-Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
+Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
 
 > **Note:** Claude's cwd remains the session workspace root throughout — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
 
@@ -255,11 +255,11 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 ---
 
-## SB — Design (delegate to `cognigy:design-agent`)
+## SB — Design (delegate to `cognigy-vibe:design-agent`)
 
 With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo folder, invoke the design orchestrator.
 
-**Output directory:** `Demo Builds/<customer>-demo/`. Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. Claude's cwd remains the session workspace root throughout. See `explain("session-workspace")` for the directory model.
+**Output directory:** `Demo Builds/<customer>-demo/`. Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. Claude's cwd remains the session workspace root throughout. See `explain("session-workspace")` for the directory model.
 
 **Invoke in Mode A (full workflow).** Persona → Jobs → Interfaces → Contracts. The orchestrator runs each in sequence; each reads the prior outputs from disk.
 
@@ -297,7 +297,7 @@ If field names diverge, the build skill is the source of truth — flag the mism
 
 ## S1.0 — Fork lane (not yet implemented)
 
-> **Fork support is not yet implemented in this plugin.** The `cognigy:fork-existing-agent` sub-skill that would drive this lane has not shipped. **Regardless of how Q13 is answered, skip this section and proceed to S1.1** as a normal from-scratch build. Do not attempt to delegate to a fork sub-skill — it does not exist yet.
+> **Fork support is not yet implemented in this plugin.** The `cognigy-vibe:fork-existing-agent` sub-skill that would drive this lane has not shipped. **Regardless of how Q13 is answered, skip this section and proceed to S1.1** as a normal from-scratch build. Do not attempt to delegate to a fork sub-skill — it does not exist yet.
 
 When the fork sub-skill ships, this lane will: clone the source project, audit and reconcile tools against this customer's S1.3 derived set, swap the cloned init-chain content (Init Session CRM body, Say Welcome variants, Set Session Config `sttHints`), and return the cloned `projectId` / `agentId` / `flowId` / `endpointId` plus the final tool list — letting the orchestrator skip S1.1 and S1.5. Until then, every build runs the full S1.1 path.
 
@@ -305,7 +305,7 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 
 ## Default build values
 
-All build defaults come from `buildConfig` (loaded via `get_build_state`). `buildConfig` is populated from live tenant discovery by `cognigy:init-cognigy-vibe` — there are no hardcoded defaults in this skill. Read `cognigy:build-config` for the full schema reference.
+All build defaults come from `buildConfig` (loaded via `get_build_state`). `buildConfig` is populated from live tenant discovery by `cognigy-vibe:init-cognigy-vibe` — there are no hardcoded defaults in this skill. Read `cognigy-vibe:build-config` for the full schema reference.
 
 > **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 3 / S1.2 `cognigy_update`.
 
@@ -351,7 +351,7 @@ Before any MCP call in S1, read all four design docs from `Demo Builds/<customer
 - `{Customer}-agent-interfaces.md` exists.
 
 If any file is missing or a required field is empty, **stop**:
-> "One or more design docs are missing or incomplete. Run `cognigy:design-agent` for `<customer>` first, then re-start S1."
+> "One or more design docs are missing or incomplete. Run `cognigy-vibe:design-agent` for `<customer>` first, then re-start S1."
 
 Do not proceed on stale in-memory facts from a prior session. The design docs on disk are the spec; S1 reads them, it does not remember them.
 
@@ -391,7 +391,7 @@ Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.
 1. `cognigy_list { resource_type: "largelanguagemodels", project_id: "<new projectId>" }` — check if `buildConfig.llm.selected.referenceId` appears in the result.
 2. **If present** → proceed to Step 3.
 3. **If absent AND `buildConfig.llm.selected.resourceLevel == "organisation"`** → call `assign_org_llm { project_id: "<new projectId>", llm_id: "<buildConfig.llm.selected.id>" }`. On `already_assigned` or `assigned` → proceed. On any error → surface to user and stop.
-4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
+4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy-vibe:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
 
 > **Note:** Do not use `manage_packages` export/import as the primary LLM wiring path — it is a fallback for project-scoped LLMs only. `assign_org_llm` is the correct path for org-level LLMs (the default for any config populated by `init-cognigy-vibe`).
 **Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the S1.1.5 MCP wire-up step.
@@ -426,7 +426,7 @@ All S1.1 steps use cognigy-vibe directly — there is no session boundary. After
 2. Bind the new project: `sync_remote_state({ project_id: "<projectId from S1.1 Step 1>" })`.
 3. Proceed to S1.2 in the **same session**.
 
-If step 1 fails with a "not loaded" / missing-credentials error, `cognigy-vibe` couldn't resolve credentials — run `cognigy:init-cognigy-vibe` to write `.env`, then retry `cognigy_list` in the same session. No restart required.
+If step 1 fails with a "not loaded" / missing-credentials error, `cognigy-vibe` couldn't resolve credentials — run `cognigy-vibe:init-cognigy-vibe` to write `.env`, then retry `cognigy_list` in the same session. No restart required.
 
 > **Session resume path.** If resuming a build started in a prior session, run the S1 entry gate first (re-read all four design docs + assert fields), THEN call `sync_remote_state({ project_id: "<projectId>" })` to refresh MCP state before any S1.2+ call. Do not skip either step — design-doc drift and stale MCP state are the two most common causes of mid-session build failures on resume.
 
@@ -937,7 +937,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 - **Brand voice traceability** — the persona `description` references brand-voice descriptors that match `brand-research.md` (not generic "calm, capable, knowledgeable" boilerplate)
 - **Derived transfer tools match the use cases** — e.g. roadside use case → `transfer_to_roadside_assist` exists (not collapsed into `transfer_to_general`)
 - **`transfer_to_care` + `transfer_to_general` present unconditionally**
-- **Persona ↔ tool-set parity** — the persona's `## Job Instructions` ROUTING DECISION TREE has one line per tool on the agent, and every tool on the agent has a routing-tree line. Drift causes the LLM to hallucinate calls to deleted tools or ignore real ones. If you added or removed a tool after the persona was authored (rare in fresh builds, common in fork builds and iterations), regenerate persona.md via `cognigy:design-agent-persona` and re-run S1.2.
+- **Persona ↔ tool-set parity** — the persona's `## Job Instructions` ROUTING DECISION TREE has one line per tool on the agent, and every tool on the agent has a routing-tree line. Drift causes the LLM to hallucinate calls to deleted tools or ignore real ones. If you added or removed a tool after the persona was authored (rare in fresh builds, common in fork builds and iterations), regenerate persona.md via `cognigy-vibe:design-agent-persona` and re-run S1.2.
 - **S2.5 empathy library** verbatim in the patched Job Node's `instructions` field (sourced from `## Job Instructions` H2 in persona.md — layer d per S2 ladder) — all 7 trigger categories with templates, hard rules, and Lifeline 13 11 14 for suicide/self-harm
 - **Agent free-text fields ≤ 1000 chars** — agent `description` (Persona/1A) and agent `instructions` (Special Instructions/1B) are EACH ≤ 1000 chars (verify via `cognigy_get`; this is S1.7 Phase A assert #12). Over-length silently errors on save and injects mid-build rework — this is the hard cap, not a guideline.
 
@@ -960,7 +960,7 @@ If any BLOCKING item is missing, the build is incomplete — go back and fix the
 **Two assertion classes — this governs failure handling.** Every assertion below is one of two kinds, and they are handled differently:
 
 - **DETERMINISTIC (structural) assertions** test something that is either wired or not: a node exists, a config field holds a value, a node fired at runtime, an interpolation resolved, a Hangup payload is present once an end-call tool fires. A correct build passes these every time. These are **hard gates** — on failure the orchestrator auto-loops back to the named S1.5 / S1.4 / S5 step, applies the canonical fix, and re-runs from the top. **All of Phase A is deterministic.** The structural-runtime checks in Phase B (Set Session Config fired, Welcome line rendered, Once gate held then released, `{{context.customer.firstName}}` resolved, filler-Say ordering when a tool fires, Hangup payload shape when an end-call tool fires) are also deterministic.
-- **PROBABILISTIC (LLM-decision) assertions** test a *choice the model made* on a given turn: whether it chose to call a tool (`finishReason: "tool_calls"`), whether it routed to the expected tool, whether it chose to end the call. The LLM is non-deterministic, so a single run missing one of these is **not** proof of a broken build. These are **advisory warnings only**. On a miss: re-run the single turn once to rule out a one-off; if it still misses, **log an advisory warning**, capture the transcript, and surface it to the user in the S10 hand-back. **Do NOT** trigger destructive `cognigy:design-agent-persona` regeneration or a S1.2 re-patch on a probabilistic miss — auto-regenerating the persona on an LLM-decision assert is exactly the over-reaction this split removes.
+- **PROBABILISTIC (LLM-decision) assertions** test a *choice the model made* on a given turn: whether it chose to call a tool (`finishReason: "tool_calls"`), whether it routed to the expected tool, whether it chose to end the call. The LLM is non-deterministic, so a single run missing one of these is **not** proof of a broken build. These are **advisory warnings only**. On a miss: re-run the single turn once to rule out a one-off; if it still misses, **log an advisory warning**, capture the transcript, and surface it to the user in the S10 hand-back. **Do NOT** trigger destructive `cognigy-vibe:design-agent-persona` regeneration or a S1.2 re-patch on a probabilistic miss — auto-regenerating the persona on an LLM-decision assert is exactly the over-reaction this split removes.
 
 **Failure handling (deterministic only).** On any failed **deterministic** assertion in Phase A or Phase B, the orchestrator does NOT halt and wait for the user. It loops back to the relevant S1.5 / S1.4 / S5 step, applies the fix using the canonical spec, then re-runs the smoke test from the top. The orchestrator is the builder; the user is not in the loop until S1.9. If two consecutive loops fail to fix the same deterministic assertion, surface to the user in the hand-back block (S10) under "smoke test partial" with the specific failure and proposed manual fix — don't silently ship. **Probabilistic** assertions never drive this loop; they are reported as advisory warnings per the class rules above.
 
@@ -1181,7 +1181,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 
 > **🔴 BLOCKING — agent free-text fields are hard-capped at 1000 characters.** Both **agent `description` (1A Persona)** and **agent `instructions` (1B Special Instructions)** MUST be **≤ 1000 characters** each (the documented platform maximum; over-length throws a save error that the agent silently survives, injecting uncertainty and rework into the build). This is enforced as a pre-flight count in S1.1/S1.2 (condense before the call), re-counted before any subsequent patch to these fields in the same session, and re-verified in S1.7 Phase A + S1.6. Keep each block tight: Persona is the WHO + brand voice in a few sentences; Special Instructions is lean speaking-conventions + brief abuse + brief out-of-scope rules. (No documented limit applies to the job-node `jobDescription`/`jobInstructions`, so the empathy library in 2B is unaffected.)
 
-**Contract on `cognigy:design-agent-persona` output:** the sub-skill MUST emit `{Customer}-agent-persona.md` with exactly four H2 headings — `## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions` — in that order, with `## Persona` and `## Special Instructions` **each ≤ 1000 chars**. The empathy library (S2.5) lives verbatim inside `## Job Instructions`. If the sub-skill output is missing a heading, merges sections, or blows the 1000-char cap on either agent field, regenerate / condense before S1.1 runs.
+**Contract on `cognigy-vibe:design-agent-persona` output:** the sub-skill MUST emit `{Customer}-agent-persona.md` with exactly four H2 headings — `## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions` — in that order, with `## Persona` and `## Special Instructions` **each ≤ 1000 chars**. The empathy library (S2.5) lives verbatim inside `## Job Instructions`. If the sub-skill output is missing a heading, merges sections, or blows the 1000-char cap on either agent field, regenerate / condense before S1.1 runs.
 
 ---
 
@@ -1703,7 +1703,7 @@ One paragraph. No further prose unless something failed during build.
 Rules that apply across multiple sections and aren't owned by any single one. Section-specific rules live in their own section, not here.
 
 **Naming:**
-- **Project name:** `[CUSTOMER]_Demo_[buildConfig.owner.initials]` — preserve original casing. Initials from `buildConfig.owner.initials` (set via `cognigy:init-cognigy-vibe`).
+- **Project name:** `[CUSTOMER]_Demo_[buildConfig.owner.initials]` — preserve original casing. Initials from `buildConfig.owner.initials` (set via `cognigy-vibe:init-cognigy-vibe`).
 - **Naming conflict:** If `[CUSTOMER]_Demo_[initials]` already exists, append `_2` (then `_3`, etc.). Never insert the persona name or change the initials suffix.
 - **Folder name:** `[customer]-demo` — lowercase.
 - **Agent name:** persona name only, no suffix.

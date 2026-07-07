@@ -9,7 +9,7 @@ description: Orchestrate the full Cognigy AI agent design workflow — runs desi
 
 Use this skill when you want to run the full agent design workflow in one session, or when you want to pick and choose which design stages to run.
 
-Requires a demo plan from `cognigy:scope-demo`. If an `output_dir` argument was supplied (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`), the demo plan is in that directory. Otherwise look in the user's working directory.
+Requires a demo plan from `cognigy-vibe:scope-demo`. If an `output_dir` argument was supplied (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`), the demo plan is in that directory. Otherwise look in the user's working directory.
 
 ## Design Skills
 
@@ -17,16 +17,16 @@ The workflow is composed of four skills, each independently callable:
 
 | Skill | What it produces |
 |-------|-----------------|
-| `cognigy:design-agent-persona` | `{Customer}-agent-persona.md` — identity, instructions, compliance framing |
-| `cognigy:design-agent-jobs` | `{Customer}-agent-architecture.md` + `{Customer}-context-schema.md` — jobs, routing, context |
-| `cognigy:design-agent-interfaces` | `{Customer}-agent-interfaces.md` — xApp, webchat, handover context |
-| `cognigy:design-agent-contracts` | `{Customer}-agent-contracts.md` — guard sub-flows, obligation state, refusals |
+| `cognigy-vibe:design-agent-persona` | `{Customer}-agent-persona.md` — identity, instructions, compliance framing |
+| `cognigy-vibe:design-agent-jobs` | `{Customer}-agent-architecture.md` + `{Customer}-context-schema.md` — jobs, routing, context |
+| `cognigy-vibe:design-agent-interfaces` | `{Customer}-agent-interfaces.md` — xApp, webchat, handover context |
+| `cognigy-vibe:design-agent-contracts` | `{Customer}-agent-contracts.md` — guard sub-flows, obligation state, refusals |
 
 ---
 
 ## Context Check
 
-Look for a demo plan (`*-demo-plan.md`) in `output_dir` if that argument was supplied; otherwise look in the user's working directory. If none exists, stop and ask the user to run `cognigy:scope-demo` first.
+Look for a demo plan (`*-demo-plan.md`) in `output_dir` if that argument was supplied; otherwise look in the user's working directory. If none exists, stop and ask the user to run `cognigy-vibe:scope-demo` first.
 
 ---
 
@@ -50,25 +50,25 @@ Run the four skills in sequence. After each skill completes and the user confirm
 
 ### Stage 1: Persona
 
-Invoke `cognigy:design-agent-persona`. When complete and output confirmed, proceed.
+Invoke `cognigy-vibe:design-agent-persona`. When complete and output confirmed, proceed.
 
 **Context pass to Stage 2:** The generated `{Customer}-agent-persona.md` is in `output_dir` (or cwd if no `output_dir` was supplied) — pass the same `output_dir` to design-agent-jobs so it reads from the right location.
 
 ### Stage 2: Jobs
 
-Invoke `cognigy:design-agent-jobs`. When complete and output confirmed, proceed.
+Invoke `cognigy-vibe:design-agent-jobs`. When complete and output confirmed, proceed.
 
 **Context pass to Stage 3:** The generated architecture and context schema docs are in `output_dir` (or cwd) — pass the same `output_dir` to design-agent-interfaces and design-agent-contracts so they read from the right location.
 
 ### Stage 3: Interfaces
 
-Invoke `cognigy:design-agent-interfaces`. When complete and output confirmed, proceed.
+Invoke `cognigy-vibe:design-agent-interfaces`. When complete and output confirmed, proceed.
 
 **Note:** Interfaces can run in parallel with contracts (they have no dependency on each other). If the user wants to run them in parallel, offer that option.
 
 ### Stage 4: Contracts
 
-Invoke `cognigy:design-agent-contracts`. When complete and output confirmed, the full design is done.
+Invoke `cognigy-vibe:design-agent-contracts`. When complete and output confirmed, the full design is done.
 
 ---
 
@@ -96,6 +96,6 @@ Design complete. Files produced:
 ## Notes
 
 - This skill does not create or modify any Cognigy resources
-- Output files are written to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise written to the user's working directory. Pass `output_dir` through to each sub-skill invocation. Never write into the plugin directory.
+- Output files are written to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise written to the user's working directory. Pass `output_dir` through to each sub-skill invocation. Never write into the plugin directory.
 - Each sub-skill can also be invoked directly without going through this orchestrator
-- To build after designing → use `cognigy:add-aiagent-job` (creates nodes via MCP tools)
+- To build after designing → use `cognigy-vibe:add-aiagent-job` (creates nodes via MCP tools)

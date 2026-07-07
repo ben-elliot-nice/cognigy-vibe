@@ -15,15 +15,36 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 **Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed — the plugin uses `uvx` to run the MCP server.
 
-### Marketplace (recommended)
+### Plugin install (recommended)
 
-1. Add the NiCE marketplace and install the plugin:
-   ```bash
-   claude marketplace add ben-elliot-nice/nice-claude-marketplace
-   claude plugin install cognigy@nice
+This repo is its own marketplace — install directly from GitHub:
+
+```bash
+claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
+claude plugin install cognigy-vibe@cognigy-vibe
+```
+
+After install:
+
+1. Add your Cognigy credentials to `.env` in your working directory:
    ```
-2. Run `cognigy:init-cognigy-vibe` to capture your Cognigy credentials and build defaults (one-time per workstation).
-3. Ask: *"Build me a Cognigy demo for \<customer\>."* — no restart required after `.env` is in place.
+   COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
+   COGNIGY_API_KEY=your-api-key-here
+   ```
+2. Add the MCP server to your project's `.mcp.json`:
+   ```json
+   {
+     "mcpServers": {
+       "cognigy-vibe": {
+         "command": "uvx",
+         "args": ["cognigy-vibe-mcp"]
+       }
+     }
+   }
+   ```
+3. Restart Claude Code to pick up the new credentials.
+4. Run `cognigy-vibe:init-cognigy-vibe` to capture your build defaults (one-time per workstation).
+5. Ask: *"Build me a Cognigy demo for \<customer\>."*
 
 ### Clone + local dev
 
@@ -47,7 +68,7 @@ See the [Development](#development) section for the full contributor workflow.
 
 The plugin pairs two layers: **skills** provide the workflow knowledge — how to interview, scope, design a persona, lay out an init chain, shape tool branches, and verify the result. **`cognigy-vibe-mcp`** is the execution layer: an MCP server wrapping the Cognigy REST API for node creation, flow inspection, code push with conflict detection, and live session testing. A skill decides *what* to build; the MCP server *does* it against your Cognigy project.
 
-The entry point is `cognigy:build-orchestrator` — a single-batch interview that drives scoping, design, build, and an automated smoke test, handing back only when structural and runtime checks are green.
+The entry point is `cognigy-vibe:build-orchestrator` — a single-batch interview that drives scoping, design, build, and an automated smoke test, handing back only when structural and runtime checks are green.
 
 ---
 
@@ -55,17 +76,17 @@ The entry point is `cognigy:build-orchestrator` — a single-batch interview tha
 
 | Skill | Purpose |
 |---|---|
-| [`build-orchestrator`](skills/build-orchestrator/SKILL.md) | **End-to-end demo builder.** Interview → scope → design → build → smoke-test, driving the full plugin stack. |
-| [`scope-demo`](skills/scope-demo/SKILL.md) | Four-phase conversational workflow — discovery, design, structured demo-plan generation (12 facts). |
-| [`design-agent`](skills/design-agent/SKILL.md) | Orchestrates the four design sub-skills below. |
-| [`design-agent-persona`](skills/design-agent-persona/SKILL.md) | Identity & standing orders — brand voice, compliance framing, channel formatting, auth scope. |
-| [`design-agent-jobs`](skills/design-agent-jobs/SKILL.md) | Specialist jobs, routing architecture, and context schema. |
-| [`design-agent-interfaces`](skills/design-agent-interfaces/SKILL.md) | Touchpoints outside the chat window — xApp scenes, webchat patterns, live-agent handover. |
-| [`design-agent-contracts`](skills/design-agent-contracts/SKILL.md) | Deterministic enforcement layer — guard sub-flows, obligation state, structured refusals. |
-| [`add-aiagent-job`](skills/add-aiagent-job/SKILL.md) | Add an AI Agent Job node (+ optional tool nodes) to an existing flow. |
-| [`init-cognigy-vibe`](skills/init-cognigy-vibe/SKILL.md) | **First-time setup wizard.** Captures every build variable once (API URL + key, LLM refs, TTS, STT, voice channel, voice preview, naming) → `.env` + `default-demo-config.json` at the `Demo Builds` workspace root. Run before your first build; `build-orchestrator` S0.0 loads it and binds projects with no restart. |
-| [`explain`](skills/explain/SKILL.md) | Retrieve implementation guidance for Cognigy topics before brute-forcing or web-searching. |
-| [`submit-issue`](skills/submit-issue/SKILL.md) | File a bug against this plugin (MCP server or a skill). |
+| [`build-orchestrator`](plugin/skills/build-orchestrator/SKILL.md) | **End-to-end demo builder.** Interview → scope → design → build → smoke-test, driving the full plugin stack. |
+| [`scope-demo`](plugin/skills/scope-demo/SKILL.md) | Four-phase conversational workflow — discovery, design, structured demo-plan generation (12 facts). |
+| [`design-agent`](plugin/skills/design-agent/SKILL.md) | Orchestrates the four design sub-skills below. |
+| [`design-agent-persona`](plugin/skills/design-agent-persona/SKILL.md) | Identity & standing orders — brand voice, compliance framing, channel formatting, auth scope. |
+| [`design-agent-jobs`](plugin/skills/design-agent-jobs/SKILL.md) | Specialist jobs, routing architecture, and context schema. |
+| [`design-agent-interfaces`](plugin/skills/design-agent-interfaces/SKILL.md) | Touchpoints outside the chat window — xApp scenes, webchat patterns, live-agent handover. |
+| [`design-agent-contracts`](plugin/skills/design-agent-contracts/SKILL.md) | Deterministic enforcement layer — guard sub-flows, obligation state, structured refusals. |
+| [`add-aiagent-job`](plugin/skills/add-aiagent-job/SKILL.md) | Add an AI Agent Job node (+ optional tool nodes) to an existing flow. |
+| [`init-cognigy-vibe`](plugin/skills/init-cognigy-vibe/SKILL.md) | **First-time setup wizard.** Captures every build variable once (API URL + key, LLM refs, TTS, STT, voice channel, voice preview, naming) → `.env` + `default-demo-config.json` at the `Demo Builds` workspace root. Run before your first build; `build-orchestrator` S0.0 loads it and binds projects with no restart. |
+| [`explain`](plugin/skills/explain/SKILL.md) | Retrieve implementation guidance for Cognigy topics before brute-forcing or web-searching. |
+| [`submit-issue`](plugin/skills/submit-issue/SKILL.md) | File a bug against this plugin (MCP server or a skill). |
 
 ---
 
@@ -110,21 +131,22 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
   uvx cognigy-vibe-mcp==1.7.0rc1            # specific RC
   uv tool install cognigy-vibe-mcp --prerelease allow  # latest RC prerelease
   ```
-  Stable releases are published when the maintainer merges `dev → main`. The marketplace submodule reference must be updated manually after a stable release (see TODO item #1 in CLAUDE.md).
+  Stable releases are published when the maintainer merges `dev → main`.
 - See [CLAUDE.md](CLAUDE.md) for the full development workflow (planning, subagent-driven implementation, PR + CI flow).
 
 ### Repository layout
 
 ```
-.claude-plugin/plugin.json   plugin manifest (name, version)
-skills/                      one directory per skill, each a SKILL.md
-cognigy-mcp/                 the cognigy-vibe-mcp Python server (+ tests, own README)
-runtime-reference/           runtime docs skills read before writing code
-                             (API reference, code conventions, output formats)
-docs/                        plugin-development docs (architecture, patterns, design specs)
-scripts/                     explain-topic build tooling
-hooks/ .githooks/            onboarding gate + pre-commit hook
-.github/workflows/           CI: version-bump check, explain-topic check, publish, release
+.claude-plugin/marketplace.json   marketplace definition (self-referential)
+plugin/                           plugin content installed by Claude Code
+  .claude-plugin/plugin.json        plugin manifest (name, version)
+  skills/                           one directory per skill, each a SKILL.md
+  hooks/                            onboarding gate
+cognigy-mcp/                      the cognigy-vibe-mcp Python server (+ tests, own README)
+docs/                             plugin-development docs (architecture, patterns, design specs)
+scripts/                          explain-topic build tooling
+.githooks/                        pre-commit hook
+.github/workflows/                CI: version-bump check, explain-topic check, publish, release
 ```
 
 ### Maintainers

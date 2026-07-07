@@ -27,11 +27,11 @@ jobs:
           echo "current: $CURRENT"
 
           if [ "$CURRENT" = "$MAIN" ]; then
-            echo "::error::Version not bumped. Bump both cognigy-mcp/pyproject.toml and .claude-plugin/plugin.json before merging to main."
+            echo "::error::Version not bumped. Bump both cognigy-mcp/pyproject.toml and plugin/.claude-plugin/plugin.json before merging to main."
             exit 1
           fi
 
-          PLUGIN=$(jq -r '.version' .claude-plugin/plugin.json)
+          PLUGIN=$(jq -r '.version' plugin/.claude-plugin/plugin.json)
           if [ "$CURRENT" != "$PLUGIN" ]; then
             echo "::error::Version mismatch: pyproject.toml ($CURRENT) ≠ plugin.json ($PLUGIN). Both must match."
             exit 1

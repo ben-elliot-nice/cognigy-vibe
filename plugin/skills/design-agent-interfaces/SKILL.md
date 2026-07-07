@@ -7,13 +7,13 @@ description: Design the Cognigy AI agent's touchpoints outside the conversation 
 
 ## When to Use
 
-Use this skill to design everything the agent touches outside the chat or voice stream itself — what gets sent to the phone, what the website does during the conversation, and what the live agent receives on escalation. Run after `cognigy:scope-demo` when the demo plan is available.
+Use this skill to design everything the agent touches outside the chat or voice stream itself — what gets sent to the phone, what the website does during the conversation, and what the live agent receives on escalation. Run after `cognigy-vibe:scope-demo` when the demo plan is available.
 
 **This skill does not create or modify any Cognigy resources.**
 
 ## Reference Docs
 
-Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-interfaces/`) and read:
+Before starting, navigate to `<plugin-root>` (three directories up from `plugin/skills/design-agent-interfaces/`) and read:
 
 - `explain("multi-agent-architecture")` — xApp notes in Specialist Job Patterns
 - `explain("agent-handover")` — handover context artefact
@@ -111,6 +111,6 @@ One subsection per event: event name, trigger, payload schema, flow handling, se
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
-- For job definitions and routing → `cognigy:design-agent-jobs`
-- For contract enforcement → `cognigy:design-agent-contracts`
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
+- For job definitions and routing → `cognigy-vibe:design-agent-jobs`
+- For contract enforcement → `cognigy-vibe:design-agent-contracts`
