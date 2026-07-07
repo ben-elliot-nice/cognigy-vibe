@@ -9,7 +9,8 @@ group: nodes
 ### Verified node type strings (exact, case-sensitive)
 Core types (no extension needed):
   say, question, code, setContext, goTo, once, lookup, log, stopBot, httpRequest
-  if (note: NOT "ifThenElse")
+  if          (created via cognigy_create — type string is "if")
+  ifThenElse  (created via Cognigy UI or cognigy-plugin — both exist in real charts)
 
 AI Agent types (extension: "@cognigy/basic-nodes"):
   aiAgentJob, aiAgentJobTool, aiAgentToolAnswer
@@ -27,8 +28,9 @@ xApp/Voice types (extension: "@cognigy/basic-nodes"):
     "position": {"x": 0, "y": 100}
   }
 
-### if nodes (NOT "ifThenElse")
-Can be created via cognigy_create. Type string is "if".
+### if / ifThenElse nodes
+`if` is created via cognigy_create (type string "if"). `ifThenElse` is the type string
+used by nodes created in the Cognigy UI or via cognigy-plugin — both appear in real charts.
   cognigy_create(resource_type="node", flow_id=..., body={
     "type": "if",
     "mode": "append",

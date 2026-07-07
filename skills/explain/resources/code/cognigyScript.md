@@ -26,8 +26,7 @@ actual value.
 
 **Condition fields** (use bare expression):
 - `ifThenElse` / `if` node `condition`
-- `lookup` case values
-- Tool `condition` field in `.tool.json`
+- Tool `condition` field in `.tool.json` — see explain("tool-conditions") for full semantics
 
 **Text fields** (use `{{expression}}`):
 - `say` node text

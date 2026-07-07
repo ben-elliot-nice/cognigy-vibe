@@ -63,10 +63,10 @@ Common pitfall: targeting the IF node's own _id ("if-abc") instead of the branch
 Same append-not-appendChild rule as Once and IF nodes.
 
 **ifThenElse** auto-creates: `then` and `else` child branch markers
-**lookup** auto-creates: `case` and `default` child branch markers
+**lookup** auto-creates a `default` branch marker; additional `case` branches are user-defined
 
 Steps to populate a branch:
-1. Create the `ifThenElse` or `lookup` node via `cognigy_create`
+1. Create the `if` (via `cognigy_create`) or `ifThenElse` (UI-created) node; or create a `lookup` node
 2. List nodes to find the auto-created child IDs: `cognigy_list` or `get_flow_chart`
 3. Create content nodes with `mode: "append"`, `target: <branch-child-_id>`
 

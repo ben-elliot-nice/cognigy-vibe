@@ -152,13 +152,12 @@ For modifying input objects, use the setVar/mergeVar utility functions:
 ### httpRequest Node Response Wrapping
 
 The httpRequest node stores its response as a wrapper object. The default identifier
-is `httprequest`, stored in `input` by default. Configure `contextStore` or `inputStore`
-on the node to change the storage location or key name.
+is `httprequest`, stored in `input` by default. Set `contextStore` on the node config
+to store to context instead.
 
 **Node config storage options:**
   { "contextStore": "httpResponse" }  → stores to context.httpResponse
-  { "inputStore": "myKey" }           → stores to input.myKey
-  (neither)                           → stores to input.httprequest (default)
+  (no config)                         → stores to input.httprequest (default)
 
 **Response object shape** (same regardless of storage location):
   {

@@ -105,8 +105,8 @@ Every Cognigy Connection belongs to exactly one project. A `connectionId` from p
 cannot be used in project B — it will fail with "Connection does not exist".
 
 This is why `manage_packages` exports BOTH the LLM resource and its connection together.
-Passing a cross-project `connectionId` directly to any tool (`assign_org_llm`,
-Knowledge AI settings, etc.) will always fail.
+Passing a cross-project `connectionId` directly to any tool (Knowledge AI settings,
+direct API calls, etc.) will always fail.
 
 Rules:
 - Never reuse a `connectionId` across projects

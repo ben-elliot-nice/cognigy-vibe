@@ -39,7 +39,8 @@ Node config fields are NOT included — use cognigy_get(resource_type="node", ..
 ### setContext node: one entry per node
 
 The setContext node stores only the FIRST entry in `contextEntries`, even if multiple
-are provided. Additional entries are silently ignored.
+are provided. Additional entries are silently ignored. (Verified: cognigy-plugin R&D
+repo documentation, 2026-07-07.)
 
   WRONG — only "greeting" is written, "authenticated" is dropped:
   { "contextEntries": [{ "key": "greeting", "value": "Hi" }, { "key": "authenticated", "value": "false" }] }
