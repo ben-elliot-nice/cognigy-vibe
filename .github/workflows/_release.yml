@@ -69,6 +69,21 @@ jobs:
           sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" cognigy-mcp/pyproject.toml
           echo "Patched pyproject.toml to version $VERSION"
 
+      - name: Patch version in plugin.json
+        if: steps.check.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          python3 << 'PYTHON'
+          import json, pathlib, sys, os
+          p = pathlib.Path("plugin/.claude-plugin/plugin.json")
+          data = json.loads(p.read_text())
+          data["mcpServers"]["cognigy-vibe"]["args"] = ["--from", f"cognigy-vibe-mcp=={os.environ['VERSION']}", "cognigy-vibe-launch"]
+          p.write_text(json.dumps(data, indent=2) + "\n")
+          print(f"Patched plugin.json: cognigy-vibe-mcp=={os.environ['VERSION']}", file=sys.stderr)
+          PYTHON
+
       - name: Build
         if: steps.check.outputs.skip == 'false'
         run: |
