@@ -105,6 +105,76 @@ def test_non_json_error_body_raises_api_error(client):
     assert "Internal Server Error" in str(exc.value)
 
 
+from cognigy_mcp.api import RetriableApiError
+
+
+# --- RetriableApiError exception hierarchy ---
+
+def test_retriable_api_error_is_api_error():
+    exc = RetriableApiError(429, "rate limited", retry_after=5.0)
+    assert isinstance(exc, ApiError)
+    assert exc.status_code == 429
+    assert exc.retry_after == 5.0
+
+
+def test_retriable_api_error_no_retry_after():
+    exc = RetriableApiError(503, "unavailable")
+    assert exc.retry_after is None
+
+
+# --- _raise_for_status behaviour ---
+
+def test_raise_for_status_429_with_retry_after_header(client):
+    resp = httpx.Response(
+        429,
+        json={"error": "rate limited"},
+        headers={"Retry-After": "3"},
+    )
+    with pytest.raises(RetriableApiError) as exc:
+        client._raise_for_status(resp)
+    assert exc.value.status_code == 429
+    assert exc.value.retry_after == 3.0
+
+
+def test_raise_for_status_429_without_retry_after_header(client):
+    resp = httpx.Response(429, json={"error": "rate limited"})
+    with pytest.raises(RetriableApiError) as exc:
+        client._raise_for_status(resp)
+    assert exc.value.status_code == 429
+    assert exc.value.retry_after is None
+
+
+def test_raise_for_status_500_raises_retriable(client):
+    resp = httpx.Response(500, json={"error": "server error"})
+    with pytest.raises(RetriableApiError) as exc:
+        client._raise_for_status(resp)
+    assert exc.value.status_code == 500
+    assert exc.value.retry_after is None
+
+
+def test_raise_for_status_503_raises_retriable(client):
+    resp = httpx.Response(503, text="Service Unavailable", headers={"content-type": "text/plain"})
+    with pytest.raises(RetriableApiError) as exc:
+        client._raise_for_status(resp)
+    assert exc.value.status_code == 503
+
+
+def test_raise_for_status_404_raises_plain_api_error(client):
+    resp = httpx.Response(404, json={"error": "Not found"})
+    with pytest.raises(ApiError) as exc:
+        client._raise_for_status(resp)
+    assert type(exc.value) is ApiError
+    assert exc.value.status_code == 404
+
+
+def test_raise_for_status_401_raises_plain_api_error(client):
+    resp = httpx.Response(401, json={"error": "Unauthorized"})
+    with pytest.raises(ApiError) as exc:
+        client._raise_for_status(resp)
+    assert type(exc.value) is ApiError
+    assert exc.value.status_code == 401
+
+
 def test_endpoint_base_url_raises_for_non_matching_url():
     c = CognigyClient(base_url="https://localhost:8080", api_key="key")
     with pytest.raises(ValueError, match="cognigy-api-"):

@@ -8,6 +8,12 @@ class ApiError(Exception):
         super().__init__(f"HTTP {status_code}: {message}")
 
 
+class RetriableApiError(ApiError):
+    def __init__(self, status_code: int, message: str, retry_after: float | None = None):
+        self.retry_after = retry_after
+        super().__init__(status_code, message)
+
+
 class CognigyClient:
     def __init__(self, base_url: str, api_key: str):
         self._base = base_url.rstrip("/")
@@ -30,13 +36,20 @@ class CognigyClient:
         return self._base.replace("cognigy-api-", "cognigy-endpoint-")
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
-        if resp.status_code >= 400:
-            try:
-                body = resp.json()
-                msg = body.get("error") or body.get("message") or resp.text
-            except Exception:
-                msg = resp.text
-            raise ApiError(resp.status_code, msg)
+        if resp.status_code < 400:
+            return
+        try:
+            body = resp.json()
+            msg = body.get("error") or body.get("message") or resp.text
+        except Exception:
+            msg = resp.text
+        if resp.status_code == 429:
+            raw = resp.headers.get("Retry-After")
+            retry_after = float(raw) if raw is not None else None
+            raise RetriableApiError(resp.status_code, msg, retry_after=retry_after)
+        if resp.status_code >= 500:
+            raise RetriableApiError(resp.status_code, msg, retry_after=None)
+        raise ApiError(resp.status_code, msg)
 
     def get(self, path: str, **params) -> dict:
         resp = self._http.get(self._base + path, params=params or None)
