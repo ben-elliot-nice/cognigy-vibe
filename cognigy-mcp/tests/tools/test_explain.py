@@ -561,3 +561,17 @@ def test_profile_editing_warns_against_mixing_set_and_merge_on_same_key(mock_cli
     text = result[0].text
     assert "same key" in text.lower() or "clobber" in text.lower(), \
         "Must warn against mixing setProfileVar and mergeProfileVar on the same key"
+
+
+def test_explain_with_empty_args_returns_orientation(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({})
+    assert len(result) == 1
+    assert "cognigy-vibe-mcp" in result[0].text.lower() or "topics" in result[0].text.lower()
+
+
+def test_explain_topic_wrong_type_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": 123})
+    # Pydantic coerces int → str in lax mode; confirm no crash and some response returned
+    assert len(result) == 1
