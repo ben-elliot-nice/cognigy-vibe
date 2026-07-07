@@ -37,34 +37,9 @@ For contributors running from source — the repo is configured to run the MCP s
    COGNIGY_API_KEY=your-api-key-here
    COGNIGY_PROJECT_ID=your-project-id-here
    ```
-4. [`.mcp.json`](.mcp.json) is pre-configured — Claude Code will pick it up on next start. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
+4. [`.mcp.json`](.mcp.json) is pre-configured and activates dev mode automatically — the server runs from local source (`./cognigy-mcp`) with `reload_mcp` available. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
 
 See the [Development](#development) section for the full contributor workflow.
-
-### MCP server only
-
-If you want the Cognigy API tools without the skills workflow:
-
-1. Install the server:
-   ```bash
-   uv tool install cognigy-vibe-mcp
-   ```
-2. Add an entry to your project's `.mcp.json`:
-   ```json
-   {
-     "mcpServers": {
-       "cognigy-vibe": {
-         "command": "uvx",
-         "args": ["cognigy-vibe-mcp"],
-         "env": {
-           "COGNIGY_BASE_URL": "https://cognigy-api-au1.nicecxone.com",
-           "COGNIGY_API_KEY": "your-api-key-here",
-           "COGNIGY_PROJECT_ID": "your-project-id-here"
-         }
-       }
-     }
-   }
-   ```
 
 ---
 
