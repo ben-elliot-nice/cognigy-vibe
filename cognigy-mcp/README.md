@@ -131,11 +131,4 @@ uv sync --extra dev
 uv run pytest tests/ -v
 ```
 
-To develop against local source with hot-reload, add to your project `.env` (credentials must be configured first):
-
-```env
-COGNIGY_VIBE_DEV=1
-COGNIGY_VIBE_SOURCE_DIR=/absolute/path/to/cognigy-claude-plugin/cognigy-mcp
-```
-
-Then ask Claude to call `reload_mcp` after editing source files — the server respawns from updated code without a terminal restart.
+To develop against local source with hot-reload, the repo's `.mcp.json` already sets `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` — no `.env` additions needed. Ask Claude to call `reload_mcp` after editing source files — the server respawns from updated code without a terminal restart.
