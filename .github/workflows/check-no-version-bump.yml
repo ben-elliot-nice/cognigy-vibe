@@ -6,7 +6,7 @@ on:
     branches: [dev]
     paths:
       - 'cognigy-mcp/pyproject.toml'
-      - '.claude-plugin/plugin.json'
+      - 'plugin/.claude-plugin/plugin.json'
 
 jobs:
   version-check:
@@ -37,11 +37,18 @@ jobs:
 
       - name: Check plugin.json version not bumped
         run: |
-          CURRENT=$(jq -r '.version' .claude-plugin/plugin.json)
-          BASE=$(git show origin/dev:.claude-plugin/plugin.json | jq -r '.version')
+          CURRENT=$(jq -r '.version' plugin/.claude-plugin/plugin.json)
+          # Fall back to old path on dev for the transition from .claude-plugin/ to plugin/.claude-plugin/
+          BASE=$(git show origin/dev:plugin/.claude-plugin/plugin.json 2>/dev/null | jq -r '.version' || \
+                 git show origin/dev:.claude-plugin/plugin.json 2>/dev/null | jq -r '.version' || echo "")
 
           echo "dev:     $BASE"
           echo "current: $CURRENT"
+
+          if [ -z "$BASE" ]; then
+            echo "plugin.json not found on origin/dev (new file) — skipping version check ✓"
+            exit 0
+          fi
 
           if [ "$CURRENT" != "$BASE" ]; then
             echo "::error::plugin.json version must not be bumped on dev PRs."

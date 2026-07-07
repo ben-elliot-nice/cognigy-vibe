@@ -57,10 +57,10 @@ On session resume: call `sync_remote_state` again before any MCP call to refresh
 
 1. `<cwd>/default-demo-config.json` — workspace-level override
 2. Walk up from cwd toward `$HOME`, first match wins
-3. `~/.config/cognigy-vibe/config.json` — global default (written by `cognigy:init-cognigy-vibe`)
+3. `~/.config/cognigy-vibe/config.json` — global default (written by `cognigy-vibe:init-cognigy-vibe`)
 4. Nothing found → `config_loaded: false`
 
-The winning file applies to **all** builds in this session. There is no per-build config file — the workspace root config is shared. See `cognigy:build-config` for the full field schema.
+The winning file applies to **all** builds in this session. There is no per-build config file — the workspace root config is shared. See `cognigy-vibe:build-config` for the full field schema.
 
 ## Cross-workspace and different-tenant sessions
 
@@ -71,17 +71,15 @@ Common scenarios that require a separate workspace:
 - Running builds for two customers who are on different Cognigy environments
 - A second developer on the same machine who has a different API key
 
-Each workspace directory has its own `.env` (and optionally its own `default-demo-config.json`). The `cognigy:init-cognigy-vibe` wizard writes `.env` to cwd — run it once per workspace, not once globally.
+Each workspace directory has its own `.env` (and optionally its own `default-demo-config.json`). The `cognigy-vibe:init-cognigy-vibe` wizard writes `.env` to cwd — run it once per workspace, not once globally.
 
 `~/.config/cognigy-vibe/config.json` (the non-secret build defaults) is global and shared across all workspaces on the same machine. Per-workspace build defaults go in `<workspace>/default-demo-config.json`.
 
 ## Legacy model (superseded)
 
-The flat-structure model — where cwd was the demo directory, `COGNIGY_PROJECT_ID` was pinned in `.env`, and `cognigy:init-mcp` was run per project — is superseded by the session-workspace model. In the current model:
+The flat-structure model — where cwd was the demo directory, `COGNIGY_PROJECT_ID` was pinned in `.env`, and an init skill was run per project — is superseded by the session-workspace model. In the current model:
 
 - No `COGNIGY_PROJECT_ID` pinned in `.env` at session start (it is written dynamically by `sync_remote_state` — see `.env` scope above)
 - No per-build `.claude/mcp.json`
-- No `cognigy:init-mcp` per project
+- No per-project init skill
 - No session restart between builds
-
-`cognigy:init-mcp` remains available for edge cases (non-plugin users who want a single-project flat directory with `COGNIGY_PROJECT_ID` pinned at session start), but is not part of the standard demo-build workflow.

@@ -1,0 +1,14 @@
+{
+  "name": "cognigy-vibe",
+  "owner": {
+    "name": "Ben Elliot",
+    "email": "ben.elliot@nice.com"
+  },
+  "plugins": [
+    {
+      "name": "cognigy-vibe",
+      "source": "./plugin",
+      "description": "Cognigy AI agent development skills for Claude Code"
+    }
+  ]
+}

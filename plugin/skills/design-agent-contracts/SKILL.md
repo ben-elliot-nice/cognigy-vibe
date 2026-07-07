@@ -11,7 +11,7 @@ Use this skill to design the deterministic enforcement layer for compliance obli
 
 **Key principle:** The LLM calls a tool. What happens inside that tool call is owned by Cognigy nodes, not the LLM. `Resolve Tool Action` is the single exit point — the contracts layer controls exactly what the LLM receives back.
 
-Run after `cognigy:design-agent-jobs` when the architecture document is available.
+Run after `cognigy-vibe:design-agent-jobs` when the architecture document is available.
 
 **This skill does not create or modify any Cognigy resources.**
 
@@ -39,7 +39,7 @@ Tool Branch
 
 ## Reference Docs
 
-Before starting, navigate to `<plugin-root>` (two directories up from `skills/design-agent-contracts/`) and read:
+Before starting, navigate to `<plugin-root>` (three directories up from `plugin/skills/design-agent-contracts/`) and read:
 
 - `explain("agent-tool-patterns")` — toolResponse channel
 - `explain("agent-handover")` — handover context pattern
@@ -165,7 +165,7 @@ How tool branches should call each guard (Execute Flow pattern), and where to pl
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - Guard sub-flows are reusable — one guard can be called from multiple tool branches
 - Obligations enforced here are separate from compliance language in tool descriptions — both are needed: tool descriptions inform the LLM's decision, guard sub-flows enforce the outcome
 - The LLM cannot bypass a guard — the tool branch structure is designer-controlled

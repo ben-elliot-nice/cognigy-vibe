@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "cognigy-vibe@cognigy-vibe": true,
+    "superpowers@superpowers-dev": true
+  }
+}
