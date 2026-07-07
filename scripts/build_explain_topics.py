@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-RESOURCES = REPO_ROOT / "skills" / "explain" / "resources"
-TEMPLATE = REPO_ROOT / "skills" / "explain" / "SKILL.md.template"
+RESOURCES = REPO_ROOT / "plugin" / "skills" / "explain" / "resources"
+TEMPLATE = REPO_ROOT / "plugin" / "skills" / "explain" / "SKILL.md.template"
 GENERATED_PY = REPO_ROOT / "cognigy-mcp" / "cognigy_mcp" / "tools" / "_explain_topics_generated.py"
-GENERATED_SKILL = REPO_ROOT / "skills" / "explain" / "SKILL.md"
+GENERATED_SKILL = REPO_ROOT / "plugin" / "skills" / "explain" / "SKILL.md"
 
 
 @dataclass
