@@ -1692,6 +1692,7 @@ Next steps (manual, in the Cognigy UI):
 - Open the Interaction Panel on the [Persona] agent to smoke-test conversation flow
 - (Optional) Configure Voice Preview (Settings → Voice Preview → Microsoft) before WebRTC demoing
 - (If S1.8 fell through to manual UI step) Wire the knowledge store into the agent via the Cognigy UI — see [CUSTOMER]_FLOW_INSERTS.md S9
+- Run `cognigy:voice-go-live-checklist` before the first live demo to catch any post-build drift or config gaps not covered by the smoke test.
 ```
 
 One paragraph. No further prose unless something failed during build.
