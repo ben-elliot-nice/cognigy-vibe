@@ -5,5 +5,9 @@
   "author": {
     "name": "Ben Elliot",
     "email": "ben.elliot@nice.com"
-  }
+  },
+  "homepage": "https://github.com/ben-elliot-nice/cognigy-claude-plugin",
+  "repository": "https://github.com/ben-elliot-nice/cognigy-claude-plugin",
+  "license": "MIT",
+  "keywords": ["cognigy", "ai-agents", "conversational-ai", "mcp", "skills", "nice"]
 }
