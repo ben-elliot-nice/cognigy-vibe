@@ -15,15 +15,46 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 **Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed — the plugin uses `uvx` to run the MCP server.
 
-### Marketplace (recommended)
+### Direct from GitHub (recommended)
 
-1. Add the NiCE marketplace and install the plugin:
-   ```bash
-   claude marketplace add ben-elliot-nice/nice-claude-marketplace
-   claude plugin install cognigy@nice
+Install with a single command — no marketplace required:
+
+```bash
+claude plugin install github:ben-elliot-nice/cognigy-claude-plugin
+```
+
+After install:
+
+1. Add your Cognigy credentials to `.env` in your working directory:
    ```
-2. Run `cognigy:init-cognigy-vibe` to capture your Cognigy credentials and build defaults (one-time per workstation).
-3. Ask: *"Build me a Cognigy demo for \<customer\>."* — no restart required after `.env` is in place.
+   COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
+   COGNIGY_API_KEY=your-api-key-here
+   ```
+2. Add the MCP server to your project's `.mcp.json` (or copy it from [`.mcp.json`](.mcp.json)):
+   ```json
+   {
+     "mcpServers": {
+       "cognigy-vibe": {
+         "command": "uvx",
+         "args": ["cognigy-vibe-mcp"]
+       }
+     }
+   }
+   ```
+3. Restart Claude Code to pick up the new credentials.
+4. Run `cognigy:init-cognigy-vibe` to capture your build defaults (one-time per workstation).
+5. Ask: *"Build me a Cognigy demo for \<customer\>."*
+
+### Marketplace (NICE internal)
+
+If you have access to the NICE Claude Marketplace:
+
+```bash
+claude marketplace add ben-elliot-nice/nice-claude-marketplace
+claude plugin install cognigy@nice
+```
+
+Then follow steps 1–5 above.
 
 ### Clone + local dev
 
