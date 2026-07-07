@@ -183,3 +183,73 @@ Fail: `❌ F8  [N] aiAgentToolAnswer node(s) have empty config.answer: [list nod
 Pass: `✅ F9  AI Agent Job production flags correct`
 Fail: `❌ F9  AI Agent Job has debug flags enabled: [list flagged fields]`
 → `cognigy_update(resource_type: "node", flow_id: flowId, resource_id: <aiAgentJobNodeId>, merge_config: true, body: { config: { debugLogSystemPrompt: false, debugResult: false } })`
+
+---
+
+## Step 5: Advisory assertions (A1–A2)
+
+These are warnings only — they do not block go-live. A1 fires when DTMF branching is absent; A2 fires when bargeIn is not explicitly configured.
+
+### A1 — DTMF handling · WARN if no branching detected
+
+**Check:** Scan the flow chart for any node that branches on `input.data.dtmf` (look for ifThenElse or lookup nodes referencing `dtmf` in their condition or data fields).
+
+If DTMF branching is found: `✅ A1  DTMF branching present`
+If not found: `⚠️  A1  No DTMF branching detected`
+→ If this agent handles keypress input (e.g. IVR menu options), add an ifThenElse node branching on `input.data.dtmf`. See `explain("voice-gateway")` for the DTMF input path.
+
+### A2 — bargeIn explicitly set · WARN if absent
+
+**Precondition:** F2 passed. If F2 failed, mark A2 as SKIP.
+
+**Check:** `setSessionConfig.config.bargeIn` exists and `bargeIn.enable` is explicitly set (to either `true` or `false`).
+
+If explicitly set: `✅ A2  bargeIn explicitly configured (enable: [value])`
+If absent: `⚠️  A2  bargeIn not explicitly set in Set Session Config — platform default applies`
+→ Add `bargeIn: { enable: false, actionHook: "voice", dtmfBargein: false }` to the Set Session Config node config for an explicit no-barge-in setting. Adjust if barge-in is intentional for this use case.
+
+---
+
+## Step 6: Print the report
+
+Collect all assertion results from Steps 3–5. Print the full report in this exact format — do not omit any assertion, even if it passed:
+
+```
+## Voice Go-Live Checklist — [project name] / [flow name]
+
+### Platform
+[P1 result line]
+[P1 remediation line if FAIL or WARN, indented with →]
+[P2 result line]
+[P2 remediation line if FAIL or WARN]
+[P3 result line or SKIP]
+[P3 remediation line if WARN]
+[P4 result line]
+[P4 remediation line if FAIL]
+
+### Flow Structure
+[F1–F9 result lines, each with remediation line below if FAIL or WARN]
+
+### Advisory
+[A1 result line]
+[A1 remediation line if WARN]
+[A2 result line or SKIP]
+[A2 remediation line if WARN]
+
+---
+[N] passed · [N] failed · [N] warnings
+```
+
+**Counts:** PASS → passed; FAIL → failed; WARN → warnings; SKIP → not counted.
+
+**Emoji key:**
+- `✅` — PASS
+- `❌` — FAIL
+- `⚠️ ` — WARN
+- `—` — SKIP (precondition not met)
+
+After printing the report, if any FAIL results exist, add this note:
+> "Fix the FAIL items before going live. WARN items are advisory — address them if the scenario applies."
+
+If all 15 assertions (excluding SKIPs) are PASS or WARN:
+> "No blocking issues found. Review any warnings above before going live."
