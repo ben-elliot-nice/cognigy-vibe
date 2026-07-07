@@ -117,7 +117,7 @@ This content is distinct from the `docs/` directory, which covers plugin develop
 
 ## Required Plugins
 
-This project uses two Claude Code plugins. `.claude/settings.json` enables them — you need both marketplaces installed locally.
+This project uses two Claude Code plugins. `.claude/settings.json` enables them — Superpowers requires its marketplace; Cognigy can be installed directly from GitHub (see below).
 
 **Superpowers** (`superpowers@superpowers-dev`) — workflow skills (brainstorming, planning, TDD, etc.):
 ```bash
