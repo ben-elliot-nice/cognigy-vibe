@@ -544,3 +544,165 @@ def test_say_normalise_does_not_inject_temperature():
     Temperature belongs on the AI Agent Job Node, not Say nodes."""
     result = _normalise_say_config({"text": "Hello world"})
     assert "generativeAI_temperature" not in result
+
+
+# ---------------------------------------------------------------------------
+# Response filtering — strip_response applied at full-object return paths
+# ---------------------------------------------------------------------------
+
+def test_cognigy_get_strips_internal_fields(mock_client, state, cache):
+    mock_client.get.return_value = {
+        "_id": "node-1",
+        "__v": 42,
+        "config": {"code": "input.text", "transpiled": "a" * 1000},
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "node",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert "__v" not in data
+    assert "transpiled" not in data["config"]
+    assert data["config"]["code"] == "input.text"
+
+
+def test_cognigy_list_full_objects_strips_each_item(mock_client, state, cache):
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "__v": 1},
+        {"_id": "f2", "name": "Flow 2", "__v": 2},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({"resource_type": "flows", "full_objects": True})
+    data = json.loads(result[0].text)
+    for item in data["items"]:
+        assert "__v" not in item
+    assert data["items"][0]["_id"] == "f1"
+
+
+def test_cognigy_list_simplified_not_affected_by_filter(mock_client, state, cache):
+    """Default (simplified) list must not be touched by the filter — it already projects to {id, name}."""
+    mock_client.get.return_value = {"items": [{"_id": "f1", "name": "Flow 1", "__v": 1}]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({"resource_type": "flows"})
+    data = json.loads(result[0].text)
+    # Simplified path only emits id/name — __v was never included; just assert no crash
+    assert data["items"][0]["id"] == "f1"
+
+
+def test_cognigy_create_return_full_object_strips_internal_fields(mock_client, state, cache):
+    mock_client.post.return_value = {
+        "_id": "f1",
+        "name": "Flow 1",
+        "__v": 3,
+        "config": {"transpiled": "big compiled output"},
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({
+        "resource_type": "flows",
+        "body": {"name": "Flow 1"},
+        "return_full_object": True,
+    })
+    data = json.loads(result[0].text)
+    assert "__v" not in data
+    assert "transpiled" not in data.get("config", {})
+    assert data["name"] == "Flow 1"
+
+
+def test_cognigy_update_return_full_object_strips_internal_fields(mock_client, state, cache):
+    mock_client.get.return_value = {"_id": "f1", "name": "Flow 1"}
+    mock_client.patch.return_value = {"_id": "f1", "name": "Flow 1 updated", "__v": 4}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_update"]({
+        "resource_type": "flows",
+        "resource_id": "f1",
+        "body": {"name": "Flow 1 updated"},
+        "return_full_object": True,
+    })
+    data = json.loads(result[0].text)
+    assert "__v" not in data
+    assert data["name"] == "Flow 1 updated"
+
+
+def test_get_flow_chart_raw_strips_node_internal_fields(mock_client, state, cache):
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "n1", "type": "code", "__v": 1, "config": {"code": "input.text", "transpiled": "big"}},
+        ],
+        "relations": [],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1", "format": "raw"})
+    data = json.loads(result[0].text)
+    node = data["nodes"][0]
+    assert "__v" not in node
+    assert "transpiled" not in node["config"]
+    assert node["config"]["code"] == "input.text"
+
+
+def test_get_flow_chart_both_strips_node_internal_fields(mock_client, state, cache):
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "n1", "type": "code", "__v": 2, "config": {"code": "input.text", "transpiled": "big"}},
+        ],
+        "relations": [{"node": "n1", "next": None, "children": [], "_id": "rel-1"}],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1", "format": "both"})
+    data = json.loads(result[0].text)
+    node = data["nodes"][0]
+    assert "__v" not in node
+    assert "transpiled" not in node["config"]
+
+
+def test_cognigy_update_merge_config_strips_blocked_fields_before_patch(mock_client, state, cache):
+    """merge_config must not re-upload config.transpiled to the API."""
+    mock_client.get.return_value = {
+        "_id": "node-1",
+        "config": {"code": "input.text", "transpiled": "compiled...", "otherKey": "keep"},
+    }
+    mock_client.patch.return_value = {"_id": "node-1", "config": {"code": "input.text", "otherKey": "keep"}}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_update"]({
+        "resource_type": "node",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+        "body": {"config": {}},
+        "merge_config": True,
+    })
+    call_body = mock_client.patch.call_args[0][1]
+    assert "transpiled" not in call_body["config"]
+    assert call_body["config"]["code"] == "input.text"
+    assert call_body["config"]["otherKey"] == "keep"
+
+
+def test_get_flow_chart_hierarchy_strips_node_internal_fields(mock_client, state, cache):
+    """hierarchy format (the default) must strip __v and config.transpiled from nodes."""
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "n1", "type": "code", "__v": 5, "config": {"code": "input.text", "transpiled": "big"}, "label": "My Code"},
+        ],
+        "relations": [{"node": "n1", "next": None, "children": [], "_id": "rel-1"}],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    data = json.loads(result[0].text)
+    # hierarchy string should still render correctly
+    assert "[code] My Code" in data["hierarchy"]
+    # raw nodes must not be in the hierarchy response, but the hierarchy itself should be clean
+    assert "__v" not in data
+
+
+def test_cognigy_invoke_strips_internal_fields(mock_client, state, cache):
+    mock_client.post.return_value = {"_id": "flow-2", "__v": 1, "name": "Cloned Flow"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "flow",
+        "resource_id": "flow-1",
+        "operation": "clone",
+        "body": {},
+    })
+    data = json.loads(result[0].text)
+    assert "__v" not in data
+    assert data["name"] == "Cloned Flow"

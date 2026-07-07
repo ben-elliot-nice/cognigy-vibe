@@ -4,6 +4,7 @@ from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState, _deep_merge
+from cognigy_mcp.filters import strip_response, BLOCKED_IN_CONFIG
 
 TOOLS: list[Tool] = [
     Tool(
@@ -363,6 +364,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         fields = args.get("fields")
         if fields:
             data = {k: data[k] for k in fields if k in data}
+        data = strip_response(data)
         return _ok({**data, "_source": source})
 
     def _cognigy_list(args: dict) -> list[TextContent]:
@@ -402,6 +404,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             items = result_data.get("items", [])
             filtered = [{k: item[k] for k in fields if k in item} for item in items]
             result_data = {"items": filtered, "count": len(filtered)}
+        if full_objects:
+            items = result_data.get("items", [])
+            result_data = {**result_data, "items": [strip_response(item) for item in items]}
         return _ok(result_data)
 
     def _cognigy_create(args: dict) -> list[TextContent]:
@@ -456,7 +461,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if resource_id:
             cache.set(rtype, resource_id, result)
         if args.get("return_full_object"):
-            return _ok(result)
+            return _ok(strip_response(result))
         minimal = {
             "_id": result.get("_id"),
             "referenceId": result.get("referenceId"),
@@ -496,12 +501,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if current.get("type") == "say" and "config" in body:
             body = {**body, "config": _normalise_say_config(body["config"])}
         if merge_config and "config" in body and "config" in current:
-            merged = _deep_merge(current["config"], body["config"])
+            current_config = {k: v for k, v in current["config"].items() if k not in BLOCKED_IN_CONFIG}
+            merged = _deep_merge(current_config, body["config"])
             body = {**body, "config": merged}
         result = client.patch(path, body)
         cache.set(rtype, rid, result)
         if args.get("return_full_object"):
-            return _ok(result)
+            return _ok(strip_response(result))
         minimal = {
             "_id": result.get("_id"),
             "type": result.get("type"),
@@ -530,20 +536,30 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if path is None:
             return _ok({"error": f"flow_id required for {rtype}/{operation}"})
         result = client.post(path, body)
-        return _ok(result)
+        return _ok(strip_response(result))
 
     def _get_flow_chart(args: dict) -> list[TextContent]:
         flow_id = args["flow_id"]
         fmt = args.get("format", "hierarchy")
         chart = client.get(f"/v2.0/flows/{flow_id}/chart")
+        stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if fmt == "hierarchy":
-            hierarchy = _build_hierarchy(chart)
+            stripped_chart = {**chart, "nodes": stripped_nodes}
+            hierarchy = _build_hierarchy(stripped_chart)
             return _ok({"hierarchy": hierarchy})
         elif fmt == "raw":
-            return _ok({"nodes": chart.get("nodes", []), "relations": chart.get("relations", [])})
+            return _ok({
+                "nodes": stripped_nodes,
+                "relations": chart.get("relations", []),
+            })
         else:
-            hierarchy = _build_hierarchy(chart)
-            return _ok({"relations": chart.get("relations", []), "nodes": chart.get("nodes", []), "hierarchy": hierarchy})
+            stripped_chart = {**chart, "nodes": stripped_nodes}
+            hierarchy = _build_hierarchy(stripped_chart)
+            return _ok({
+                "relations": chart.get("relations", []),
+                "nodes": stripped_nodes,
+                "hierarchy": hierarchy,
+            })
 
     return {
         "cognigy_get": _cognigy_get,
