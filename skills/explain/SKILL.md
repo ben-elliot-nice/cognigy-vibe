@@ -29,7 +29,7 @@ aiagent:
   two-pass-confirm           inter-turn flag management, STOP gate wording
 
 code:
-  code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest .result
+  code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest response shape and storage config
   cognigyScript              interpolation contexts, what works where
   function-execution         async pattern, inject-back via sessions API
   output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
