@@ -18,7 +18,7 @@ def _log_path() -> str:
         ver = version("cognigy-vibe-mcp")
     except Exception:
         ver = "unknown"
-    log_dir = Path.home() / ".config" / "cognigy-vibe-mcp"
+    log_dir = Path.home() / ".config" / "cognigy-vibe"
     log_dir.mkdir(parents=True, exist_ok=True)
     return str(log_dir / f"cognigy-vibe-mcp-{ver}.log")
 
@@ -111,8 +111,12 @@ class _Orchestrator:
         project_env = Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env"
         if project_env.exists():
             load_dotenv(dotenv_path=project_env, override=True)
+            _log(f"_spawn: loaded project env {project_env} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
         elif USER_ENV_PATH.exists():
             load_dotenv(dotenv_path=USER_ENV_PATH, override=True)
+            _log(f"_spawn: loaded user-scope env {USER_ENV_PATH} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
+        else:
+            _log("_spawn: no .env found — starting in degraded mode")
         mode = _detect_mode()
         self._mode = mode
         cmd = _inner_command(mode)
