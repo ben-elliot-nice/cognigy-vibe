@@ -110,11 +110,23 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 
 ## OpenAPI Spec
 
-The Cognigy OpenAPI spec is available per environment (not vendored):
-- AU1: `GET https://cognigy-api-au1.nicecxone.com/openapi/openapi-viewer.json`
-- NA1: `GET https://cognigy-api-na1.nicecxone.com/openapi/openapi-viewer.json`
-- JP1: `GET https://cognigy-api-jp1.nicecxone.com/openapi/openapi-viewer.json`
-- Trial: `GET https://api-trial.cognigy.ai/openapi/openapi-viewer.json`
+A local copy lives at `./openapi.json` in the repo root — check there first before fetching.
+
+The spec is also available per environment. It requires a session cookie (`_0710c`) from a logged-in browser session — a plain unauthenticated GET returns an empty or truncated response:
+
+```bash
+# AU1 — replace the cookie value with one from your browser session
+curl 'https://cognigy-api-au1.nicecxone.com/openapi/openapi-viewer.json' \
+  -H 'accept: application/json' \
+  -b '_0710c=<your-session-cookie>' \
+  -o openapi.json
+```
+
+Environments:
+- AU1: `https://cognigy-api-au1.nicecxone.com/openapi/openapi-viewer.json`
+- NA1: `https://cognigy-api-na1.nicecxone.com/openapi/openapi-viewer.json`
+- JP1: `https://cognigy-api-jp1.nicecxone.com/openapi/openapi-viewer.json`
+- Trial: `https://api-trial.cognigy.ai/openapi/openapi-viewer.json`
 
 ## Required Plugins
 
