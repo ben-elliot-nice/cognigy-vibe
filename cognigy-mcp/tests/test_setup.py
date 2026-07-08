@@ -85,6 +85,18 @@ def test_write_credential_env_creates_file(tmp_path):
     assert "COGNIGY_API_KEY=my-key" in content
 
 
+def test_write_credential_env_preserves_existing_keys(tmp_path):
+    from cognigy_mcp.setup import write_credential_env
+    env_path = tmp_path / ".env"
+    env_path.write_text("COGNIGY_PROJECT_ID=existing-project\nCOGNIGY_BASE_URL=https://old.example.com\n")
+    write_credential_env(env_path, "https://new.example.com", "new-key")
+    content = env_path.read_text()
+    assert "COGNIGY_PROJECT_ID=existing-project" in content
+    assert "COGNIGY_BASE_URL=https://new.example.com" in content
+    assert "COGNIGY_API_KEY=new-key" in content
+    assert "https://old.example.com" not in content
+
+
 def test_write_credential_env_creates_parent_dirs(tmp_path):
     from cognigy_mcp.setup import write_credential_env
     env_path = tmp_path / ".config" / "cognigy-vibe" / ".env"

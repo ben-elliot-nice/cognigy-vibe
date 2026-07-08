@@ -6,8 +6,9 @@ import os
 import stat
 import subprocess
 import sys
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from cognigy_mcp.config import USER_ENV_PATH
 
 
 def get_desktop_config_path() -> Path:
@@ -25,7 +26,13 @@ def detect_desktop_installed() -> bool:
 
 
 def get_installed_version() -> str:
-    return version("cognigy-vibe-mcp")
+    try:
+        return version("cognigy-vibe-mcp")
+    except PackageNotFoundError:
+        raise RuntimeError(
+            "Cannot determine cognigy-vibe-mcp version. "
+            "Run the wizard via: uvx --from cognigy-vibe-mcp cognigy-vibe-setup"
+        ) from None
 
 
 def merge_desktop_config(path: Path, server_name: str, entry: dict) -> None:
@@ -41,10 +48,17 @@ def merge_desktop_config(path: Path, server_name: str, entry: dict) -> None:
 
 def write_credential_env(path: Path, base_url: str, api_key: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        f"COGNIGY_BASE_URL={base_url}\n"
-        f"COGNIGY_API_KEY={api_key}\n"
-    )
+    existing: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                existing[k.strip()] = v.strip()
+    existing["COGNIGY_BASE_URL"] = base_url
+    existing["COGNIGY_API_KEY"] = api_key
+    content = "\n".join(f"{k}={v}" for k, v in existing.items()) + "\n"
+    path.write_text(content)
     if sys.platform != "win32":
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
@@ -115,13 +129,19 @@ def main() -> None:
     else:
         desktop_detected = detect_desktop_installed()
         default_client = "both" if desktop_detected else "code"
-        client_raw = _prompt("Install for which client? (code/desktop/both)", default=default_client)
-        if client_raw in ("both", "b"):
-            clients = ["code", "desktop"]
-        elif client_raw in ("desktop", "d"):
-            clients = ["desktop"]
-        else:
-            clients = ["code"]
+        while True:
+            client_raw = _prompt("Install for which client? (code/desktop/both)", default=default_client)
+            if client_raw in ("both", "b"):
+                clients = ["code", "desktop"]
+                break
+            elif client_raw in ("desktop", "d"):
+                clients = ["desktop"]
+                break
+            elif client_raw in ("code", "c"):
+                clients = ["code"]
+                break
+            else:
+                print(f"  Invalid choice '{client_raw}'. Enter: code, desktop, or both.")
 
     # 3. Scope (flag or prompt, Code only)
     scope = "user"
@@ -159,28 +179,38 @@ def main() -> None:
             print("  Run manually: claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin")
             print("  Then:         claude plugin install cognigy-vibe@cognigy-vibe --scope local")
         if mode == "configure":
-            cred_path = (
-                Path.home() / ".config" / "cognigy-vibe" / ".env"
-                if scope == "user"
-                else Path.cwd() / ".env"
-            )
+            cred_path = USER_ENV_PATH if scope == "user" else Path.cwd() / ".env"
             print(f"Writing credentials to {cred_path}")
             write_credential_env(cred_path, base_url, api_key)
 
     if "desktop" in clients:
         ver = get_installed_version()
         desktop_path = get_desktop_config_path()
-        entry: dict = {
-            "command": "uvx",
-            "args": ["--from", f"cognigy-vibe-mcp=={ver}", "cognigy-vibe-launch"],
-        }
-        if mode == "configure":
-            entry["env"] = {
-                "COGNIGY_BASE_URL": base_url,
-                "COGNIGY_API_KEY": api_key,
+        skip_desktop = False
+        if desktop_path.exists():
+            try:
+                import json as _json
+                existing_config = _json.loads(desktop_path.read_text())
+                if "cognigy-vibe" in existing_config.get("mcpServers", {}):
+                    print(f"  An existing 'cognigy-vibe' Desktop entry was found.")
+                    resp = _prompt("  Overwrite it?", default="y")
+                    if resp.lower() not in ("y", "yes"):
+                        print("  Skipping Desktop config update.")
+                        skip_desktop = True
+            except Exception:
+                pass
+        if not skip_desktop:
+            entry: dict = {
+                "command": "uvx",
+                "args": ["--from", f"cognigy-vibe-mcp=={ver}", "cognigy-vibe-launch"],
             }
-        print(f"Writing Desktop config to {desktop_path}")
-        merge_desktop_config(desktop_path, "cognigy-vibe", entry)
+            if mode == "configure":
+                entry["env"] = {
+                    "COGNIGY_BASE_URL": base_url,
+                    "COGNIGY_API_KEY": api_key,
+                }
+            print(f"Writing Desktop config to {desktop_path}")
+            merge_desktop_config(desktop_path, "cognigy-vibe", entry)
 
     # 6. Success
     print("\nDone!")
@@ -188,4 +218,6 @@ def main() -> None:
         print("  Claude Code: restart Claude if it is already running.")
     if "desktop" in clients:
         print("  Claude Desktop: restart the application to pick up the new config.")
+        print("  Note: the Desktop entry is pinned to the version installed today.")
+        print("  After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
     print()

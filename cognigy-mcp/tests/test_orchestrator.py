@@ -383,7 +383,7 @@ def test_resolve_env_file_finds_project_env(tmp_path):
     assert result == project_env
 
 
-def test_resolve_env_file_falls_back_to_user_scope(tmp_path):
+def test_resolve_env_file_falls_back_to_user_scope(tmp_path, monkeypatch):
     """With no project .env, falls back to ~/.config/cognigy-vibe/.env."""
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -392,8 +392,9 @@ def test_resolve_env_file_falls_back_to_user_scope(tmp_path):
     user_env.parent.mkdir(parents=True)
     user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\n")
 
-    from cognigy_mcp.orchestrator import _resolve_env_file
-    result = _resolve_env_file(project_dir, tmp_path)
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    result = orch._resolve_env_file(project_dir, tmp_path)
     assert result == user_env
 
 
