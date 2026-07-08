@@ -83,7 +83,7 @@ jobs:
           args = data["mcpServers"]["cognigy-vibe"]["args"]
           args = [a for a in args if a not in ("--prerelease", "allow")]
           args = [f"cognigy-vibe-mcp=={version}" if a.startswith("cognigy-vibe-mcp==") else a for a in args]
-          args = ["--prerelease", "allow"] + args
+          args = ["--no-cache", "--prerelease", "allow"] + args
           data["mcpServers"]["cognigy-vibe"]["args"] = args
           p.write_text(json.dumps(data, indent=2) + "\n")
           print(f"Patched plugin.json to {version} with --prerelease allow")
