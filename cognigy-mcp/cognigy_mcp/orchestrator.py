@@ -6,7 +6,6 @@ import os
 import queue
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -19,7 +18,9 @@ def _log_path() -> str:
         ver = version("cognigy-vibe-mcp")
     except Exception:
         ver = "unknown"
-    return os.path.join(tempfile.gettempdir(), f"cognigy-vibe-mcp-{ver}.log")
+    log_dir = Path.home() / ".config" / "cognigy-vibe-mcp"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return str(log_dir / f"cognigy-vibe-mcp-{ver}.log")
 
 _LOG = open(_log_path(), "a", buffering=1)
 
