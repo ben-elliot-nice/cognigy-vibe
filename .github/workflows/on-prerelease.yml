@@ -62,7 +62,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v8.2.0
 
-      - name: Check version exceeds current stable on PyPI
+      - name: Check version exceeds current stable and all prereleases on PyPI
         run: |
           uv run --with packaging --no-project python3 << 'EOF'
           import sys, json, urllib.request
@@ -73,12 +73,21 @@ jobs:
 
           current_stable = data['info']['version']
           new_base = "${{ steps.version.outputs.base }}"
+          new_full = Version("${{ steps.version.outputs.version }}")
 
           if not Version(new_base) > Version(current_stable):
               print(f"::error::Version {new_base} is not greater than current stable {current_stable} — bump pyproject.toml first")
               sys.exit(1)
 
-          print(f"Version check passed: {new_base} > {current_stable} ✓")
+          print(f"Stable check passed: {new_base} > {current_stable} ✓")
+
+          all_published = [Version(v) for v in data['releases']]
+          blocking = [v for v in all_published if v.is_prerelease and new_full <= v]
+          if blocking:
+              print(f"::error::Version {new_full} is not greater than existing prerelease(s) {sorted(blocking)} — use a higher RC number")
+              sys.exit(1)
+
+          print(f"Prerelease check passed: {new_full} is the highest prerelease ✓")
           EOF
 
   release:
