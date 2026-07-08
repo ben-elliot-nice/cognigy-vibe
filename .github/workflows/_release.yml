@@ -70,7 +70,7 @@ jobs:
           echo "Patched pyproject.toml to version $VERSION"
 
       - name: Validate plugin.json launcher version matches release version
-        if: steps.check.outputs.skip == 'false'
+        if: steps.check.outputs.skip == 'false' && inputs.prerelease == false
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
