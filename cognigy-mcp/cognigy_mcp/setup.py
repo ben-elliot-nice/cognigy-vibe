@@ -163,6 +163,7 @@ def main() -> None:
             print("  Base URL is required.")
             base_url = _prompt("COGNIGY_BASE_URL")
         base_url = base_url.rstrip("/")
+        print("  (API key input is hidden — no characters will appear as you type)")
         api_key = _prompt("COGNIGY_API_KEY", secret=True)
         while not api_key:
             print("  API key is required.")
