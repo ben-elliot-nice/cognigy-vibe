@@ -56,5 +56,126 @@ def install_plugin(scope: str) -> None:
     subprocess.run(cmd, check=True)
 
 
+def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
+    import getpass
+    display = f"{msg} [{default}]: " if default else f"{msg}: "
+    if secret:
+        value = getpass.getpass(display)
+    else:
+        value = input(display).strip()
+    return value or default
+
+
+def _parse_args() -> "argparse.Namespace":
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="cognigy-vibe-setup",
+        description="Install and configure the cognigy-vibe plugin.",
+    )
+    parser.add_argument(
+        "--install-only",
+        action="store_true",
+        help="Skip credential collection; install plugin only.",
+    )
+    parser.add_argument(
+        "--client",
+        choices=["code", "desktop", "both"],
+        default=None,
+        help="Which client(s) to configure (default: both if Desktop detected, else code).",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=["user", "project", "local"],
+        default=None,
+        help="Plugin install scope for Claude Code (default: user).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    pass  # wizard CLI — implemented in Task 6
+    args = _parse_args()
+    print("\ncognigy-vibe setup wizard\n")
+
+    # 1. Mode (flag or prompt)
+    if args.install_only:
+        mode = "install"
+    else:
+        mode_raw = _prompt("Mode — install+configure or install only? (configure/install)", default="configure")
+        mode = "install" if mode_raw == "install" else "configure"
+
+    # 2. Client (flag or detect+prompt)
+    if args.client:
+        clients = ["code", "desktop"] if args.client == "both" else [args.client]
+    else:
+        desktop_detected = detect_desktop_installed()
+        default_client = "both" if desktop_detected else "code"
+        client_raw = _prompt("Install for which client? (code/desktop/both)", default=default_client)
+        if client_raw in ("both", "b"):
+            clients = ["code", "desktop"]
+        elif client_raw in ("desktop", "d"):
+            clients = ["desktop"]
+        else:
+            clients = ["code"]
+
+    # 3. Scope (flag or prompt, Code only)
+    scope = "user"
+    if "code" in clients:
+        if args.scope:
+            scope = args.scope
+        else:
+            scope_raw = _prompt("Plugin scope for Claude Code? (user/project/local)", default="user")
+            scope = scope_raw if scope_raw in ("user", "project", "local") else "user"
+
+    # 4. Credentials (configure mode only)
+    base_url = ""
+    api_key = ""
+    if mode == "configure":
+        print("\nCredentials (project ID can be set later via the sync_remote_state tool)")
+        base_url = _prompt("COGNIGY_BASE_URL (e.g. https://cognigy-api-au1.nicecxone.com)")
+        while not base_url:
+            print("  Base URL is required.")
+            base_url = _prompt("COGNIGY_BASE_URL")
+        base_url = base_url.rstrip("/")
+        api_key = _prompt("COGNIGY_API_KEY", secret=True)
+        while not api_key:
+            print("  API key is required.")
+            api_key = _prompt("COGNIGY_API_KEY", secret=True)
+
+    # 5. Install + write
+    ver = get_installed_version()
+    print()
+
+    if "code" in clients:
+        if scope != "local":
+            print(f"Installing plugin at {scope} scope...")
+            install_plugin(scope)
+        if mode == "configure":
+            cred_path = (
+                Path.home() / ".config" / "cognigy-vibe" / ".env"
+                if scope == "user"
+                else Path.cwd() / ".env"
+            )
+            print(f"Writing credentials to {cred_path}")
+            write_credential_env(cred_path, base_url, api_key)
+
+    if "desktop" in clients:
+        desktop_path = get_desktop_config_path()
+        entry: dict = {
+            "command": "uvx",
+            "args": ["--from", f"cognigy-vibe-mcp=={ver}", "cognigy-vibe-launch"],
+        }
+        if mode == "configure":
+            entry["env"] = {
+                "COGNIGY_BASE_URL": base_url,
+                "COGNIGY_API_KEY": api_key,
+            }
+        print(f"Writing Desktop config to {desktop_path}")
+        merge_desktop_config(desktop_path, "cognigy-vibe", entry)
+
+    # 6. Success
+    print("\nDone!")
+    if "code" in clients:
+        print("  Claude Code: restart Claude if it is already running.")
+    if "desktop" in clients:
+        print("  Claude Desktop: restart the application to pick up the new config.")
+    print()
