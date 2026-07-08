@@ -5,7 +5,6 @@ def test_launcher_calls_orchestrator_main():
     """Launcher must delegate to orchestrator.main()."""
     mock_orchestrator = MagicMock()
     with patch.dict("sys.modules", {
-        "truststore": MagicMock(),
         "cognigy_mcp.orchestrator": mock_orchestrator,
     }):
         # Force reimport so patched modules are used
@@ -30,7 +29,6 @@ def test_launcher_logs_version_to_stderr(capsys):
     """Launcher must print version info to stderr, not stdout."""
     mock_orchestrator = MagicMock()
     with patch.dict("sys.modules", {
-        "truststore": MagicMock(),
         "cognigy_mcp.orchestrator": mock_orchestrator,
     }):
         import importlib
