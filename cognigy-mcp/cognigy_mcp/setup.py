@@ -172,13 +172,8 @@ def main() -> None:
     print()
 
     if "code" in clients:
-        if scope != "local":
-            print(f"Installing plugin at {scope} scope...")
-            install_plugin(scope)
-        else:
-            print("Local scope: plugin install skipped.")
-            print("  Run manually: claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin")
-            print("  Then:         claude plugin install cognigy-vibe@cognigy-vibe --scope local")
+        print(f"Installing plugin at {scope} scope...")
+        install_plugin(scope)
         if mode == "configure":
             cred_path = USER_ENV_PATH if scope == "user" else Path.cwd() / ".env"
             print(f"Writing credentials to {cred_path}")

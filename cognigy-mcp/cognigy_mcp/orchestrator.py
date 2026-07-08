@@ -96,7 +96,11 @@ class _Orchestrator:
     def _spawn(self) -> subprocess.Popen:
         for key in _ENV_KEYS:
             os.environ.pop(key, None)
-        load_dotenv(dotenv_path=Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env", override=True)
+        project_env = Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env"
+        if project_env.exists():
+            load_dotenv(dotenv_path=project_env, override=True)
+        elif USER_ENV_PATH.exists():
+            load_dotenv(dotenv_path=USER_ENV_PATH, override=True)
         mode = _detect_mode()
         self._mode = mode
         cmd = _inner_command(mode)
@@ -325,4 +329,7 @@ def main() -> None:
     if env_file:
         load_dotenv(dotenv_path=env_file)
     _log(f"main: after load_dotenv mode={_detect_mode()}")
-    _Orchestrator().run()
+    try:
+        _Orchestrator().run()
+    except KeyboardInterrupt:
+        sys.exit(0)
