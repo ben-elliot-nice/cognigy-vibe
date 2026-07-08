@@ -13,7 +13,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 from cognigy_mcp.config import USER_ENV_PATH
 
-_LOG = open(os.path.join(tempfile.gettempdir(), "cognigy-mcp.log"), "a", buffering=1)
+def _log_path() -> str:
+    try:
+        from importlib.metadata import version
+        ver = version("cognigy-vibe-mcp")
+    except Exception:
+        ver = "unknown"
+    return os.path.join(tempfile.gettempdir(), f"cognigy-vibe-mcp-{ver}.log")
+
+_LOG = open(_log_path(), "a", buffering=1)
 
 # Sentinel enqueued by _monitor_child when the inner server exits with rc=42.
 # Routing through the same queue as stdin bytes makes restart delivery FIFO,
