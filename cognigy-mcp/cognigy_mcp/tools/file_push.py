@@ -64,6 +64,10 @@ class ExportPackageArgs(BaseModel):
         None,
         description="Package name. Defaults to the output filename without extension.",
     )
+    resource_ids: list[str] | None = Field(
+        None,
+        description="Specific resource _ids to include. Defaults to all flows in the project.",
+    )
 
 
 _EXPORT_POLL_INTERVAL = 3.0   # seconds between job-status polls
@@ -335,10 +339,27 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         output_path = Path(m.output_path)
         package_name = m.name or output_path.stem
 
+        # Resolve resourceIds — required by the API.
+        # If not supplied, fetch all flows for the project and use their _ids.
+        if m.resource_ids is not None:
+            resource_ids = m.resource_ids
+        else:
+            try:
+                flows_resp = client.get("/v2.0/flows", projectId=project_id, limit=100)
+                resource_ids = [f["_id"] for f in flows_resp.get("items", []) if "_id" in f]
+            except Exception as e:
+                return _ok({"error": f"Failed to fetch flows to populate resourceIds: {e}"})
+            if not resource_ids:
+                return _ok({"error": "No flows found for project — cannot create an empty package"})
+
         # Kick off the async export job — returns a Task object, not a Package.
         # The _id in the response is the task ID, not the package ID.
         try:
-            job = client.post("/v2.0/packages", {"projectId": project_id, "name": package_name})
+            job = client.post("/v2.0/packages", {
+                "projectId": project_id,
+                "name": package_name,
+                "resourceIds": resource_ids,
+            })
         except Exception as e:
             return _ok({"error": f"Failed to start export job: {e}"})
 
