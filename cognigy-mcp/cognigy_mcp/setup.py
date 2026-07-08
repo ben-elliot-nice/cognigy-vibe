@@ -77,11 +77,56 @@ def install_plugin(scope: str) -> None:
     )
 
 
+def _prompt_secret(msg: str, reveal: int = 5) -> str:
+    """Read a secret, echoing the first `reveal` characters and masking the rest with *."""
+    import sys
+    display = f"{msg}: "
+    if sys.platform == "win32" or not sys.stdin.isatty():
+        import getpass
+        return getpass.getpass(display)
+    try:
+        import tty, termios
+    except ImportError:
+        import getpass
+        return getpass.getpass(display)
+    sys.stderr.write(display)
+    sys.stderr.flush()
+    chars: list[str] = []
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        while True:
+            ch = sys.stdin.read(1)
+            if ch in ("\r", "\n"):
+                sys.stderr.write("\n")
+                sys.stderr.flush()
+                break
+            elif ch in ("\x7f", "\x08"):  # backspace
+                if chars:
+                    chars.pop()
+                    sys.stderr.write("\b \b")
+                    sys.stderr.flush()
+            elif ch == "\x03":  # Ctrl-C
+                sys.stderr.write("\n")
+                raise KeyboardInterrupt
+            elif ch == "\x15":  # Ctrl-U clear line
+                sys.stderr.write("\b \b" * len(chars))
+                sys.stderr.flush()
+                chars = []
+            elif ch >= " ":
+                chars.append(ch)
+                sys.stderr.write(ch if len(chars) <= reveal else "*")
+                sys.stderr.flush()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return "".join(chars)
+
+
 def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
-    import getpass
     display = f"{msg} [{default}]: " if default else f"{msg}: "
     if secret:
-        value = getpass.getpass(display)
+        value = _prompt_secret(display.rstrip(": ").rstrip())
     else:
         value = input(display).strip()
     return value or default
@@ -163,7 +208,6 @@ def main() -> None:
             print("  Base URL is required.")
             base_url = _prompt("COGNIGY_BASE_URL")
         base_url = base_url.rstrip("/")
-        print("  (API key input is hidden — no characters will appear as you type)")
         api_key = _prompt("COGNIGY_API_KEY", secret=True)
         while not api_key:
             print("  API key is required.")
