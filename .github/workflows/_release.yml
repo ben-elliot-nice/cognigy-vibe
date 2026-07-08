@@ -69,6 +69,28 @@ jobs:
           sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" cognigy-mcp/pyproject.toml
           echo "Patched pyproject.toml to version $VERSION"
 
+      - name: Validate plugin.json launcher version matches release version
+        if: steps.check.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 << 'PYTHON'
+          import json, pathlib, sys, os
+          version = os.environ.get("VERSION", "")
+          if not version:
+              print("::error::VERSION is empty — cannot validate plugin.json", file=sys.stderr)
+              sys.exit(1)
+          p = pathlib.Path("plugin/.claude-plugin/plugin.json")
+          data = json.loads(p.read_text())
+          args = data["mcpServers"]["cognigy-vibe"]["args"]
+          expected = f"cognigy-vibe-mcp=={version}"
+          actual = next((a for a in args if a.startswith("cognigy-vibe-mcp==")), None)
+          if actual != expected:
+              print(f"::error::plugin.json args has {actual!r}, expected {expected!r} — update plugin.json before releasing", file=sys.stderr)
+              sys.exit(1)
+          print(f"plugin.json version check passed: {actual}", file=sys.stderr)
+          PYTHON
+
       - name: Build
         if: steps.check.outputs.skip == 'false'
         run: |

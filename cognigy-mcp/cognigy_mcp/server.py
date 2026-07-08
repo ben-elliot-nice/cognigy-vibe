@@ -156,11 +156,12 @@ def _create_full_server() -> tuple[Server, list[types.Tool]]:
         state.touch_interaction()
         result = handler(arguments or {})
 
-        if auto_synced and result:
+        if auto_synced and isinstance(result, list) and result:
             try:
                 first = json.loads(result[0].text)
-                first["auto_synced"] = True
-                result[0] = types.TextContent(type="text", text=json.dumps(first, indent=2))
+                if "error" not in first:
+                    first["auto_synced"] = True
+                    result[0] = types.TextContent(type="text", text=json.dumps(first, indent=2))
             except Exception:
                 pass
 

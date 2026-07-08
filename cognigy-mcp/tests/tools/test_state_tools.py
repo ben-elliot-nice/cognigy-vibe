@@ -344,3 +344,21 @@ def test_assign_org_llm_idempotent(mock_client, state, cache):
 def test_assign_org_llm_in_tools_list():
     names = [t.name for t in TOOLS]
     assert "assign_org_llm" in names
+
+
+def test_resolve_resource_missing_name_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["resolve_resource"]({})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "name" for d in data["details"])
+
+
+def test_assign_org_llm_missing_project_id_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["assign_org_llm"]({"llm_id": "llm-1"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "project_id" for d in data["details"])
