@@ -49,6 +49,16 @@ def _find_env_file(start: Path, stop: Path) -> "Path | None":
         current = current.parent
 
 
+def _resolve_env_file(start: Path, stop: Path) -> "Path | None":
+    """Walk up from start toward stop, then check user-scope fallback."""
+    env_file = _find_env_file(start, stop)
+    if env_file is None:
+        user_scope = stop / ".config" / "cognigy-vibe" / ".env"
+        if user_scope.exists():
+            return user_scope
+    return env_file
+
+
 def _detect_mode() -> str:
     if not os.environ.get("COGNIGY_BASE_URL") or not os.environ.get("COGNIGY_API_KEY"):
         return "degraded"
@@ -302,7 +312,7 @@ def main() -> None:
     truststore.inject_into_ssl()
     home = Path.home()
     cwd = Path.cwd()
-    env_file = _find_env_file(cwd, home)
+    env_file = _resolve_env_file(cwd, home)
     project_root = env_file.parent if env_file else cwd
     os.environ.setdefault("COGNIGY_PROJECT_ROOT", str(project_root))
     _log(f"main: start cwd={cwd} project_root={project_root} env_found={env_file is not None}")

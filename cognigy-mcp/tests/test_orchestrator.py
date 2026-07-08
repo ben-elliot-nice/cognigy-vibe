@@ -361,3 +361,47 @@ def test_write_to_child_broken_pipe_notification_no_response(monkeypatch):
     o._write_to_child((raw + "\n").encode(), json.loads(raw))
 
     assert not forwarded, "Notifications have no id — must not send a response"
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — user-scope .env fallback
+# ---------------------------------------------------------------------------
+
+def test_resolve_env_file_finds_project_env(tmp_path):
+    """Project .env takes priority over user-scope fallback."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    project_env = project_dir / ".env"
+    project_env.write_text("COGNIGY_BASE_URL=https://project.example.com\n")
+
+    user_config = tmp_path / ".config" / "cognigy-vibe"
+    user_config.mkdir(parents=True)
+    (user_config / ".env").write_text("COGNIGY_BASE_URL=https://user.example.com\n")
+
+    from cognigy_mcp.orchestrator import _resolve_env_file
+    result = _resolve_env_file(project_dir, tmp_path)
+    assert result == project_env
+
+
+def test_resolve_env_file_falls_back_to_user_scope(tmp_path):
+    """With no project .env, falls back to ~/.config/cognigy-vibe/.env."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+
+    user_env = tmp_path / ".config" / "cognigy-vibe" / ".env"
+    user_env.parent.mkdir(parents=True)
+    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\n")
+
+    from cognigy_mcp.orchestrator import _resolve_env_file
+    result = _resolve_env_file(project_dir, tmp_path)
+    assert result == user_env
+
+
+def test_resolve_env_file_returns_none_when_neither_exists(tmp_path):
+    """Returns None when no .env found anywhere."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+
+    from cognigy_mcp.orchestrator import _resolve_env_file
+    result = _resolve_env_file(project_dir, tmp_path)
+    assert result is None
