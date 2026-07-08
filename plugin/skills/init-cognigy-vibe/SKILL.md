@@ -1,15 +1,17 @@
 ---
 name: init-cognigy-vibe
-description: First-time-user setup wizard for the Cognigy-Vibe plugin. Run once per workstation to capture every variable a demo build needs — Cognigy API URL + key, LLM reference IDs, TTS, STT, voice channel (VoiceGateway webRTC), and voice-preview settings — and write them as reusable defaults. After this runs, `cognigy-vibe:build-orchestrator` builds for any customer with zero further manual setup. Triggers — "/init-cognigy-vibe", "set up cognigy vibe", "set up cognigy vibe MCP", "set up the cognigy plugin", "cognigy first-time setup", "configure my demo build defaults", "show/edit my Cognigy build config". Also auto-delegated by `build-orchestrator` S0.0 when no workspace config is found. Writes a non-secret `default-demo-config.json` to `~/.config/cognigy-vibe/config.json` and a secret `.env` to cwd; never commits secrets.
+description: First-time-user setup wizard for the Cognigy-Vibe plugin. Run once per workstation to capture every variable a demo build needs — Cognigy API URL + key, LLM reference IDs, TTS, STT, voice channel (VoiceGateway webRTC), and voice-preview settings — and write them as reusable defaults. After this runs, `cognigy-vibe:build-orchestrator` builds for any customer with zero further manual setup. Triggers — "/init-cognigy-vibe", "set up cognigy vibe", "set up cognigy vibe MCP", "set up the cognigy plugin", "cognigy first-time setup", "configure my demo build defaults", "show/edit my Cognigy build config". Also auto-delegated by `build-orchestrator` S0.0 when no workspace config is found. Writes a non-secret `default-demo-config.json` to `~/.config/cognigy-vibe/config.json`; only writes credentials if none are already present in the cascade.
 ---
 
 # cognigy-vibe:init-cognigy-vibe — first-time setup wizard
 
-This is the **front door** for a new Cognigy-Vibe user. It captures, once, everything a build needs and stores the non-secret config globally at `~/.config/cognigy-vibe/config.json` and credentials in `.env` at cwd. From then on, `cognigy-vibe:build-orchestrator` reads these defaults and never re-asks for tenant, credentials, LLM, voice, or naming.
+This is the **front door** for a new Cognigy-Vibe user. It captures, once, everything a build needs and stores the non-secret config globally at `~/.config/cognigy-vibe/config.json`. Credentials are **not re-asked** if they are already loaded — the preferred way to set credentials is `cognigy-vibe-setup` (or manually writing `.env`). From then on, `cognigy-vibe:build-orchestrator` reads these defaults and never re-asks for tenant, credentials, LLM, voice, or naming.
 
 > **Run order.** Run this **before your first build**, or just start a build — `build-orchestrator` S0.0 auto-delegates here if no workspace config exists. Re-run any time to view or change your defaults.
 
-> **Secrets & cloud sync.** `COGNIGY_API_KEY` is the one true secret. It is written **only** to `.env` in cwd. If cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` syncs — treat that as publishing the key. Inform the user to move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed. Never write the API key into `default-demo-config.json` and never commit it.
+> **Credential locations.** Credentials (`COGNIGY_BASE_URL`, `COGNIGY_API_KEY`) are loaded by the MCP server from the first `.env` found in: cwd → parent directories → `~/.config/cognigy-vibe/.env`. The setup wizard (`cognigy-vibe-setup`) writes to the user-scope location. Never overwrite credentials without explicit user confirmation.
+
+> **Secrets & cloud sync.** `COGNIGY_API_KEY` is the one true secret. If written to a cwd `.env` in a cloud-synced folder (OneDrive/Dropbox/iCloud), it syncs — treat that as publishing the key. Never write the API key into `default-demo-config.json` and never commit it.
 
 > **Dependency:** Read `cognigy-vibe:build-config` before proceeding — it is the canonical reference for the schema, all field descriptions, cascade discovery order, and where to write each file. The wizard steps below assume that context.
 
@@ -23,9 +25,9 @@ Greet the user — e.g. *"Welcome to the Cognigy-Vibe plugin. Looks like your fi
 
 Call `cognigy_list { resource_type: "projects" }`.
 
-- **Success** → proceed to Step 3.
+- **Success** → credentials are loaded from somewhere in the cascade. Proceed to Step 3. Do **not** ask for credentials again.
 - **Failure** → **Hard stop:**
-  > "MCP connection required before setup can continue. Check that `COGNIGY_BASE_URL` and `COGNIGY_API_KEY` are set in your `.env` file, restart the Claude Code session, and re-run `cognigy-vibe:init-cognigy-vibe`."
+  > "MCP connection required before setup can continue. Credentials (`COGNIGY_BASE_URL` and `COGNIGY_API_KEY`) must be set in one of: `~/.config/cognigy-vibe/.env` (user-scope, written by `cognigy-vibe-setup`), a `.env` in the project directory, or a `.env` in a parent directory. Restart the Claude Code session after writing credentials and re-run `cognigy-vibe:init-cognigy-vibe`."
 
   Do not fall through to manual LLM entry. There is no manual entry path for LLMs.
 
@@ -76,18 +78,23 @@ Do not present a pre-selected default. Do not ask the user to type or paste a UU
 
 ### 5. Write the files
 
-- Write `.env` with `COGNIGY_BASE_URL` + `COGNIGY_API_KEY` to **cwd** (the project directory this session is open in). Always writes here — no walk-up.
+**Credentials** — only write if Step 2 failed (degraded mode). Never overwrite without confirmation:
+- If credentials are already loaded (Step 2 succeeded): skip credential writing entirely. Inform the user where they came from (check `get_build_state` → `state_source` for context, or note that the server resolved them at startup).
+- If credentials are missing: ask the user where to write — user-scope (`~/.config/cognigy-vibe/.env`, recommended) or project-scope (`cwd/.env`). Write only to the chosen location.
+- If a `.env` already exists at the chosen location, **ask before overwriting** — do not clobber silently.
+
+**Config:**
 - Write `default-demo-config.json` (pretty JSON, `$schemaVersion: 2`) to **`~/.config/cognigy-vibe/config.json`** on first-time setup (creating the directory if needed). If the user explicitly requested a workspace override for this project only, write to cwd instead.
-- Ensure `.env` is gitignored if cwd is a git repo: check for `.gitignore`; if `.env` is not listed, append it and tell the user.
+- If `cwd/.env` was written: ensure `.env` is gitignored if cwd is a git repo — check `.gitignore`; if missing, append it and tell the user.
 - Re-read both files back and confirm they parse / are well-formed.
 
 ### 6. Confirm + next step
 
 Report:
-- `.env` written to: `<cwd>/.env` (workspace-level — shared across all Demo Builds/ in this session — see explain("session-workspace"))
+- Credentials: either "already loaded — no changes made" (with source location if known) or the path written to
 - Config written to: `~/.config/cognigy-vibe/config.json` (global — applies to all future projects on this tenant)
 - Non-secret summary table of the written config values
-- Cloud-sync note: if cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` is synced — treat that as publishing the API key. Move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed.
+- Cloud-sync note: if a `cwd/.env` was written and cwd is in a cloud-synced folder (OneDrive/Dropbox/iCloud), `.env` is synced — treat that as publishing the API key. Move it outside the synced tree and set `COGNIGY_PROJECT_ROOT` if needed.
 
 Then: *"You're set up. Open a new project directory, say 'build a demo for Liberty Financial' — credentials are already here, build defaults will inherit from your global config."*
 
