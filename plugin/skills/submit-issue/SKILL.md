@@ -69,12 +69,20 @@ If `which gh` succeeded, run:
 ```bash
 gh issue create \
   --repo ben-elliot-nice/cognigy-claude-plugin \
+  --label "bug" \
+  --label "pending release" \
+  --milestone "1.7.0" \
   --title "<title>" \
   --body "$(cat <<'EOF'
 <body>
 EOF
 )"
 ```
+
+Always include:
+- `--label "bug"` — all issues filed via this skill are bugs
+- `--label "pending release"` — fixed in dev, awaiting promotion to main
+- `--milestone "1.7.0"` — current active milestone; update if a different milestone is in scope
 
 Report the created issue URL to the user.
 
