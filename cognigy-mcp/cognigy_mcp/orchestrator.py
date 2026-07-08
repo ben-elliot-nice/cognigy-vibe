@@ -22,7 +22,9 @@ _RESTART = object()
 
 
 def _log(msg: str) -> None:
-    _LOG.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+    line = f"[{time.strftime('%H:%M:%S')}] {msg}\n"
+    _LOG.write(line)
+    sys.stderr.write(line)
 
 
 # Only credential keys are popped on each _spawn() so they reload from .env on restart.
