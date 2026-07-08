@@ -60,6 +60,10 @@ class ExportPackageArgs(BaseModel):
     output_path: str = Field(
         description="Absolute or relative path where the zip file will be written",
     )
+    name: str | None = Field(
+        None,
+        description="Package name. Defaults to the output filename without extension.",
+    )
 
 
 _EXPORT_POLL_INTERVAL = 3.0   # seconds between job-status polls
@@ -329,11 +333,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return err
         project_id = m.project_id
         output_path = Path(m.output_path)
+        package_name = m.name or output_path.stem
 
         # Kick off the async export job — returns a Task object, not a Package.
         # The _id in the response is the task ID, not the package ID.
         try:
-            job = client.post("/v2.0/packages", {"projectId": project_id})
+            job = client.post("/v2.0/packages", {"projectId": project_id, "name": package_name})
         except Exception as e:
             return _ok({"error": f"Failed to start export job: {e}"})
 
