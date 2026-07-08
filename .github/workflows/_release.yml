@@ -79,12 +79,14 @@ jobs:
           p = pathlib.Path("plugin/.claude-plugin/plugin.json")
           data = json.loads(p.read_text())
           data["version"] = version
-          data["mcpServers"]["cognigy-vibe"]["args"] = [
-              f"cognigy-vibe-mcp=={version}" if a.startswith("cognigy-vibe-mcp==") else a
-              for a in data["mcpServers"]["cognigy-vibe"]["args"]
-          ]
+          # Rebuild args: strip any existing --prerelease flag, update version pin, add --prerelease allow
+          args = data["mcpServers"]["cognigy-vibe"]["args"]
+          args = [a for a in args if a not in ("--prerelease", "allow")]
+          args = [f"cognigy-vibe-mcp=={version}" if a.startswith("cognigy-vibe-mcp==") else a for a in args]
+          args = ["--prerelease", "allow"] + args
+          data["mcpServers"]["cognigy-vibe"]["args"] = args
           p.write_text(json.dumps(data, indent=2) + "\n")
-          print(f"Patched plugin.json to {version}")
+          print(f"Patched plugin.json to {version} with --prerelease allow")
           PYTHON
 
           # Commit, retag, push — dev stays clean; tag points to the patched snapshot
