@@ -106,3 +106,21 @@ def test_get_installed_version():
     ver = get_installed_version()
     assert isinstance(ver, str)
     assert "." in ver
+
+
+def test_install_plugin_calls_claude_cli():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import install_plugin
+    with patch("subprocess.run") as mock_run:
+        install_plugin("user")
+        mock_run.assert_called_once_with(
+            ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
+            check=True,
+        )
+
+
+def test_install_plugin_rejects_invalid_scope():
+    import pytest
+    from cognigy_mcp.setup import install_plugin
+    with pytest.raises(ValueError, match="Invalid scope"):
+        install_plugin("global")
