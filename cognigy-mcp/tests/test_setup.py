@@ -121,17 +121,30 @@ def test_get_installed_version():
 
 
 def test_install_plugin_calls_claude_cli():
-    from unittest.mock import patch, call
+    from unittest.mock import patch
     from cognigy_mcp.setup import install_plugin
-    with patch("subprocess.run") as mock_run:
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
+         patch("subprocess.run") as mock_run:
         install_plugin("user")
         assert mock_run.call_count == 2
         mock_run.assert_any_call(
-            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin"],
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
             check=True,
         )
         mock_run.assert_any_call(
             ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
+            check=True,
+        )
+
+
+def test_install_plugin_version_pins_prerelease():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import install_plugin
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0rc8"), \
+         patch("subprocess.run") as mock_run:
+        install_plugin("project")
+        mock_run.assert_any_call(
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0rc8"],
             check=True,
         )
 

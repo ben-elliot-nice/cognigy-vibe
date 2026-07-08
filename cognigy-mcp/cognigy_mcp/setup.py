@@ -66,8 +66,9 @@ def write_credential_env(path: Path, base_url: str, api_key: str) -> None:
 def install_plugin(scope: str) -> None:
     if scope not in ("user", "project", "local"):
         raise ValueError(f"Invalid scope: {scope!r}. Must be one of: user, project, local")
+    ver = get_installed_version()
     subprocess.run(
-        ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin"],
+        ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-claude-plugin@v{ver}"],
         check=True,
     )
     subprocess.run(
