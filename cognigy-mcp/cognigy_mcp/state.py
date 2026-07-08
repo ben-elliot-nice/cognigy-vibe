@@ -5,7 +5,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-CONFIG_BASE = Path.home() / ".config" / "cognigy-mcp"
+CONFIG_BASE = Path.home() / ".config" / "cognigy-vibe-mcp"
+
+# Migrate state from old package name location on first access
+_OLD_CONFIG_BASE = Path.home() / ".config" / "cognigy-mcp"
+if _OLD_CONFIG_BASE.exists() and not CONFIG_BASE.exists():
+    import shutil
+    shutil.copytree(_OLD_CONFIG_BASE, CONFIG_BASE)
 
 
 def _deep_get(d: dict, *keys: str) -> Any:

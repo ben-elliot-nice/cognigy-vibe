@@ -33,6 +33,7 @@ def _log(msg: str) -> None:
     line = f"[{time.strftime('%H:%M:%S')}] {msg}\n"
     _LOG.write(line)
     sys.stderr.write(line)
+    sys.stderr.flush()
 
 
 # Only credential keys are popped on each _spawn() so they reload from .env on restart.

@@ -219,11 +219,22 @@ def make_handlers(
         m, err = validate(GetBuildStateArgs, args)
         if err:
             return err
-        full_state = state.as_dict()
-        config_fields: dict = {"config_loaded": build_config is not None}
+        project_id = state.project_id or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
+        config_fields: dict = {
+            "config_loaded": build_config is not None,
+            "project_id": project_id,
+            "state_source": str(state.config_dir) if project_id else None,
+        }
+        if not project_id:
+            return _ok({
+                **config_fields,
+                "error": "no_project_bound",
+                "hint": "Call sync_remote_state(project_id=<id>) first, or set COGNIGY_PROJECT_ID in your .env",
+            })
         if build_config is not None:
             config_fields["config_source"] = config_source or ""
             config_fields["config_summary"] = _make_config_summary(build_config)
+        full_state = state.as_dict()
         if m.resource_type:
             filtered = full_state.get(m.resource_type, {})
             return _ok({m.resource_type: filtered, "_filtered": True, **config_fields})
