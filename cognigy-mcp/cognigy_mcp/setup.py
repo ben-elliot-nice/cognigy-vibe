@@ -67,10 +67,13 @@ def install_plugin(scope: str) -> None:
     if scope not in ("user", "project", "local"):
         raise ValueError(f"Invalid scope: {scope!r}. Must be one of: user, project, local")
     ver = get_installed_version()
-    subprocess.run(
-        ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-claude-plugin@v{ver}"],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-claude-plugin@v{ver}"],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        print("  Note: marketplace add failed — already registered or stale cache. Proceeding with install...")
     subprocess.run(
         ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", scope],
         check=True,
