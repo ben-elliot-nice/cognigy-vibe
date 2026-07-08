@@ -52,8 +52,14 @@ def write_credential_env(path: Path, base_url: str, api_key: str) -> None:
 def install_plugin(scope: str) -> None:
     if scope not in ("user", "project", "local"):
         raise ValueError(f"Invalid scope: {scope!r}. Must be one of: user, project, local")
-    cmd = ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", scope]
-    subprocess.run(cmd, check=True)
+    subprocess.run(
+        ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin"],
+        check=True,
+    )
+    subprocess.run(
+        ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", scope],
+        check=True,
+    )
 
 
 def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
@@ -142,13 +148,16 @@ def main() -> None:
             api_key = _prompt("COGNIGY_API_KEY", secret=True)
 
     # 5. Install + write
-    ver = get_installed_version()
     print()
 
     if "code" in clients:
         if scope != "local":
             print(f"Installing plugin at {scope} scope...")
             install_plugin(scope)
+        else:
+            print("Local scope: plugin install skipped.")
+            print("  Run manually: claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin")
+            print("  Then:         claude plugin install cognigy-vibe@cognigy-vibe --scope local")
         if mode == "configure":
             cred_path = (
                 Path.home() / ".config" / "cognigy-vibe" / ".env"
@@ -159,6 +168,7 @@ def main() -> None:
             write_credential_env(cred_path, base_url, api_key)
 
     if "desktop" in clients:
+        ver = get_installed_version()
         desktop_path = get_desktop_config_path()
         entry: dict = {
             "command": "uvx",

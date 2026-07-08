@@ -48,6 +48,7 @@ After setup, open Claude Code or restart Claude Desktop. On the first tool call 
 Prerequisites: [install uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
+claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
 claude plugin install cognigy-vibe@cognigy-vibe
 ```
 

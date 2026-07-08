@@ -109,11 +109,16 @@ def test_get_installed_version():
 
 
 def test_install_plugin_calls_claude_cli():
-    from unittest.mock import patch
+    from unittest.mock import patch, call
     from cognigy_mcp.setup import install_plugin
     with patch("subprocess.run") as mock_run:
         install_plugin("user")
-        mock_run.assert_called_once_with(
+        assert mock_run.call_count == 2
+        mock_run.assert_any_call(
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin"],
+            check=True,
+        )
+        mock_run.assert_any_call(
             ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
             check=True,
         )
