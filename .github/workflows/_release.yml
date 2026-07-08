@@ -62,33 +62,56 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Patch version in pyproject.toml
-        if: steps.check.outputs.skip == 'false'
+      - name: Patch versions and commit release snapshot (prerelease)
+        if: steps.check.outputs.skip == 'false' && inputs.prerelease == true
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          # Patch pyproject.toml
           sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" cognigy-mcp/pyproject.toml
-          echo "Patched pyproject.toml to version $VERSION"
+          echo "Patched pyproject.toml to ${VERSION}"
 
-      - name: Validate plugin.json launcher version matches release version
+          # Patch plugin.json version field and MCP args pin
+          python3 << 'PYTHON'
+          import json, pathlib, os
+          version = os.environ["VERSION"]
+          p = pathlib.Path("plugin/.claude-plugin/plugin.json")
+          data = json.loads(p.read_text())
+          data["version"] = version
+          data["mcpServers"]["cognigy-vibe"]["args"] = [
+              f"cognigy-vibe-mcp=={version}" if a.startswith("cognigy-vibe-mcp==") else a
+              for a in data["mcpServers"]["cognigy-vibe"]["args"]
+          ]
+          p.write_text(json.dumps(data, indent=2) + "\n")
+          print(f"Patched plugin.json to {version}")
+          PYTHON
+
+          # Commit, retag, push — dev stays clean; tag points to the patched snapshot
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add cognigy-mcp/pyproject.toml plugin/.claude-plugin/plugin.json
+          git commit -m "chore(release): patch versions to ${VERSION} [skip ci]"
+          git tag -f "${TAG}"
+          git push origin "${TAG}" --force
+
+      - name: Validate plugin.json launcher version matches release version (stable)
         if: steps.check.outputs.skip == 'false' && inputs.prerelease == false
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           python3 << 'PYTHON'
           import json, pathlib, sys, os
-          version = os.environ.get("VERSION", "")
-          if not version:
-              print("::error::VERSION is empty — cannot validate plugin.json", file=sys.stderr)
-              sys.exit(1)
+          version = os.environ["VERSION"]
           p = pathlib.Path("plugin/.claude-plugin/plugin.json")
           data = json.loads(p.read_text())
           args = data["mcpServers"]["cognigy-vibe"]["args"]
           expected = f"cognigy-vibe-mcp=={version}"
           actual = next((a for a in args if a.startswith("cognigy-vibe-mcp==")), None)
           if actual != expected:
-              print(f"::error::plugin.json args has {actual!r}, expected {expected!r} — update plugin.json before releasing", file=sys.stderr)
+              print(f"::error::plugin.json has {actual!r}, expected {expected!r} — update plugin.json to the stable version before merging to main", file=sys.stderr)
               sys.exit(1)
-          print(f"plugin.json version check passed: {actual}", file=sys.stderr)
+          print(f"plugin.json version check passed: {actual}")
           PYTHON
 
       - name: Build

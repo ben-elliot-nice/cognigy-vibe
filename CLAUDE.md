@@ -168,11 +168,14 @@ The following items are tracked but not currently in scope. If you ask Claude to
 
 Prereleases are **not** published automatically on every `dev` push. To cut a prerelease:
 
-1. Bump `cognigy-mcp/pyproject.toml` and `plugin/.claude-plugin/plugin.json` to the intended next version (e.g. `1.7.0`) — push directly to `dev` (not via PR).
-2. Trigger one of:
-   - **Dispatch:** GitHub Actions UI → "Release (prerelease)" → Run workflow on `dev`
-   - **Tag:** `git tag v1.7.0rc1 && git push origin v1.7.0rc1`
-3. CI validates that the base version in pyproject exceeds the current stable on PyPI, then publishes to PyPI.
+1. Bump `cognigy-mcp/pyproject.toml` to the intended next version (e.g. `1.7.0`) — push directly to `dev` (not via PR). `plugin.json` is CI-managed; do not bump it manually.
+2. Tag and push: `git tag v1.7.0rc1 && git push origin v1.7.0rc1`
+3. CI validates the base version exceeds current stable on PyPI, patches both `pyproject.toml` and `plugin.json` to the full RC version on an ephemeral commit, moves the tag to that commit, then publishes to PyPI. `dev` is not modified.
+
+To cut a subsequent RC (e.g. after fixes land on `dev`), just push a new tag:
+```bash
+git tag v1.7.0rc2 && git push origin v1.7.0rc2
+```
 
 Install a prerelease:
 ```bash
@@ -180,4 +183,4 @@ uvx cognigy-vibe-mcp==1.7.0rc1      # specific RC
 uv tool install cognigy-vibe-mcp --prerelease allow  # latest prerelease
 ```
 
-**Merge to `main`** (stable release only) — the stable version is published to PyPI.
+**Merge to `main`** (stable release only) — before merging, update `plugin.json` MCP args pin to the stable version (e.g. `cognigy-vibe-mcp==1.7.0`). CI validates this before publishing.
