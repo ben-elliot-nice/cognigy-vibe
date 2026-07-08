@@ -57,6 +57,11 @@ def _resolve_env_file(start: Path, stop: Path) -> "Path | None":
         if USER_ENV_PATH.exists():
             _log(f"_resolve_env_file: no project .env found; using user-scope fallback {USER_ENV_PATH}")
             return USER_ENV_PATH
+    elif env_file != USER_ENV_PATH and USER_ENV_PATH.exists():
+        _log(
+            f"_resolve_env_file: using {env_file}; "
+            f"user-scope {USER_ENV_PATH} exists but is shadowed by the walk-up result"
+        )
     return env_file
 
 
