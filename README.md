@@ -11,56 +11,54 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ---
 
-## Install
+## Installation
 
-**Prerequisite:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) must be installed — the plugin uses `uvx` to run the MCP server.
+### Recommended — all users
 
-### Plugin install (recommended)
+Run the setup wizard. It installs `uv` if needed, installs the plugin, and optionally configures your Cognigy credentials for Claude Code and/or Claude Desktop.
 
-This repo is its own marketplace — install directly from GitHub:
+**Mac / Linux:**
+```bash
+bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-claude-plugin/dev/plugin/bin/cognigy-setup.sh)
+```
+
+Or, if you have already cloned the repo:
+```bash
+bash plugin/bin/cognigy-setup.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy Bypass -File plugin\bin\cognigy-setup.ps1
+```
+
+**Wizard defaults:** installs + configures, both Claude Code and Desktop (if Desktop is detected), user scope.
+
+**Wizard options (pass as flags):**
+- `--install-only` — skip credential collection
+- `--client code|desktop|both`
+- `--scope user|project|local`
+
+After setup, open Claude Code or restart Claude Desktop. On the first tool call you will be prompted through onboarding.
+
+---
+
+### Advanced — uv already installed, Code only
+
+Prerequisites: [install uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
 claude plugin install cognigy-vibe@cognigy-vibe
 ```
 
-After install:
+Create a `.env` in your project root:
+```
+COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
+COGNIGY_API_KEY=<your-api-key>
+COGNIGY_PROJECT_ID=<your-project-id>   # optional — set later via sync_remote_state
+```
 
-1. Add your Cognigy credentials to `.env` in your working directory:
-   ```
-   COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
-   COGNIGY_API_KEY=your-api-key-here
-   ```
-2. Add the MCP server to your project's `.mcp.json`:
-   ```json
-   {
-     "mcpServers": {
-       "cognigy-vibe": {
-         "command": "uvx",
-         "args": ["cognigy-vibe-mcp"]
-       }
-     }
-   }
-   ```
-3. Restart Claude Code to pick up the new credentials.
-4. Run `cognigy-vibe:init-cognigy-vibe` to capture your build defaults (one-time per workstation).
-5. Ask: *"Build me a Cognigy demo for \<customer\>."*
-
-### Clone + local dev
-
-For contributors running from source — the repo is configured to run the MCP server directly, no install step required.
-
-1. Clone this repo.
-2. `mise trust` (once per clone) so `mise` auto-sources `.env`.
-3. Copy `.env.example` to `.env` and fill in your Cognigy credentials:
-   ```
-   COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
-   COGNIGY_API_KEY=your-api-key-here
-   COGNIGY_PROJECT_ID=your-project-id-here
-   ```
-4. [`.mcp.json`](.mcp.json) is pre-configured and activates dev mode automatically — the server runs from local source (`./cognigy-mcp`) with `reload_mcp` available. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
-
-See the [Development](#development) section for the full contributor workflow.
+Run `claude` from the project directory. The server finds `.env` automatically.
 
 ---
 
