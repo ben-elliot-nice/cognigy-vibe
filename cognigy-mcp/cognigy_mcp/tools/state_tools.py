@@ -221,6 +221,7 @@ def make_handlers(
             return err
         project_id = state.project_id or os.getenv("COGNIGY_PROJECT_ID", "").strip() or None
         config_fields: dict = {
+            "_version": pkg_version("cognigy-vibe-mcp"),
             "config_loaded": build_config is not None,
             "project_id": project_id,
             "state_source": str(state.config_dir) if project_id else None,
@@ -238,7 +239,7 @@ def make_handlers(
         if m.resource_type:
             filtered = full_state.get(m.resource_type, {})
             return _ok({m.resource_type: filtered, "_filtered": True, **config_fields})
-        return _ok({**full_state, "_version": pkg_version("cognigy-vibe-mcp"), **config_fields})
+        return _ok({**full_state, **config_fields})
 
     def _resolve_resource(args: dict) -> list[TextContent]:
         m, err = validate(ResolveResourceArgs, args)
