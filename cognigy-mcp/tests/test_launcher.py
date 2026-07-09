@@ -1,18 +1,13 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 def test_launcher_calls_orchestrator_main():
     """Launcher must delegate to orchestrator.main()."""
-    mock_orchestrator = MagicMock()
-    with patch.dict("sys.modules", {
-        "cognigy_mcp.orchestrator": mock_orchestrator,
-    }):
-        # Force reimport so patched modules are used
-        import importlib
-        import cognigy_mcp.launcher as launcher_mod
-        importlib.reload(launcher_mod)
+    import cognigy_mcp.launcher as launcher_mod
+
+    with patch("cognigy_mcp.orchestrator.main") as mock_main:
         launcher_mod.main()
-        mock_orchestrator.main.assert_called_once()
+        mock_main.assert_called_once()
 
 
 def test_launcher_reads_version():
@@ -27,13 +22,9 @@ def test_launcher_reads_version():
 
 def test_launcher_logs_version_to_stderr(capsys):
     """Launcher must print version info to stderr, not stdout."""
-    mock_orchestrator = MagicMock()
-    with patch.dict("sys.modules", {
-        "cognigy_mcp.orchestrator": mock_orchestrator,
-    }):
-        import importlib
-        import cognigy_mcp.launcher as launcher_mod
-        importlib.reload(launcher_mod)
+    import cognigy_mcp.launcher as launcher_mod
+
+    with patch("cognigy_mcp.orchestrator.main"):
         launcher_mod.main()
     captured = capsys.readouterr()
     assert captured.out == ""  # nothing on stdout
