@@ -68,13 +68,15 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 | `api.py` | `CognigyClient` — thin httpx wrapper; derives endpoint URL from base URL |
 | `state.py` | `ProjectState` — name→ID mappings, seed/runtime merge, interaction timestamp |
 | `cache.py` | `Cache` — filesystem TTL cache for resource JSON + code node snapshots |
-| `config.py` | Path constants — `CONFIG_BASE` (`~/.config/cognigy-vibe`), `USER_ENV_PATH` (`CONFIG_BASE/.env`) |
+| `config.py` | Path constants — `CONFIG_BASE` (`~/.config/cognigy-vibe`), `USER_ENV_PATH` (`CONFIG_BASE/.env`), `SETUP_META_PATH` (`CONFIG_BASE/.setup-meta.json`); `CONFIG_SCHEMA_VERSION` for the on-disk layout version |
 | `filters.py` | `strip_response` — removes internal fields (`__v`, `transpiled`) from API responses |
 | `validation.py` | `validate()` / `make_schema()` — Pydantic-model argument validation shared across tool handlers |
 | `launcher.py` | `cognigy-vibe-launch` console-script entry point — resolves installed package version, hands off to `orchestrator.main()` |
 | `orchestrator.py` | Outer supervisor process — spawns/monitors the inner server subprocess, handles the dev-mode restart protocol (rc=42 sentinel), logs to `~/.config/cognigy-vibe/logs/` |
 | `migrate.py` | `safe_move()` — best-effort, race-safe file move used by layout migrations |
-| `setup.py` | `cognigy-vibe-setup` console-script entry point — the install wizard |
+| `setup.py` | `cognigy-vibe-setup` console-script entry point — `install`/`status`/`update`/`uninstall` subcommands |
+| `reconcile.py` | `SetupState`/`DriftIssue` dataclasses, `gather_state()`/`diff_state()`/`apply_fixes()`, `check_pypi_latest()` — drift detection and reconciliation backing `status`/`update` |
+| `wizard_ui.py` | `rich`-based terminal presentation helpers (`print_header`, `print_section`, `print_summary`, `print_drift_table`, `print_step`, `print_error_panel`) and `run_subprocess()`/`StepFailure` — shared UI layer for all `setup.py` subcommands |
 | `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
 | `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer, `cognigy_invoke` operation routing |
 | `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `export_package` |
