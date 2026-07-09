@@ -10,7 +10,16 @@ import threading
 import time
 from pathlib import Path
 from dotenv import load_dotenv
-from cognigy_mcp.config import USER_ENV_PATH
+from cognigy_mcp.config import CONFIG_BASE, USER_ENV_PATH
+from cognigy_mcp.migrate import safe_move
+
+def _migrate_flat_logs(config_base: Path, log_dir: Path) -> None:
+    """Move stray log files from the pre-#171 flat layout into logs/."""
+    if not config_base.exists():
+        return
+    for entry in config_base.glob("cognigy-vibe-mcp-*.log"):
+        safe_move(entry, log_dir / entry.name)
+
 
 def _log_path() -> str:
     try:
@@ -18,8 +27,9 @@ def _log_path() -> str:
         ver = version("cognigy-vibe-mcp")
     except Exception:
         ver = "unknown"
-    log_dir = Path.home() / ".config" / "cognigy-vibe"
+    log_dir = CONFIG_BASE / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    _migrate_flat_logs(CONFIG_BASE, log_dir)
     return str(log_dir / f"cognigy-vibe-mcp-{ver}.log")
 
 _LOG = open(_log_path(), "a", buffering=1)

@@ -4,7 +4,6 @@ import os
 import queue
 import subprocess
 import sys
-import tempfile
 import time
 import pytest
 from pathlib import Path
@@ -218,13 +217,13 @@ def test_inner_server_stderr_appears_in_log(monkeypatch):
 # Windows compatibility fixes
 # ---------------------------------------------------------------------------
 
-def test_log_file_is_in_system_tempdir():
-    """Log file must use tempfile.gettempdir(), not a hardcoded /tmp path."""
+def test_log_file_is_under_config_base_logs():
+    """Log file must live under CONFIG_BASE/logs (see #171), not a hardcoded /tmp path."""
     import cognigy_mcp.orchestrator as orch
+    from cognigy_mcp.config import CONFIG_BASE
     log_path = Path(orch._LOG.name)
-    assert log_path.parent == Path(tempfile.gettempdir()), (
-        f"Expected log in {tempfile.gettempdir()!r}, got {log_path!r} — "
-        "use tempfile.gettempdir() instead of a hardcoded /tmp path"
+    assert log_path.parent == CONFIG_BASE / "logs", (
+        f"Expected log under {CONFIG_BASE / 'logs'!r}, got {log_path!r}"
     )
 
 
@@ -398,11 +397,89 @@ def test_resolve_env_file_falls_back_to_user_scope(tmp_path, monkeypatch):
     assert result == user_env
 
 
-def test_resolve_env_file_returns_none_when_neither_exists(tmp_path):
+def test_resolve_env_file_returns_none_when_neither_exists(tmp_path, monkeypatch):
     """Returns None when no .env found anywhere."""
     project_dir = tmp_path / "project"
     project_dir.mkdir()
 
-    from cognigy_mcp.orchestrator import _resolve_env_file
-    result = _resolve_env_file(project_dir, tmp_path)
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", tmp_path / ".config" / "cognigy-vibe" / ".env")
+    result = orch._resolve_env_file(project_dir, tmp_path)
     assert result is None
+
+
+def test_migrate_flat_logs_moves_stray_log_file(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    stray = config_base / "cognigy-vibe-mcp-1.5.4.log"
+    stray.write_text("old log contents")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+
+    _migrate_flat_logs(config_base, log_dir)
+
+    assert not stray.exists()
+    assert (log_dir / "cognigy-vibe-mcp-1.5.4.log").read_text() == "old log contents"
+
+
+def test_migrate_flat_logs_noop_if_destination_exists(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    stray = config_base / "cognigy-vibe-mcp-1.5.4.log"
+    stray.write_text("old")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+    (log_dir / "cognigy-vibe-mcp-1.5.4.log").write_text("new")
+
+    _migrate_flat_logs(config_base, log_dir)
+
+    assert stray.exists()  # untouched — destination already existed
+    assert (log_dir / "cognigy-vibe-mcp-1.5.4.log").read_text() == "new"
+
+
+def test_migrate_flat_logs_noop_if_config_base_missing(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "does-not-exist"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+
+    _migrate_flat_logs(config_base, log_dir)  # must not raise
+
+    assert not config_base.exists()
+
+
+def test_migrate_flat_logs_survives_concurrent_migration_race(tmp_path, monkeypatch):
+    """Simulates a second orchestrator process winning the race: dest.exists()
+    is False when this process checks it, but the log file vanishes before
+    the move actually runs (the other process already relocated it)."""
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    (config_base / "cognigy-vibe-mcp-1.5.4.log").write_text("old")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+
+    def fake_move(s, d):
+        raise FileNotFoundError(s)
+
+    monkeypatch.setattr("shutil.move", fake_move)
+
+    _migrate_flat_logs(config_base, log_dir)  # must not raise
+
+
+def test_migrate_flat_logs_ignores_non_log_files(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    (config_base / "config.json").write_text("{}")
+    (config_base / ".env").write_text("KEY=1")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+
+    _migrate_flat_logs(config_base, log_dir)
+
+    assert (config_base / "config.json").exists()
+    assert (config_base / ".env").exists()
