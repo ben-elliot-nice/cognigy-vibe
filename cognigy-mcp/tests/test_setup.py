@@ -660,3 +660,79 @@ def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys
 
     mock_run.assert_not_called()
     assert "not installed" in capsys.readouterr().out.lower()
+
+
+def test_parse_args_status_verbose_flag(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "status", "--verbose"])
+    args = _parse_args()
+    assert args.command == "status"
+    assert args.verbose is True
+
+
+def test_parse_args_update_verbose_flag(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "update", "--verbose"])
+    args = _parse_args()
+    assert args.command == "update"
+    assert args.verbose is True
+
+
+def test_parse_args_uninstall_verbose_flag(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall", "--verbose"])
+    args = _parse_args()
+    assert args.command == "uninstall"
+    assert args.verbose is True
+
+
+def test_main_renders_error_panel_for_status_command():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "status"]), \
+         patch("cognigy_mcp.setup._run_status", side_effect=RuntimeError("disk full")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 1
+    mock_panel.assert_called_once()
+    assert mock_panel.call_args.args[0] == "Status failed."
+    assert isinstance(mock_panel.call_args.args[1], RuntimeError)
+
+
+def test_main_renders_error_panel_for_update_command():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "update"]), \
+         patch("cognigy_mcp.setup._run_update", side_effect=RuntimeError("disk full")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 1
+    assert mock_panel.call_args.args[0] == "Update failed."
+
+
+def test_main_renders_error_panel_for_uninstall_command():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "uninstall"]), \
+         patch("cognigy_mcp.setup._run_uninstall", side_effect=RuntimeError("disk full")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 1
+    assert mock_panel.call_args.args[0] == "Uninstall failed."
+
+
+def test_main_status_command_propagates_system_exit_unchanged():
+    """sys.exit(0) from a successful _run_status must NOT be intercepted
+    by the new error wrapper and turned into exit code 1."""
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "status"]), \
+         patch("cognigy_mcp.setup._run_status", side_effect=SystemExit(0)), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 0
+    mock_panel.assert_not_called()

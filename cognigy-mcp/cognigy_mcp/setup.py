@@ -180,6 +180,11 @@ def _parse_args() -> "argparse.Namespace":
         action="store_true",
         help="Apply fixes for any drift found. Never touches PyPI or upgrades the package.",
     )
+    status_p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show captured subprocess output and full tracebacks on failure.",
+    )
 
     update_p = sub.add_parser("update", help="Check PyPI, upgrade if stale, and reconcile drift.")
     update_p.add_argument(
@@ -187,28 +192,43 @@ def _parse_args() -> "argparse.Namespace":
         action="store_true",
         help="Report what update would do without changing anything.",
     )
+    update_p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show captured subprocess output and full tracebacks on failure.",
+    )
 
-    sub.add_parser("uninstall", help="Remove the plugin, Desktop config entry, and optionally credentials.")
+    uninstall_p = sub.add_parser("uninstall", help="Remove the plugin, Desktop config entry, and optionally credentials.")
+    uninstall_p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show captured subprocess output and full tracebacks on failure.",
+    )
 
     return parser.parse_args(argv)
 
 
 def main() -> None:
     args = _parse_args()
-    if args.command == "install":
-        try:
-            _run_install(args)
-        except KeyboardInterrupt:
-            raise
-        except Exception as exc:
-            print_error_panel("Setup failed.", exc, debug=args.verbose)
-            sys.exit(1)
-    elif args.command == "status":
-        _run_status(args)
-    elif args.command == "update":
-        _run_update(args)
-    elif args.command == "uninstall":
-        _run_uninstall(args)
+    runners = {
+        "install": _run_install,
+        "status": _run_status,
+        "update": _run_update,
+        "uninstall": _run_uninstall,
+    }
+    failure_messages = {
+        "install": "Setup failed.",
+        "status": "Status failed.",
+        "update": "Update failed.",
+        "uninstall": "Uninstall failed.",
+    }
+    try:
+        runners[args.command](args)
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:
+        print_error_panel(failure_messages[args.command], exc, debug=args.verbose)
+        sys.exit(1)
 
 
 def _run_install(args) -> None:
