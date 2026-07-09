@@ -50,7 +50,7 @@ Collect the schema. Group into ≤3 batches:
 |---|---|
 | **Identity & tenant** | owner initials; `connection.region` → derives baseUrl + endpointBase; **API key** (→ `.env`) |
 | **LLM** | Discovered live — see below (no manual UUID entry) |
-| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language — enter values as shown in Cognigy UI → Settings → Connections. No defaults provided. |
+| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language — **plaintext entry only, never a picklist.** There is no discovery mechanism for these values — any `AskUserQuestion` options list would be fabricated. Ask the user to type each value as shown in Cognigy UI → Settings → Connections. No defaults provided. |
 | **Channel & preview** | channel type (default voice-webRTC); VoiceGateway endpoint name (default `Click-to-Call`); voice-preview speech provider + connection name/region |
 
 `temperatureVoice` (0.2), `temperatureChat` (0.5), `maxTokens` (400), `toolChoice` (auto), `voiceBehaviour` (barge-in/VAD off) are written at defaults without a question unless the user asks.
@@ -74,7 +74,7 @@ Collect the schema. Group into ≤3 batches:
 
 Do not present a pre-selected default. Do not ask the user to type or paste a UUID.
 
-> **Note:** TTS/STT connection discovery is not yet supported — enter connection labels and voice IDs as shown in Cognigy UI → Settings → Connections. Automated discovery is tracked in [issue #76](https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/76) (Voice Gateway integration).
+> **Note:** TTS/STT connection discovery is not yet supported — enter connection labels and voice IDs as shown in Cognigy UI → Settings → Connections, via plaintext prompt only. Automated discovery via the VoiceGateway API is tracked in [issue #172](https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/172) (targeted for 2.0.0).
 
 ### 5. Write the files
 
