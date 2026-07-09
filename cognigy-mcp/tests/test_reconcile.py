@@ -2,7 +2,7 @@
 import json
 from unittest.mock import patch, MagicMock
 
-from cognigy_mcp.reconcile import SetupState, DriftIssue, gather_state, diff_state
+from cognigy_mcp.reconcile import SetupState, DriftIssue, gather_state, diff_state, apply_fixes
 
 
 def test_setup_state_holds_all_five_surfaces():
@@ -146,3 +146,45 @@ def test_diff_state_flags_missing_surfaces_not_drift():
     surfaces = {i.surface: i.kind for i in issues}
     assert surfaces["marketplace_ref"] == "missing"
     assert surfaces["plugin_version"] == "missing"
+
+
+def test_apply_fixes_reinstalls_plugin_on_marketplace_or_version_drift(tmp_path):
+    state = _aligned_state()
+    issues = [DriftIssue("marketplace_ref", "v1.6.0", "v1.7.0", "drift")]
+    with patch("cognigy_mcp.setup.install_plugin") as mock_install:
+        apply_fixes(issues, state)
+    mock_install.assert_called_once_with("user")
+
+
+def test_apply_fixes_rewrites_desktop_pin(tmp_path):
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({
+        "mcpServers": {"cognigy-vibe": {"command": "uvx", "args": ["--from", "cognigy-vibe-mcp==1.6.0", "cognigy-vibe-launch"]}}
+    }))
+    state = _aligned_state()
+    issues = [DriftIssue("desktop_pin", "1.6.0", "1.7.0", "drift")]
+    with patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path):
+        apply_fixes(issues, state)
+    data = json.loads(desktop_path.read_text())
+    assert data["mcpServers"]["cognigy-vibe"]["args"] == ["--from", "cognigy-vibe-mcp==1.7.0", "cognigy-vibe-launch"]
+
+
+def test_apply_fixes_migrates_layout_schema_marker(tmp_path):
+    meta_path = tmp_path / ".setup-meta.json"
+    state = _aligned_state()
+    issues = [DriftIssue("layout_schema_version", "0", "1", "drift")]
+    with patch("cognigy_mcp.reconcile.SETUP_META_PATH", meta_path):
+        apply_fixes(issues, state)
+    assert json.loads(meta_path.read_text()) == {"schema_version": 1}
+
+
+def test_apply_fixes_never_touches_missing_surfaces(tmp_path):
+    state = _aligned_state()
+    issues = [DriftIssue("desktop_pin", None, "1.7.0", "missing")]
+    with patch("cognigy_mcp.setup.get_desktop_config_path") as mock_path, \
+         patch("cognigy_mcp.setup.merge_desktop_config") as mock_merge, \
+         patch("cognigy_mcp.setup.install_plugin") as mock_install:
+        apply_fixes(issues, state)
+    mock_path.assert_not_called()
+    mock_merge.assert_not_called()
+    mock_install.assert_not_called()

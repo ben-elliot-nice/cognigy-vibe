@@ -131,3 +131,27 @@ def diff_state(state: SetupState) -> list[DriftIssue]:
         issues.append(DriftIssue("layout_schema_version", str(state.layout_schema_version), expected_schema, "drift"))
 
     return issues
+
+
+def apply_fixes(issues: list[DriftIssue], state: SetupState) -> None:
+    from cognigy_mcp.setup import install_plugin, merge_desktop_config, get_desktop_config_path
+
+    drift_surfaces = {issue.surface for issue in issues if issue.kind == "drift"}
+
+    if "marketplace_ref" in drift_surfaces or "plugin_version" in drift_surfaces:
+        install_plugin(state.plugin_scope or "user")
+
+    if "desktop_pin" in drift_surfaces:
+        path = get_desktop_config_path()
+        config = json.loads(path.read_text()) if path.exists() else {}
+        entry = config.get("mcpServers", {}).get(MARKETPLACE_NAME, {"command": "uvx"})
+        entry["args"] = ["--from", f"cognigy-vibe-mcp=={state.package_version}", "cognigy-vibe-launch"]
+        merge_desktop_config(path, MARKETPLACE_NAME, entry)
+
+    if "layout_schema_version" in drift_surfaces:
+        _migrate_layout()
+
+
+def _migrate_layout() -> None:
+    SETUP_META_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SETUP_META_PATH.write_text(json.dumps({"schema_version": CONFIG_SCHEMA_VERSION}))
