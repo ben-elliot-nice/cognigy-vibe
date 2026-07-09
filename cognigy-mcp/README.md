@@ -2,7 +2,7 @@
 
 A local Python MCP server for building Cognigy AI agent demos with Claude Code. Covers the full Cognigy REST API surface — node creation, flow inspection, code push with conflict detection, session testing, and a 20-topic reference library.
 
-Part of the [cognigy-claude-plugin](https://github.com/ben-elliot-nice/cognigy-claude-plugin).
+Part of the [cognigy-claude-plugin](https://github.com/ben-elliot-nice/cognigy-claude-plugin) — this package is the MCP server; the plugin repo also ships the Claude Code skills that drive it.
 
 ## Installation
 
@@ -11,6 +11,29 @@ uv tool install cognigy-vibe-mcp                        # stable
 uv tool install cognigy-vibe-mcp --prerelease allow     # latest RC prerelease
 uvx cognigy-vibe-mcp==1.7.0rc1                          # specific RC (check PyPI for latest)
 ```
+
+## Setup CLI (`cognigy-vibe-setup`)
+
+Installing this package also installs `cognigy-vibe-setup`, a CLI that manages the companion Claude Code plugin — marketplace entry, plugin install/uninstall, and the Claude Desktop config version pin. It's separate from the MCP server process itself.
+
+```bash
+cognigy-vibe-setup                 # install — default when no subcommand is given
+cognigy-vibe-setup install         # explicit alias for the default
+cognigy-vibe-setup status          # report drift across marketplace/plugin/Desktop pins; no changes
+cognigy-vibe-setup status --fix    # same check, applies fixes; never touches PyPI or upgrades the package
+cognigy-vibe-setup update          # check PyPI for a newer cognigy-vibe-mcp, upgrade if stale, then reconcile
+cognigy-vibe-setup update --check  # dry-run of update — reports drift, changes nothing
+cognigy-vibe-setup uninstall       # reverse install: plugin, Desktop config entry, optionally credentials
+```
+
+| Flag | Applies to | Description |
+|---|---|---|
+| `--install-only` | `install` | Skip credential collection; install the plugin only. |
+| `--client code\|desktop\|both` | `install` | Which client(s) to configure (default: both if Desktop is detected, else code). |
+| `--scope user\|project\|local` | `install` | Plugin install scope for Claude Code (default: user). |
+| `--verbose` | all subcommands | Stream subprocess output instead of hiding it behind a status line; show a full traceback instead of a short message on failure. |
+
+`uninstall` always prompts before deleting `~/.config/cognigy-vibe/.env` — credentials are the one step that is never non-interactive, regardless of flags.
 
 ## Quick start
 
