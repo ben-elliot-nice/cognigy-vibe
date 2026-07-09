@@ -4,7 +4,6 @@ import os
 import queue
 import subprocess
 import sys
-import tempfile
 import time
 import pytest
 from pathlib import Path
@@ -218,13 +217,13 @@ def test_inner_server_stderr_appears_in_log(monkeypatch):
 # Windows compatibility fixes
 # ---------------------------------------------------------------------------
 
-def test_log_file_is_in_system_tempdir():
-    """Log file must use tempfile.gettempdir(), not a hardcoded /tmp path."""
+def test_log_file_is_under_config_base_logs():
+    """Log file must live under CONFIG_BASE/logs (see #171), not a hardcoded /tmp path."""
     import cognigy_mcp.orchestrator as orch
+    from cognigy_mcp.config import CONFIG_BASE
     log_path = Path(orch._LOG.name)
-    assert log_path.parent == Path(tempfile.gettempdir()), (
-        f"Expected log in {tempfile.gettempdir()!r}, got {log_path!r} — "
-        "use tempfile.gettempdir() instead of a hardcoded /tmp path"
+    assert log_path.parent == CONFIG_BASE / "logs", (
+        f"Expected log under {CONFIG_BASE / 'logs'!r}, got {log_path!r}"
     )
 
 
@@ -398,13 +397,14 @@ def test_resolve_env_file_falls_back_to_user_scope(tmp_path, monkeypatch):
     assert result == user_env
 
 
-def test_resolve_env_file_returns_none_when_neither_exists(tmp_path):
+def test_resolve_env_file_returns_none_when_neither_exists(tmp_path, monkeypatch):
     """Returns None when no .env found anywhere."""
     project_dir = tmp_path / "project"
     project_dir.mkdir()
 
-    from cognigy_mcp.orchestrator import _resolve_env_file
-    result = _resolve_env_file(project_dir, tmp_path)
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", tmp_path / ".config" / "cognigy-vibe" / ".env")
+    result = orch._resolve_env_file(project_dir, tmp_path)
     assert result is None
 
 
