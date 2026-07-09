@@ -23,15 +23,17 @@ Cognigy REST API
 
 The MCP server is the only thing that talks to the Cognigy API. It handles authentication, per-project state management, filesystem cache, and conflict detection. Skills call MCP tools — they never make HTTP requests directly.
 
-### Tools (14 total)
+### Tools (20 total: 19 always registered + 1 dev-only)
 
 | Group | Tools |
 |---|---|
-| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource` |
+| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
 | Flow ops | `cognigy_get`, `cognigy_list`, `cognigy_create`, `cognigy_update`, `cognigy_delete`, `cognigy_invoke`, `get_flow_chart` |
-| File push | `push_code_node`, `push_html_node` |
+| File push | `push_code_node`, `push_html_node`, `push_agent_tool`, `push_agent_avatar`, `export_package` |
+| Voice | `provision_webrtc_endpoint` |
 | Testing | `talk_to_agent` |
 | Guidance | `explain` |
+| Dev only | `reload_mcp` (gated on `COGNIGY_VIBE_DEV=1`) |
 
 ### Key behaviours
 
