@@ -183,3 +183,52 @@ def test_install_plugin_raises_step_failure_on_cli_error():
          patch("cognigy_mcp.setup.run_subprocess", side_effect=failure):
         with pytest.raises(StepFailure):
             install_plugin("user")
+
+
+def test_parse_args_verbose_flag_defaults_false():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import _parse_args
+    with patch("sys.argv", ["cognigy-vibe-setup"]):
+        args = _parse_args()
+    assert args.verbose is False
+
+
+def test_parse_args_verbose_flag_can_be_set():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import _parse_args
+    with patch("sys.argv", ["cognigy-vibe-setup", "--verbose"]):
+        args = _parse_args()
+    assert args.verbose is True
+
+
+def test_main_renders_error_panel_on_unhandled_exception():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "--install-only", "--client", "code", "--scope", "user"]), \
+         patch("cognigy_mcp.setup.install_plugin", side_effect=RuntimeError("network down")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         patch("cognigy_mcp.setup.print_summary"), \
+         patch("cognigy_mcp.setup.print_header"), \
+         patch("cognigy_mcp.setup.print_section"), \
+         pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 1
+    assert mock_panel.call_count == 1
+    call_args = mock_panel.call_args
+    assert call_args.args[0] == "Setup failed."
+    assert isinstance(call_args.args[1], RuntimeError)
+    assert call_args.kwargs["debug"] is False
+
+
+def test_main_passes_verbose_to_error_panel_debug():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "--install-only", "--client", "code", "--scope", "user", "--verbose"]), \
+         patch("cognigy_mcp.setup.install_plugin", side_effect=RuntimeError("network down")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         patch("cognigy_mcp.setup.print_summary"), \
+         patch("cognigy_mcp.setup.print_header"), \
+         patch("cognigy_mcp.setup.print_section"), \
+         pytest.raises(SystemExit):
+        main()
+    assert mock_panel.call_args.kwargs["debug"] is True
