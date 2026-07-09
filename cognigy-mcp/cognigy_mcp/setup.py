@@ -135,13 +135,13 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     return value or default
 
 
-_LEGACY_INSTALL_FLAGS = {"--install-only", "--client", "--scope", "--verbose"}
+_BARE_FLAGS_IMPLYING_INSTALL = {"--install-only", "--client", "--scope", "--verbose"}
 
 
 def _parse_args() -> "argparse.Namespace":
     import argparse
     argv = sys.argv[1:]
-    if not argv or argv[0] in _LEGACY_INSTALL_FLAGS:
+    if not argv or argv[0] in _BARE_FLAGS_IMPLYING_INSTALL:
         argv = ["install"] + argv
 
     parser = argparse.ArgumentParser(

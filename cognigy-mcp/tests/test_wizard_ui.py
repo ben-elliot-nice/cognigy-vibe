@@ -102,3 +102,34 @@ def test_print_error_panel_shows_traceback_when_debug():
     output = test_console.export_text()
     assert "Traceback" in output
     assert "boom" in output
+
+
+def test_print_error_panel_surfaces_step_failure_output_without_debug():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    test_console = Console(record=True)
+    failure = StepFailure(
+        "Installing plugin",
+        SubprocessResult(returncode=1, stdout="", stderr="marketplace conflict: already registered"),
+    )
+    with patch.object(wizard_ui, "console", test_console):
+        wizard_ui.print_error_panel("Setup failed.", failure, debug=False)
+    output = test_console.export_text()
+    assert "Setup failed." in output
+    assert "marketplace conflict: already registered" in output
+    assert "Traceback" not in output
+
+
+def test_print_error_panel_plain_exception_unaffected():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError as exc:
+            wizard_ui.print_error_panel("Setup failed.", exc, debug=False)
+    output = test_console.export_text()
+    assert "Setup failed." in output
+    assert "Traceback" not in output

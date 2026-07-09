@@ -67,8 +67,12 @@ def print_summary(rows: list[tuple[str, str]]) -> None:
 
 def print_error_panel(message: str, exc: Exception, debug: bool = False) -> None:
     body = message
+    if isinstance(exc, StepFailure):
+        captured = "\n".join(filter(None, [exc.result.stdout.strip(), exc.result.stderr.strip()]))
+        if captured:
+            body = f"{body}\n\n{captured}"
     if debug:
         tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-        body = f"{message}\n\n{tb}"
+        body = f"{body}\n\n{tb}"
     console.print()
     console.print(Panel(body, title="Setup failed", border_style="red"))
