@@ -74,20 +74,26 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 
 ### State storage
 
-Per-project state lives in `~/.config/cognigy-mcp/<project-id>/`:
+`~/.config/cognigy-vibe/` holds config/credentials at its root and generated data under `logs/` and `cache/`:
 
 ```
-~/.config/cognigy-mcp/<project-id>/
-├── .state.json          # runtime name→ID mappings (written by sync_remote_state)
-├── .state-seed.json     # optional seed defaults (merged under runtime state)
-├── last-interaction     # epoch timestamp — drives auto-resync threshold
-└── cache/               # filesystem TTL cache
-    ├── flows/           # resource JSON by ID
-    ├── nodes/           # resource JSON + code snapshots (code.js per node)
-    └── ...
+~/.config/cognigy-vibe/
+├── config.json           # user config (root)
+├── .env                   # credentials (root)
+├── logs/
+│   └── cognigy-vibe-mcp-{version}.log
+└── cache/
+    └── <project-id>/
+        ├── .state.json          # runtime name→ID mappings (written by sync_remote_state)
+        ├── .state-seed.json     # optional seed defaults (merged under runtime state)
+        ├── last-interaction     # epoch timestamp — drives auto-resync threshold
+        └── cache/               # filesystem TTL cache
+            ├── flows/           # resource JSON by ID
+            ├── nodes/           # resource JSON + code snapshots (code.js per node)
+            └── ...
 ```
 
-State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls. The `~/.config/cognigy-mcp/<project-id>/` directory is auto-created by the MCP server on first use of any stateful tool for that project.
+State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls. The `~/.config/cognigy-vibe/cache/<project-id>/` directory is auto-created by the MCP server on first use of any stateful tool for that project. Existing installs on the pre-#171 flat layout are migrated automatically on first run.
 
 ### Reference docs (runtime guidance)
 
