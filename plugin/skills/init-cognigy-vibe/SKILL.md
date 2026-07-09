@@ -48,12 +48,23 @@ Collect the schema. Group into ≤3 batches:
 
 | Group | Captures |
 |---|---|
-| **Identity & tenant** | owner initials; `connection.region` → derives baseUrl + endpointBase; **API key** (→ `.env`) |
+| **Identity & tenant** | owner initials; `connection.region` (known NICE CXone regions only — see table below); **API key** (→ `.env`) |
 | **LLM** | Discovered live — see below (no manual UUID entry) |
 | **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language — **plaintext entry only, never a picklist.** There is no discovery mechanism for these values — any `AskUserQuestion` options list would be fabricated. Ask the user to type each value as shown in Cognigy UI → Settings → Connections. No defaults provided. |
 | **Channel & preview** | channel type (default voice-webRTC); VoiceGateway endpoint name (default `Click-to-Call`); voice-preview speech provider + connection name/region |
 
 `temperatureVoice` (0.2), `temperatureChat` (0.5), `maxTokens` (400), `toolChoice` (auto), `voiceBehaviour` (barge-in/VAD off) are written at defaults without a question unless the user asks.
+
+#### Region → baseUrl / endpointBase lookup (fixed table — do not infer or guess)
+
+| Region | `connection.baseUrl` | `connection.endpointBase` |
+|---|---|---|
+| `au1` | `https://cognigy-api-au1.nicecxone.com` | `https://cognigy-endpoint-au1.nicecxone.com` |
+| `na1` | `https://cognigy-api-na1.nicecxone.com` | `https://cognigy-endpoint-na1.nicecxone.com` |
+| `jp1` | `https://cognigy-api-jp1.nicecxone.com` | `https://cognigy-endpoint-jp1.nicecxone.com` |
+| `trial` | `https://api-trial.cognigy.ai` | ask the user — no fixed endpoint host for trial tenants |
+
+If the user's region is not one of the above (e.g. a self-hosted or EU tenant), **do not fabricate a URL** — ask the user to paste both `baseUrl` and `endpointBase` directly as plaintext. Never invent a domain (e.g. `*.cognigy.cloud` is a real but unrelated self-hosted Cognigy domain pattern — do not use it for NICE CXone tenants unless the user explicitly confirms that's their deployment).
 
 #### Live LLM discovery (runs before the LLM group question)
 
