@@ -34,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File plugin\bin\cognigy-setup.ps1
 
 > **[SCREENSHOT: terminal running the setup wizard, showing the mode/client/scope selection prompts with rich-styled section headers]**
 
-Both scripts forward all arguments to the `cognigy-vibe-setup` console command, which supports four subcommands:
+Both scripts forward all arguments to the `cognigy-vibe-setup` console command, which supports several subcommands:
 
 | Command | Network | Mutates | Purpose |
 |---|---|---|---|
