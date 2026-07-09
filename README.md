@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/cognigy-vibe-mcp?label=cognigy-vibe-mcp)](https://pypi.org/project/cognigy-vibe-mcp/)
 [![Check version bump](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-version-bump.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-version-bump.yml)
 [![Check explain topics](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-explain-topics.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-explain-topics.yml)
-[![Publish to PyPI](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/publish.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/publish.yml)
+[![Release (production)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/on-push-main.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/on-push-main.yml)
 
 Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en/docs/claude-code) — scope, design, build, and smoke-test Cognigy.AI agent demos end-to-end.
 
@@ -13,18 +13,11 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ## Installation
 
-### Recommended — all users
-
-Run the setup wizard. It installs `uv` if needed, installs the plugin, and optionally configures your Cognigy credentials for Claude Code and/or Claude Desktop.
+Run the setup wizard. It installs `uv` if needed, then installs and configures the plugin.
 
 **Mac / Linux:**
 ```bash
 bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-claude-plugin/dev/plugin/bin/cognigy-setup.sh)
-```
-
-Or, if you have already cloned the repo:
-```bash
-bash plugin/bin/cognigy-setup.sh
 ```
 
 **Windows (PowerShell):**
@@ -32,34 +25,38 @@ bash plugin/bin/cognigy-setup.sh
 powershell -ExecutionPolicy Bypass -File plugin\bin\cognigy-setup.ps1
 ```
 
-**Wizard defaults:** installs + configures, both Claude Code and Desktop (if Desktop is detected), user scope.
+> **[SCREENSHOT: terminal running the setup wizard, showing the mode/client/scope selection prompts with rich-styled section headers]**
 
-**Wizard options (pass as flags):**
-- `--install-only` — skip credential collection
-- `--client code|desktop|both`
-- `--scope user|project|local`
+After the first install, use `uvx cognigy-vibe-setup` directly for everything else:
 
-After setup, open Claude Code or restart Claude Desktop. On the first tool call you will be prompted through onboarding.
+| Command | Flags | Purpose |
+|---|---|---|
+| `uvx cognigy-vibe-setup install` | `--install-only`, `--client code\|desktop\|both`, `--scope user\|project\|local` | Fresh install — the wizard above (also the default when no subcommand is given) |
+| `uvx cognigy-vibe-setup status` | `--fix` | Report drift between the installed package, marketplace pin, plugin version, and Desktop config pin; `--fix` applies fixes without touching PyPI |
+| `uvx cognigy-vibe-setup update` | `--check` | Check PyPI for a newer version and upgrade if stale, then reconcile the same surfaces as `status --fix`; `--check` is a dry run |
+| `uvx cognigy-vibe-setup uninstall` | — | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials |
+
+Any subcommand also accepts `--verbose` (inline diagnostic output and a full traceback on failure) and `--help`.
+
+> **[SCREENSHOT: terminal showing the summary box printed at the end of a successful install — credential path, plugin scope, Desktop config path]**
+
+After install, open Claude Code or restart Claude Desktop. On the first tool call you will be prompted through onboarding.
 
 ---
 
-### Advanced — uv already installed, Code only
+## Configuration
 
-Prerequisites: [install uv](https://docs.astral.sh/uv/getting-started/installation/).
+Two files, discovered by directory walk-up — no manual wiring required.
 
-```bash
-claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
-claude plugin install cognigy-vibe@cognigy-vibe
-```
+**Credentials — `.env`:** holds `COGNIGY_BASE_URL`, `COGNIGY_API_KEY`, and optionally `COGNIGY_PROJECT_ID`. On startup the server walks up from the current directory toward your home directory looking for `.env`; the first one found sets `COGNIGY_PROJECT_ROOT` for that session. If none is found on the way up, it falls back to a user-scope `.env` at `~/.config/cognigy-vibe/.env`. If neither exists, the server starts in degraded mode — every tool stays visible, but calls return setup guidance until a `.env` is created.
 
-Create a `.env` in your project root:
 ```
 COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
 COGNIGY_API_KEY=<your-api-key>
 COGNIGY_PROJECT_ID=<your-project-id>   # optional — set later via sync_remote_state
 ```
 
-Run `claude` from the project directory. The server finds `.env` automatically.
+**Build defaults — `default-demo-config.json`:** captures LLM references, TTS/STT, and naming defaults for `cognigy-vibe:build-orchestrator`. Discovered by the same walk-up (first match wins, no merging across levels), with a final fallback to `~/.config/cognigy-vibe/config.json`. Written by `cognigy-vibe:init-cognigy-vibe` — run that skill once per machine (or per workspace, for different defaults) rather than authoring this file by hand.
 
 ---
 
@@ -107,6 +104,8 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 | `talk_to_agent` | Drive a live session for smoke testing. |
 | `explain` | Topic reference library (node positioning, say-node schema, xApp events, knowledge store, …). |
 
+> The `cognigy-vibe-mcp` PyPI package is the MCP server only — narrower in scope than this repository, which also contains the Claude Code skills and marketplace manifest that pair with it. See [cognigy-mcp/README.md](cognigy-mcp/README.md) for the server's own docs.
+
 ---
 
 ## Development
@@ -119,19 +118,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 
 ### Contributing
 
-- Branch from `origin/dev` (not local dev):
-  ```bash
-  git checkout -b feat/<name> origin/dev
-  ```
-- **Do not bump versions.** CI will reject any PR to `dev` that changes the version. Version bumps are pushed directly to `dev` by the maintainer to initiate a prerelease cycle — not via PR.
-- **Composite skills call atomic MCP tools** (`cognigy_get`, `cognigy_create`, …) — never hardcode `npx tsx` CLI calls in a skill.
-- PR to `dev`. Prereleases are **not** published automatically on merge — the maintainer cuts them explicitly via `workflow_dispatch` (GitHub Actions → "Release (prerelease)" → Run workflow on `dev`) or RC tag (`git tag v1.7.0rc1 && git push origin v1.7.0rc1`). Both paths gate on the base version in `pyproject.toml` exceeding the current stable on PyPI. To install a specific prerelease for testing:
-  ```bash
-  uvx cognigy-vibe-mcp==1.7.0rc1            # specific RC
-  uv tool install cognigy-vibe-mcp --prerelease allow  # latest RC prerelease
-  ```
-  Stable releases are published when the maintainer merges `dev → main`.
-- See [CLAUDE.md](CLAUDE.md) for the full development workflow (planning, subagent-driven implementation, PR + CI flow).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Repository layout
 
@@ -139,15 +126,16 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 .claude-plugin/marketplace.json   marketplace definition (self-referential)
 plugin/                           plugin content installed by Claude Code
   .claude-plugin/plugin.json        plugin manifest (name, version)
+  bin/                              setup wizard bootstrap scripts (cognigy-setup.sh / .ps1)
   skills/                           one directory per skill, each a SKILL.md
-  hooks/                            onboarding gate
 cognigy-mcp/                      the cognigy-vibe-mcp Python server (+ tests, own README)
-docs/                             plugin-development docs (architecture, patterns, design specs)
+docs/                             plugin-development docs (architecture, design specs)
 scripts/                          explain-topic build tooling
-.githooks/                        pre-commit hook
-.github/workflows/                CI: version-bump check, explain-topic check, publish, release
+.githooks/                        pre-commit hook (GitGuardian)
+.github/workflows/                CI: version-bump check, explain-topic check, prerelease + production release
 ```
 
 ### Maintainers
 
-Ben Elliot — [ben.elliot@nice.com](mailto:ben.elliot@nice.com)
+Ben Elliot — [ben.elliot@nice.com](mailto:ben.elliot@nice.com)  
+Ben Hancock — [ben.hancock@nice.com](mailto:ben.hancock@nice.com)
