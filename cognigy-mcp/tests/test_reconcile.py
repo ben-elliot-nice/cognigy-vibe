@@ -199,6 +199,16 @@ def test_apply_fixes_reinstalls_plugin_on_marketplace_or_version_drift(tmp_path)
     mock_install.assert_called_once_with("user")
 
 
+def test_apply_fixes_propagates_subprocess_failure_during_plugin_repair():
+    import subprocess
+    state = _aligned_state()
+    issues = [DriftIssue("plugin_version", "1.6.0", "1.7.0", "drift")]
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
+         patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, ["claude"])):
+        with pytest.raises(subprocess.CalledProcessError):
+            apply_fixes(issues, state)
+
+
 def test_apply_fixes_rewrites_desktop_pin(tmp_path):
     desktop_path = tmp_path / "claude_desktop_config.json"
     desktop_path.write_text(json.dumps({
