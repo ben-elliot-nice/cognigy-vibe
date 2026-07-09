@@ -106,6 +106,10 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 
 State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls. The `~/.config/cognigy-vibe/cache/<project-id>/` directory is auto-created by the MCP server on first use of any stateful tool for that project. Existing installs on the pre-#171 flat layout are migrated automatically on first run.
 
+### Config file cascade
+
+`server.py`'s `_find_config_file()` resolves the active `default-demo-config.json` at startup by walking from `cwd` up through ancestor directories, then falling back to `~/.config/cognigy-vibe/config.json`. The first file found wins — there is no merging across levels. A malformed or unreadable candidate is skipped with a stderr message (distinguishing `JSONDecodeError` from `OSError`) rather than aborting the walk. `COGNIGY_PROJECT_ROOT` is a separate mechanism: it controls where `.env` is read from and does not participate in this cascade.
+
 ### Reference docs (runtime guidance)
 
 The `explain` tool carries a 37-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
