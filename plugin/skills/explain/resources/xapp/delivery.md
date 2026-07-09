@@ -6,6 +6,10 @@ group: xapp
 
 ## xapp-delivery — xApp Patterns
 
+### Where to write HTML source before `push_html_node`
+
+Same convention as code nodes (see explain("code-node-patterns")) — write the HTML/JS source to a file in the project directory (e.g. `xapp/<moment-name>.html`), not a scratchpad or temp directory. Keeps xApp source discoverable and editable across sessions instead of regenerated from scratch each time.
+
 ### Session init
 initAppSession node generates input.apps.url (EPHEMERAL — only available this turn).
 Immediately after: Code node reads and persists it:

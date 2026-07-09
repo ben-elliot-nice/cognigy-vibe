@@ -6,6 +6,16 @@ group: code
 
 ## code-node-patterns — Writing Cognigy Code Nodes
 
+### Where to write the source before `push_code_node`
+
+Write the `.js` source to a file **inside the project directory** (e.g. `nodes/<node-name>.js`), not to a scratchpad or temp directory. `push_code_node` takes `script_file` as a path — it doesn't care where the file lives, but the choice has lasting effect:
+
+- A file in the project tree is discoverable by a future session (this one or another) without regenerating the source from a `get_flow_chart` read or from memory.
+- Editing an existing file (small diff) is far cheaper in tokens than reconstructing the full script from scratch.
+- It also gives you a local diffable history of the node's logic, independent of Cognigy's own versioning.
+
+Keep this convention for `push_html_node` xApp content too — see explain("xapp-delivery").
+
 ### Execution Model
 
 - Flow waits until the code node finishes
