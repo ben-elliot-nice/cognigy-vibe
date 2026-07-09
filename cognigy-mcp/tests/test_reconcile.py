@@ -2,7 +2,18 @@
 import json
 from unittest.mock import patch, MagicMock
 
-from cognigy_mcp.reconcile import SetupState, DriftIssue, gather_state, diff_state, apply_fixes
+import httpx
+import pytest
+import respx
+
+from cognigy_mcp.reconcile import (
+    SetupState,
+    DriftIssue,
+    gather_state,
+    diff_state,
+    apply_fixes,
+    check_pypi_latest,
+)
 
 
 def test_setup_state_holds_all_five_surfaces():
@@ -188,3 +199,38 @@ def test_apply_fixes_never_touches_missing_surfaces(tmp_path):
     mock_path.assert_not_called()
     mock_merge.assert_not_called()
     mock_install.assert_not_called()
+
+
+def test_check_pypi_latest_returns_version_string():
+    with respx.mock:
+        respx.get("https://pypi.org/pypi/cognigy-vibe-mcp/json").mock(
+            return_value=httpx.Response(200, json={"info": {"version": "1.8.0"}})
+        )
+        assert check_pypi_latest("cognigy-vibe-mcp") == "1.8.0"
+
+
+def test_check_pypi_latest_raises_on_404():
+    with respx.mock:
+        respx.get("https://pypi.org/pypi/cognigy-vibe-mcp/json").mock(
+            return_value=httpx.Response(404)
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            check_pypi_latest("cognigy-vibe-mcp")
+
+
+def test_check_pypi_latest_raises_on_network_error():
+    with respx.mock:
+        respx.get("https://pypi.org/pypi/cognigy-vibe-mcp/json").mock(
+            side_effect=httpx.ConnectError("connection refused")
+        )
+        with pytest.raises(httpx.ConnectError):
+            check_pypi_latest("cognigy-vibe-mcp")
+
+
+def test_check_pypi_latest_raises_on_malformed_response():
+    with respx.mock:
+        respx.get("https://pypi.org/pypi/cognigy-vibe-mcp/json").mock(
+            return_value=httpx.Response(200, json={"unexpected": "shape"})
+        )
+        with pytest.raises(KeyError):
+            check_pypi_latest("cognigy-vibe-mcp")

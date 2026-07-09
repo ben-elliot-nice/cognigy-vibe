@@ -6,6 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Literal
 
+import httpx
+
 from cognigy_mcp.config import CONFIG_SCHEMA_VERSION, SETUP_META_PATH
 
 
@@ -155,3 +157,20 @@ def apply_fixes(issues: list[DriftIssue], state: SetupState) -> None:
 def _migrate_layout() -> None:
     SETUP_META_PATH.parent.mkdir(parents=True, exist_ok=True)
     SETUP_META_PATH.write_text(json.dumps({"schema_version": CONFIG_SCHEMA_VERSION}))
+
+
+def check_pypi_latest(package: str) -> str:
+    """Return the latest published version of `package` on PyPI.
+
+    Deliberately loud: unlike every other reconcile function in this module,
+    this does NOT catch or suppress exceptions. Network failures
+    (httpx.ConnectError, httpx.TimeoutException, ...), HTTP error statuses
+    (httpx.HTTPStatusError via raise_for_status), and malformed response
+    bodies (KeyError) all propagate uncaught to the caller. This lets
+    `update`'s hard-fail-on-unreachable-PyPI behavior distinguish "PyPI is
+    unreachable" from "everything is fine" in one isolated place.
+    """
+    response = httpx.get(f"https://pypi.org/pypi/{package}/json", timeout=10.0)
+    response.raise_for_status()
+    data = response.json()
+    return data["info"]["version"]
