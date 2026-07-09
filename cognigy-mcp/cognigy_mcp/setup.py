@@ -4,11 +4,11 @@ from __future__ import annotations
 import json
 import os
 import stat
-import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from cognigy_mcp.config import USER_ENV_PATH
+from cognigy_mcp.wizard_ui import run_subprocess
 
 
 def get_desktop_config_path() -> Path:
@@ -63,17 +63,19 @@ def write_credential_env(path: Path, base_url: str, api_key: str) -> None:
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
-def install_plugin(scope: str) -> None:
+def install_plugin(scope: str, verbose: bool = False) -> None:
     if scope not in ("user", "project", "local"):
         raise ValueError(f"Invalid scope: {scope!r}. Must be one of: user, project, local")
     ver = get_installed_version()
-    subprocess.run(
+    run_subprocess(
         ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-claude-plugin@v{ver}"],
-        check=True,
+        "Adding marketplace",
+        verbose=verbose,
     )
-    subprocess.run(
+    run_subprocess(
         ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", scope],
-        check=True,
+        "Installing plugin",
+        verbose=verbose,
     )
 
 

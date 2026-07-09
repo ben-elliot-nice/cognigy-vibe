@@ -124,16 +124,19 @@ def test_install_plugin_calls_claude_cli():
     from unittest.mock import patch
     from cognigy_mcp.setup import install_plugin
     with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
-         patch("subprocess.run") as mock_run:
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        mock_run.return_value = None
         install_plugin("user")
         assert mock_run.call_count == 2
         mock_run.assert_any_call(
             ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
-            check=True,
+            "Adding marketplace",
+            verbose=False,
         )
         mock_run.assert_any_call(
             ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
-            check=True,
+            "Installing plugin",
+            verbose=False,
         )
 
 
@@ -141,11 +144,25 @@ def test_install_plugin_version_pins_prerelease():
     from unittest.mock import patch
     from cognigy_mcp.setup import install_plugin
     with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0rc8"), \
-         patch("subprocess.run") as mock_run:
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
         install_plugin("project")
         mock_run.assert_any_call(
             ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0rc8"],
-            check=True,
+            "Adding marketplace",
+            verbose=False,
+        )
+
+
+def test_install_plugin_passes_verbose_through():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import install_plugin
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        install_plugin("user", verbose=True)
+        mock_run.assert_any_call(
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
+            "Adding marketplace",
+            verbose=True,
         )
 
 
@@ -154,3 +171,15 @@ def test_install_plugin_rejects_invalid_scope():
     from cognigy_mcp.setup import install_plugin
     with pytest.raises(ValueError, match="Invalid scope"):
         install_plugin("global")
+
+
+def test_install_plugin_raises_step_failure_on_cli_error():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import install_plugin
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    import pytest
+    failure = StepFailure("Adding marketplace", SubprocessResult(returncode=1, stdout="", stderr="denied"))
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=failure):
+        with pytest.raises(StepFailure):
+            install_plugin("user")
