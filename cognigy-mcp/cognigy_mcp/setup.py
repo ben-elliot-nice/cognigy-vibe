@@ -380,4 +380,38 @@ def _run_update(args) -> None:
 
 
 def _run_uninstall(args) -> None:
-    raise NotImplementedError  # implemented in Task 9
+    from cognigy_mcp.reconcile import gather_state
+
+    state = gather_state()
+    if state.plugin_scope is None:
+        print("cognigy-vibe is not installed. Nothing to do.")
+        return
+
+    print(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})...")
+    subprocess.run(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", state.plugin_scope],
+        check=True,
+    )
+
+    desktop_path = get_desktop_config_path()
+    if desktop_path.exists():
+        config = json.loads(desktop_path.read_text())
+        if "cognigy-vibe" in config.get("mcpServers", {}):
+            print(f"Removing Desktop config entry at {desktop_path}...")
+            del config["mcpServers"]["cognigy-vibe"]
+            desktop_path.write_text(json.dumps(config, indent=2) + "\n")
+
+    if USER_ENV_PATH.exists():
+        resp = _prompt(f"Delete credentials at {USER_ENV_PATH}?", default="n")
+        if resp.lower() in ("y", "yes"):
+            USER_ENV_PATH.unlink()
+            print("Credentials removed.")
+        else:
+            print("Keeping credentials.")
+
+    resp = _prompt("Remove the 'cognigy-vibe' marketplace entry too?", default="n")
+    if resp.lower() in ("y", "yes"):
+        subprocess.run(["claude", "plugin", "marketplace", "remove", "cognigy-vibe"], check=True)
+        print("Marketplace entry removed.")
+
+    print("\nUninstall complete.")
