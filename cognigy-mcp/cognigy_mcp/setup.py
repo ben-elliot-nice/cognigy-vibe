@@ -336,7 +336,47 @@ def _run_status(args) -> None:
 
 
 def _run_update(args) -> None:
-    raise NotImplementedError  # implemented in Task 8
+    import shutil
+    from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes, check_pypi_latest
+
+    state = gather_state()
+
+    try:
+        latest = check_pypi_latest("cognigy-vibe-mcp")
+    except Exception:
+        print(
+            "Could not reach PyPI to check for updates. "
+            "Run 'cognigy-vibe-setup status --fix' to reconcile local state without a version check.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if state.package_version == latest:
+        print(f"Already at latest ({latest}).")
+    elif not args.check:
+        if shutil.which("uv"):
+            print(f"Upgrading cognigy-vibe-mcp: {state.package_version} -> {latest}...")
+            subprocess.run(["uv", "tool", "upgrade", "cognigy-vibe-mcp"], check=True)
+        else:
+            print(
+                f"uv not found on PATH. Upgrade manually, then re-run: "
+                f"uv tool install cognigy-vibe-mcp=={latest} --force"
+            )
+        state = gather_state()
+
+    issues = diff_state(state)
+    drift_issues = [issue for issue in issues if issue.kind == "drift"]
+    _print_state_table(state, issues)
+
+    if args.check:
+        if state.package_version != latest:
+            print(f"\nPyPI has {latest}; installed is {state.package_version}.")
+        sys.exit(1 if (drift_issues or state.package_version != latest) else 0)
+
+    if drift_issues:
+        apply_fixes(drift_issues, state)
+        print("\nFixed local drift.")
+    sys.exit(0)
 
 
 def _run_uninstall(args) -> None:

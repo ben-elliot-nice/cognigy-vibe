@@ -272,3 +272,70 @@ def test_run_status_fix_does_not_call_apply_fixes_when_nothing_drifted():
             _run_status(args)
     assert exc.value.code == 0
     mock_apply.assert_not_called()
+
+
+def test_run_update_hard_fails_when_pypi_unreachable(capsys):
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", side_effect=Exception("network down")), \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 1
+    assert "status --fix" in capsys.readouterr().err
+    mock_run.assert_not_called()
+
+
+def test_run_update_short_circuits_when_already_latest():
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply, \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 0
+    mock_run.assert_not_called()  # no `uv tool upgrade` call
+    mock_apply.assert_not_called()  # aligned state, nothing to fix
+
+
+def test_run_update_upgrades_package_when_stale(monkeypatch):
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv")
+    states = iter([_state(package_version="1.6.0"), _state(package_version="1.7.0")])
+    with patch("cognigy_mcp.reconcile.gather_state", side_effect=lambda: next(states)), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 0
+    mock_run.assert_called_once_with(["uv", "tool", "upgrade", "cognigy-vibe-mcp"], check=True)
+
+
+def test_run_update_check_reports_without_mutating():
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": True})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(package_version="1.6.0")), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply, \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 1
+    mock_run.assert_not_called()
+    mock_apply.assert_not_called()
+
+
+def test_run_update_applies_fixes_when_drift_found_and_not_check():
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(desktop_pin="1.6.0")), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 0
+    mock_apply.assert_called_once()
