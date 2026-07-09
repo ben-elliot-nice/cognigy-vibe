@@ -64,15 +64,24 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server wiring, auto-resync middleware, tool dispatch |
+| `server.py` | MCP server wiring, degraded/full/dev mode selection, config cascade (`_find_config_file`), auto-resync middleware, tool dispatch |
 | `api.py` | `CognigyClient` — thin httpx wrapper; derives endpoint URL from base URL |
 | `state.py` | `ProjectState` — name→ID mappings, seed/runtime merge, interaction timestamp |
 | `cache.py` | `Cache` — filesystem TTL cache for resource JSON + code node snapshots |
-| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource` |
-| `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer |
-| `tools/file_push.py` | `push_code_node` (conflict detection), `push_html_node` |
+| `config.py` | Path constants — `CONFIG_BASE` (`~/.config/cognigy-vibe`), `USER_ENV_PATH` (`CONFIG_BASE/.env`) |
+| `filters.py` | `strip_response` — removes internal fields (`__v`, `transpiled`) from API responses |
+| `validation.py` | `validate()` / `make_schema()` — Pydantic-model argument validation shared across tool handlers |
+| `launcher.py` | `cognigy-vibe-launch` console-script entry point — resolves installed package version, hands off to `orchestrator.main()` |
+| `orchestrator.py` | Outer supervisor process — spawns/monitors the inner server subprocess, handles the dev-mode restart protocol (rc=42 sentinel), logs to `~/.config/cognigy-vibe/logs/` |
+| `migrate.py` | `safe_move()` — best-effort, race-safe file move used by layout migrations |
+| `setup.py` | `cognigy-vibe-setup` console-script entry point — the install wizard |
+| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
+| `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer, `cognigy_invoke` operation routing |
+| `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `export_package` |
+| `tools/voice_ops.py` | `provision_webrtc_endpoint` — VoiceGateway webRTC endpoint provisioning with real/dummy Azure Speech connection path |
 | `tools/testing.py` | `talk_to_agent` — REST endpoint test harness |
-| `tools/explain.py` | `explain` — 21-topic in-server reference library |
+| `tools/explain.py` | `explain` — 36-topic in-server reference library |
+| `tools/dev_tools.py` | `reload_mcp` — dev-mode server respawn signal |
 
 ### State storage
 
