@@ -12,14 +12,28 @@ from pathlib import Path
 from dotenv import load_dotenv
 from cognigy_mcp.config import USER_ENV_PATH
 
+def _migrate_flat_logs(config_base: Path, log_dir: Path) -> None:
+    """Move stray log files from the pre-#171 flat layout into logs/."""
+    import shutil
+    if not config_base.exists():
+        return
+    for entry in config_base.glob("cognigy-vibe-mcp-*.log"):
+        dest = log_dir / entry.name
+        if dest.exists():
+            continue
+        shutil.move(str(entry), str(dest))
+
+
 def _log_path() -> str:
     try:
         from importlib.metadata import version
         ver = version("cognigy-vibe-mcp")
     except Exception:
         ver = "unknown"
-    log_dir = Path.home() / ".config" / "cognigy-vibe"
+    config_base = Path.home() / ".config" / "cognigy-vibe"
+    log_dir = config_base / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    _migrate_flat_logs(config_base, log_dir)
     return str(log_dir / f"cognigy-vibe-mcp-{ver}.log")
 
 _LOG = open(_log_path(), "a", buffering=1)

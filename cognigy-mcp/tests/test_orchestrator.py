@@ -406,3 +406,60 @@ def test_resolve_env_file_returns_none_when_neither_exists(tmp_path):
     from cognigy_mcp.orchestrator import _resolve_env_file
     result = _resolve_env_file(project_dir, tmp_path)
     assert result is None
+
+
+def test_migrate_flat_logs_moves_stray_log_file(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    stray = config_base / "cognigy-vibe-mcp-1.5.4.log"
+    stray.write_text("old log contents")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+
+    _migrate_flat_logs(config_base, log_dir)
+
+    assert not stray.exists()
+    assert (log_dir / "cognigy-vibe-mcp-1.5.4.log").read_text() == "old log contents"
+
+
+def test_migrate_flat_logs_noop_if_destination_exists(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    stray = config_base / "cognigy-vibe-mcp-1.5.4.log"
+    stray.write_text("old")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+    (log_dir / "cognigy-vibe-mcp-1.5.4.log").write_text("new")
+
+    _migrate_flat_logs(config_base, log_dir)
+
+    assert stray.exists()  # untouched — destination already existed
+    assert (log_dir / "cognigy-vibe-mcp-1.5.4.log").read_text() == "new"
+
+
+def test_migrate_flat_logs_noop_if_config_base_missing(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "does-not-exist"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+
+    _migrate_flat_logs(config_base, log_dir)  # must not raise
+
+    assert not config_base.exists()
+
+
+def test_migrate_flat_logs_ignores_non_log_files(tmp_path):
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    (config_base / "config.json").write_text("{}")
+    (config_base / ".env").write_text("KEY=1")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+
+    _migrate_flat_logs(config_base, log_dir)
+
+    assert (config_base / "config.json").exists()
+    assert (config_base / ".env").exists()
