@@ -380,26 +380,33 @@ def _run_update(args) -> None:
 
 
 def _run_uninstall(args) -> None:
-    from cognigy_mcp.reconcile import gather_state
+    from cognigy_mcp.reconcile import gather_state, PLUGIN_ID, MARKETPLACE_NAME
 
     state = gather_state()
-    if state.plugin_scope is None:
+    desktop_path = get_desktop_config_path()
+    desktop_config: dict = {}
+    has_desktop_entry = False
+    if desktop_path.exists():
+        desktop_config = json.loads(desktop_path.read_text())
+        has_desktop_entry = MARKETPLACE_NAME in desktop_config.get("mcpServers", {})
+
+    has_plugin = state.plugin_scope is not None
+
+    if not has_plugin and not has_desktop_entry:
         print("cognigy-vibe is not installed. Nothing to do.")
         return
 
-    print(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})...")
-    subprocess.run(
-        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", state.plugin_scope],
-        check=True,
-    )
+    if has_plugin:
+        print(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})...")
+        subprocess.run(
+            ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", state.plugin_scope],
+            check=True,
+        )
 
-    desktop_path = get_desktop_config_path()
-    if desktop_path.exists():
-        config = json.loads(desktop_path.read_text())
-        if "cognigy-vibe" in config.get("mcpServers", {}):
-            print(f"Removing Desktop config entry at {desktop_path}...")
-            del config["mcpServers"]["cognigy-vibe"]
-            desktop_path.write_text(json.dumps(config, indent=2) + "\n")
+    if has_desktop_entry:
+        print(f"Removing Desktop config entry at {desktop_path}...")
+        del desktop_config["mcpServers"][MARKETPLACE_NAME]
+        desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
 
     if USER_ENV_PATH.exists():
         resp = _prompt(f"Delete credentials at {USER_ENV_PATH}?", default="n")
@@ -409,9 +416,9 @@ def _run_uninstall(args) -> None:
         else:
             print("Keeping credentials.")
 
-    resp = _prompt("Remove the 'cognigy-vibe' marketplace entry too?", default="n")
+    resp = _prompt(f"Remove the '{MARKETPLACE_NAME}' marketplace entry too?", default="n")
     if resp.lower() in ("y", "yes"):
-        subprocess.run(["claude", "plugin", "marketplace", "remove", "cognigy-vibe"], check=True)
+        subprocess.run(["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME], check=True)
         print("Marketplace entry removed.")
 
     print("\nUninstall complete.")

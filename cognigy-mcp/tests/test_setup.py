@@ -352,10 +352,12 @@ def test_run_update_applies_fixes_when_drift_found_and_not_check():
     mock_apply.assert_called_once()
 
 
-def test_run_uninstall_noop_when_not_installed(capsys):
+def test_run_uninstall_noop_when_not_installed(tmp_path, capsys):
     from cognigy_mcp.setup import _run_uninstall
     args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
          patch("subprocess.run") as mock_run:
         _run_uninstall(args)
     mock_run.assert_not_called()
@@ -436,3 +438,46 @@ def test_run_uninstall_does_not_remove_marketplace_by_default(tmp_path):
         if call.args[0][:3] == ["claude", "plugin", "marketplace"]
     ]
     assert marketplace_calls == []
+
+
+def test_run_uninstall_desktop_only_removes_entry_without_plugin_call(tmp_path):
+    """Desktop-only installs (plugin_scope=None) must still be detected and cleaned up.
+
+    A user who ran `install --client desktop` never registers a Code plugin,
+    so plugin_scope is None even though a live Desktop config entry exists.
+    Regression guard for issue #185 fix 1.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    plugin_uninstall_calls = [
+        call for call in mock_run.call_args_list
+        if call.args[0][:3] == ["claude", "plugin", "uninstall"]
+    ]
+    assert plugin_uninstall_calls == []
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+
+
+def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_not_called()
+    assert "not installed" in capsys.readouterr().out.lower()
