@@ -227,7 +227,20 @@ def test_parse_args_bare_help_shows_top_level_subcommands(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "status" in output
     assert "update" in output
-    assert "uninstall" in output
+
+
+def test_parse_args_typo_subcommand_reports_invalid_choice(monkeypatch, capsys):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "satus"])
+    with pytest.raises(SystemExit):
+        _parse_args()
+    err = capsys.readouterr().err
+    assert "invalid choice" in err
+    assert "'satus'" in err
+    assert "install" in err
+    assert "status" in err
+    assert "update" in err
+    assert "uninstall" in err
 
 
 from cognigy_mcp.reconcile import SetupState, DriftIssue
