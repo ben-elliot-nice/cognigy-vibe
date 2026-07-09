@@ -25,7 +25,7 @@ bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-clau
 powershell -ExecutionPolicy Bypass -File plugin\bin\cognigy-setup.ps1
 ```
 
-> **[SCREENSHOT: terminal running the setup wizard, showing the mode/client/scope selection prompts with rich-styled section headers]**
+![Setup wizard running, showing the mode/client/scope selection prompts](docs/images/cli-install-progress.png)
 
 After the first install, use `uvx cognigy-vibe-setup` directly for everything else:
 
@@ -38,7 +38,7 @@ After the first install, use `uvx cognigy-vibe-setup` directly for everything el
 
 Any subcommand also accepts `--verbose` (inline diagnostic output and a full traceback on failure) and `--help`.
 
-> **[SCREENSHOT: terminal showing the summary box printed at the end of a successful install — credential path, plugin scope, Desktop config path]**
+![Summary box printed at the end of a successful install](docs/images/cli-install-done.png)
 
 After install, open Claude Code or restart Claude Desktop. On the first tool call you will be prompted through onboarding.
 
