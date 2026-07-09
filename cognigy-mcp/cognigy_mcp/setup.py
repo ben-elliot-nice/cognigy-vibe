@@ -9,6 +9,7 @@ import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from cognigy_mcp.config import USER_ENV_PATH
+from cognigy_mcp.wizard_ui import run_subprocess, print_header, print_section, print_summary, print_error_panel
 
 
 def get_desktop_config_path() -> Path:
@@ -63,17 +64,19 @@ def write_credential_env(path: Path, base_url: str, api_key: str) -> None:
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
-def install_plugin(scope: str) -> None:
+def install_plugin(scope: str, verbose: bool = False) -> None:
     if scope not in ("user", "project", "local"):
         raise ValueError(f"Invalid scope: {scope!r}. Must be one of: user, project, local")
     ver = get_installed_version()
-    subprocess.run(
+    run_subprocess(
         ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-claude-plugin@v{ver}"],
-        check=True,
+        "Adding marketplace",
+        verbose=verbose,
     )
-    subprocess.run(
+    run_subprocess(
         ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", scope],
-        check=True,
+        "Installing plugin",
+        verbose=verbose,
     )
 
 
@@ -132,13 +135,13 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     return value or default
 
 
-_LEGACY_INSTALL_FLAGS = {"--install-only", "--client", "--scope"}
+_BARE_FLAGS_IMPLYING_INSTALL = {"--install-only", "--client", "--scope", "--verbose"}
 
 
 def _parse_args() -> "argparse.Namespace":
     import argparse
     argv = sys.argv[1:]
-    if not argv or argv[0] in _LEGACY_INSTALL_FLAGS:
+    if not argv or argv[0] in _BARE_FLAGS_IMPLYING_INSTALL:
         argv = ["install"] + argv
 
     parser = argparse.ArgumentParser(
@@ -165,6 +168,11 @@ def _parse_args() -> "argparse.Namespace":
         default=None,
         help="Plugin install scope for Claude Code (default: user).",
     )
+    install_p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show captured subprocess output and full tracebacks on failure.",
+    )
 
     status_p = sub.add_parser("status", help="Report drift across install-related surfaces.")
     status_p.add_argument(
@@ -188,7 +196,13 @@ def _parse_args() -> "argparse.Namespace":
 def main() -> None:
     args = _parse_args()
     if args.command == "install":
-        _run_install(args)
+        try:
+            _run_install(args)
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            print_error_panel("Setup failed.", exc, debug=args.verbose)
+            sys.exit(1)
     elif args.command == "status":
         _run_status(args)
     elif args.command == "update":
@@ -198,9 +212,10 @@ def main() -> None:
 
 
 def _run_install(args) -> None:
-    print("\ncognigy-vibe setup wizard\n")
+    print_header("cognigy-vibe setup wizard")
 
     # 1. Mode (flag or prompt)
+    print_section(1, "Mode")
     if args.install_only:
         mode = "install"
     else:
@@ -208,6 +223,7 @@ def _run_install(args) -> None:
         mode = "install" if mode_raw == "install" else "configure"
 
     # 2. Client (flag or detect+prompt)
+    print_section(2, "Client")
     if args.client:
         clients = ["code", "desktop"] if args.client == "both" else [args.client]
     else:
@@ -228,6 +244,7 @@ def _run_install(args) -> None:
                 print(f"  Invalid choice '{client_raw}'. Enter: code, desktop, or both.")
 
     # 3. Scope (flag or prompt, Code only)
+    print_section(3, "Scope")
     scope = "user"
     if "code" in clients:
         if args.scope:
@@ -240,7 +257,8 @@ def _run_install(args) -> None:
     base_url = ""
     api_key = ""
     if mode == "configure":
-        print("\nCredentials (project ID can be set later via the sync_remote_state tool)")
+        print_section(4, "Credentials")
+        print("Credentials (project ID can be set later via the sync_remote_state tool)")
         base_url = _prompt("COGNIGY_BASE_URL (e.g. https://cognigy-api-au1.nicecxone.com)")
         while not base_url:
             print("  Base URL is required.")
@@ -252,15 +270,16 @@ def _run_install(args) -> None:
             api_key = _prompt("COGNIGY_API_KEY", secret=True)
 
     # 5. Install + write
-    print()
+    print_section(5, "Install")
+    summary_rows: list[tuple[str, str]] = []
 
     if "code" in clients:
-        print(f"Installing plugin at {scope} scope...")
-        install_plugin(scope)
+        install_plugin(scope, verbose=args.verbose)
+        summary_rows.append(("Plugin scope", scope))
         if mode == "configure":
             cred_path = USER_ENV_PATH if scope == "user" else Path.cwd() / ".env"
-            print(f"Writing credentials to {cred_path}")
             write_credential_env(cred_path, base_url, api_key)
+            summary_rows.append(("Credentials", str(cred_path)))
 
     if "desktop" in clients:
         ver = get_installed_version()
@@ -288,18 +307,18 @@ def _run_install(args) -> None:
                     "COGNIGY_BASE_URL": base_url,
                     "COGNIGY_API_KEY": api_key,
                 }
-            print(f"Writing Desktop config to {desktop_path}")
             merge_desktop_config(desktop_path, "cognigy-vibe", entry)
+            summary_rows.append(("Desktop config", str(desktop_path)))
 
-    # 6. Success
-    print("\nDone!")
+    # 6. Summary
+    print_section(6, "Done")
+    print_summary(summary_rows)
     if "code" in clients:
-        print("  Claude Code: restart Claude if it is already running.")
+        print("Claude Code: restart Claude if it is already running.")
     if "desktop" in clients:
-        print("  Claude Desktop: restart the application to pick up the new config.")
-        print("  Note: the Desktop entry is pinned to the version installed today.")
-        print("  After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
-    print()
+        print("Claude Desktop: restart the application to pick up the new config.")
+        print("Note: the Desktop entry is pinned to the version installed today.")
+        print("After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
 
 
 def _print_state_table(state, issues) -> None:

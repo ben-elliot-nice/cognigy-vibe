@@ -124,16 +124,19 @@ def test_install_plugin_calls_claude_cli():
     from unittest.mock import patch
     from cognigy_mcp.setup import install_plugin
     with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
-         patch("subprocess.run") as mock_run:
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        mock_run.return_value = None
         install_plugin("user")
         assert mock_run.call_count == 2
         mock_run.assert_any_call(
             ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
-            check=True,
+            "Adding marketplace",
+            verbose=False,
         )
         mock_run.assert_any_call(
             ["claude", "plugin", "install", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
-            check=True,
+            "Installing plugin",
+            verbose=False,
         )
 
 
@@ -141,11 +144,25 @@ def test_install_plugin_version_pins_prerelease():
     from unittest.mock import patch
     from cognigy_mcp.setup import install_plugin
     with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0rc8"), \
-         patch("subprocess.run") as mock_run:
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
         install_plugin("project")
         mock_run.assert_any_call(
             ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0rc8"],
-            check=True,
+            "Adding marketplace",
+            verbose=False,
+        )
+
+
+def test_install_plugin_passes_verbose_through():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import install_plugin
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        install_plugin("user", verbose=True)
+        mock_run.assert_any_call(
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
+            "Adding marketplace",
+            verbose=True,
         )
 
 
@@ -154,6 +171,67 @@ def test_install_plugin_rejects_invalid_scope():
     from cognigy_mcp.setup import install_plugin
     with pytest.raises(ValueError, match="Invalid scope"):
         install_plugin("global")
+
+
+def test_install_plugin_raises_step_failure_on_cli_error():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import install_plugin
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    import pytest
+    failure = StepFailure("Adding marketplace", SubprocessResult(returncode=1, stdout="", stderr="denied"))
+    with patch("cognigy_mcp.setup.get_installed_version", return_value="1.7.0"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=failure):
+        with pytest.raises(StepFailure):
+            install_plugin("user")
+
+
+def test_parse_args_verbose_flag_defaults_false():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import _parse_args
+    with patch("sys.argv", ["cognigy-vibe-setup"]):
+        args = _parse_args()
+    assert args.verbose is False
+
+
+def test_parse_args_verbose_flag_can_be_set():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import _parse_args
+    with patch("sys.argv", ["cognigy-vibe-setup", "--verbose"]):
+        args = _parse_args()
+    assert args.verbose is True
+
+
+def test_main_renders_error_panel_on_unhandled_exception():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "--install-only", "--client", "code", "--scope", "user"]), \
+         patch("cognigy_mcp.setup.install_plugin", side_effect=RuntimeError("network down")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         patch("cognigy_mcp.setup.print_summary"), \
+         patch("cognigy_mcp.setup.print_header"), \
+         patch("cognigy_mcp.setup.print_section"), \
+         pytest.raises(SystemExit) as exc_info:
+        main()
+    assert exc_info.value.code == 1
+    assert mock_panel.call_count == 1
+    call_args = mock_panel.call_args
+    assert call_args.args[0] == "Setup failed."
+    assert isinstance(call_args.args[1], RuntimeError)
+    assert call_args.kwargs["debug"] is False
+
+
+def test_main_passes_verbose_to_error_panel_debug():
+    from unittest.mock import patch
+    from cognigy_mcp.setup import main
+    with patch("sys.argv", ["cognigy-vibe-setup", "--install-only", "--client", "code", "--scope", "user", "--verbose"]), \
+         patch("cognigy_mcp.setup.install_plugin", side_effect=RuntimeError("network down")), \
+         patch("cognigy_mcp.setup.print_error_panel") as mock_panel, \
+         patch("cognigy_mcp.setup.print_summary"), \
+         patch("cognigy_mcp.setup.print_header"), \
+         patch("cognigy_mcp.setup.print_section"), \
+         pytest.raises(SystemExit):
+        main()
+    assert mock_panel.call_args.kwargs["debug"] is True
 
 
 def test_parse_args_defaults_to_install_with_no_argv(monkeypatch):
