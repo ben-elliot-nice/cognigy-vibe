@@ -133,3 +133,38 @@ def test_print_error_panel_plain_exception_unaffected():
     output = test_console.export_text()
     assert "Setup failed." in output
     assert "Traceback" not in output
+
+
+def test_print_drift_table_renders_all_rows():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        wizard_ui.print_drift_table([
+            ("package_version", "1.6.0", "1.6.0", "ok"),
+            ("plugin_version", "1.5.0", "1.6.0", "drift"),
+            ("desktop_pin", "None", "1.6.0", "missing"),
+        ])
+    output = test_console.export_text()
+    assert "package_version" in output
+    assert "plugin_version" in output
+    assert "desktop_pin" in output
+    assert "ok" in output
+    assert "drift" in output
+    assert "missing" in output
+
+
+def test_print_drift_table_rejects_unknown_status():
+    from cognigy_mcp import wizard_ui
+    with pytest.raises(KeyError):
+        wizard_ui.print_drift_table([("surface", "a", "b", "not-a-real-status")])
+
+
+def test_print_step_renders_text():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        wizard_ui.print_step("Uninstalling cognigy-vibe plugin (scope: user)")
+    output = test_console.export_text()
+    assert "Uninstalling cognigy-vibe plugin (scope: user)" in output

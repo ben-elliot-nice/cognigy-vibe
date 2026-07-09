@@ -4,12 +4,19 @@ from __future__ import annotations
 import json
 import os
 import stat
-import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from cognigy_mcp.config import USER_ENV_PATH
-from cognigy_mcp.wizard_ui import run_subprocess, print_header, print_section, print_summary, print_error_panel
+from cognigy_mcp.wizard_ui import (
+    run_subprocess,
+    print_header,
+    print_section,
+    print_summary,
+    print_error_panel,
+    print_drift_table,
+    print_step,
+)
 
 
 def get_desktop_config_path() -> Path:
@@ -144,13 +151,22 @@ def _parse_args() -> "argparse.Namespace":
     if not argv or argv[0] in _BARE_FLAGS_IMPLYING_INSTALL:
         argv = ["install"] + argv
 
+    verbose_parent = argparse.ArgumentParser(add_help=False)
+    verbose_parent.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show captured subprocess output and full tracebacks on failure.",
+    )
+
     parser = argparse.ArgumentParser(
         prog="cognigy-vibe-setup",
         description="Install, update, check, or uninstall the cognigy-vibe plugin.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    install_p = sub.add_parser("install", help="Install and configure the plugin (default).")
+    install_p = sub.add_parser(
+        "install", help="Install and configure the plugin (default).", parents=[verbose_parent]
+    )
     install_p.add_argument(
         "--install-only",
         action="store_true",
@@ -168,47 +184,50 @@ def _parse_args() -> "argparse.Namespace":
         default=None,
         help="Plugin install scope for Claude Code (default: user).",
     )
-    install_p.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show captured subprocess output and full tracebacks on failure.",
-    )
 
-    status_p = sub.add_parser("status", help="Report drift across install-related surfaces.")
+    status_p = sub.add_parser(
+        "status", help="Report drift across install-related surfaces.", parents=[verbose_parent]
+    )
     status_p.add_argument(
         "--fix",
         action="store_true",
         help="Apply fixes for any drift found. Never touches PyPI or upgrades the package.",
     )
 
-    update_p = sub.add_parser("update", help="Check PyPI, upgrade if stale, and reconcile drift.")
+    update_p = sub.add_parser(
+        "update", help="Check PyPI, upgrade if stale, and reconcile drift.", parents=[verbose_parent]
+    )
     update_p.add_argument(
         "--check",
         action="store_true",
         help="Report what update would do without changing anything.",
     )
 
-    sub.add_parser("uninstall", help="Remove the plugin, Desktop config entry, and optionally credentials.")
+    sub.add_parser(
+        "uninstall",
+        help="Remove the plugin, Desktop config entry, and optionally credentials.",
+        parents=[verbose_parent],
+    )
 
     return parser.parse_args(argv)
 
 
 def main() -> None:
     args = _parse_args()
-    if args.command == "install":
-        try:
-            _run_install(args)
-        except KeyboardInterrupt:
-            raise
-        except Exception as exc:
-            print_error_panel("Setup failed.", exc, debug=args.verbose)
-            sys.exit(1)
-    elif args.command == "status":
-        _run_status(args)
-    elif args.command == "update":
-        _run_update(args)
-    elif args.command == "uninstall":
-        _run_uninstall(args)
+    # One entry per command: (runner, failure message) travel together so a new
+    # subcommand can't add a runner while forgetting its error message (or vice versa).
+    commands = {
+        "install": (_run_install, "Setup failed."),
+        "status": (_run_status, "Status failed."),
+        "update": (_run_update, "Update failed."),
+        "uninstall": (_run_uninstall, "Uninstall failed."),
+    }
+    runner, failure_message = commands[args.command]
+    try:
+        runner(args)
+    except Exception as exc:
+        print_error_panel(failure_message, exc, debug=args.verbose)
+        sys.exit(1)
 
 
 def _run_install(args) -> None:
@@ -321,9 +340,9 @@ def _run_install(args) -> None:
         print("After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
 
 
-def _print_state_table(state, issues) -> None:
+def _drift_table_rows(state, issues) -> list[tuple[str, str, str, str]]:
     from cognigy_mcp.config import CONFIG_SCHEMA_VERSION
-    rows = [
+    surfaces = [
         ("package_version", state.package_version, state.package_version),
         ("marketplace_ref", state.marketplace_ref, f"v{state.package_version}"),
         ("plugin_version", state.plugin_version, state.package_version),
@@ -331,18 +350,20 @@ def _print_state_table(state, issues) -> None:
         ("layout_schema_version", state.layout_schema_version, CONFIG_SCHEMA_VERSION),
     ]
     issue_map = {issue.surface: issue for issue in issues}
-    print(f"{'surface':<24}{'current':<18}{'expected':<12}status")
-    for surface, current, expected in rows:
+    rows = []
+    for surface, current, expected in surfaces:
         issue = issue_map.get(surface)
         status = issue.kind if issue else "ok"
-        print(f"{surface:<24}{str(current):<18}{str(expected):<12}{status}")
+        rows.append((surface, str(current), str(expected), status))
+    return rows
 
 
 def _run_status(args) -> None:
     from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes
+    print_header("cognigy-vibe status")
     state = gather_state()
     issues = diff_state(state)
-    _print_state_table(state, issues)
+    print_drift_table(_drift_table_rows(state, issues))
     drift_issues = [issue for issue in issues if issue.kind == "drift"]
 
     if args.fix:
@@ -358,6 +379,7 @@ def _run_update(args) -> None:
     import shutil
     from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes, check_pypi_latest
 
+    print_header("cognigy-vibe update")
     state = gather_state()
 
     try:
@@ -375,7 +397,11 @@ def _run_update(args) -> None:
     elif not args.check:
         if shutil.which("uv"):
             print(f"Upgrading cognigy-vibe-mcp: {state.package_version} -> {latest}...")
-            subprocess.run(["uv", "tool", "upgrade", "cognigy-vibe-mcp"], check=True)
+            run_subprocess(
+                ["uv", "tool", "upgrade", "cognigy-vibe-mcp"],
+                "Upgrading cognigy-vibe-mcp",
+                verbose=args.verbose,
+            )
         else:
             print(
                 f"uv not found on PATH. Upgrade manually, then re-run: "
@@ -385,7 +411,7 @@ def _run_update(args) -> None:
 
     issues = diff_state(state)
     drift_issues = [issue for issue in issues if issue.kind == "drift"]
-    _print_state_table(state, issues)
+    print_drift_table(_drift_table_rows(state, issues))
 
     if args.check:
         if state.package_version != latest:
@@ -401,6 +427,7 @@ def _run_update(args) -> None:
 def _run_uninstall(args) -> None:
     from cognigy_mcp.reconcile import gather_state, PLUGIN_ID, MARKETPLACE_NAME
 
+    print_header("cognigy-vibe uninstall")
     state = gather_state()
     desktop_path = get_desktop_config_path()
     desktop_config: dict = {}
@@ -420,19 +447,24 @@ def _run_uninstall(args) -> None:
         print("cognigy-vibe is not installed. Nothing to do.")
         return
 
+    summary_rows: list[tuple[str, str]] = []
+
     if has_plugin:
-        print(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})...")
-        subprocess.run(
+        print_step(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})")
+        run_subprocess(
             ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", state.plugin_scope],
-            check=True,
+            "Uninstalling plugin",
+            verbose=args.verbose,
         )
+        summary_rows.append(("Plugin", f"uninstalled (was scope: {state.plugin_scope})"))
 
     if has_desktop_entry:
-        print(f"Removing Desktop config entry at {desktop_path}...")
+        print_step(f"Removing Desktop config entry at {desktop_path}")
         del desktop_config["mcpServers"][MARKETPLACE_NAME]
         desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
         if sys.platform != "win32":
             desktop_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        summary_rows.append(("Desktop config", "entry removed"))
 
     cred_paths = [USER_ENV_PATH]
     if state.plugin_scope in ("project", "local"):
@@ -446,13 +478,22 @@ def _run_uninstall(args) -> None:
         resp = _prompt(f"Delete credentials at {cred_path}?", default="n")
         if resp.lower() in ("y", "yes"):
             cred_path.unlink()
-            print("Credentials removed.")
+            print_step(f"Removed credentials at {cred_path}")
+            summary_rows.append(("Credentials", f"removed ({cred_path})"))
         else:
-            print("Keeping credentials.")
+            print_step(f"Kept credentials at {cred_path}")
+            summary_rows.append(("Credentials", f"kept ({cred_path})"))
 
     resp = _prompt(f"Remove the '{MARKETPLACE_NAME}' marketplace entry too?", default="n")
     if resp.lower() in ("y", "yes"):
-        subprocess.run(["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME], check=True)
-        print("Marketplace entry removed.")
+        print_step(f"Removing '{MARKETPLACE_NAME}' marketplace entry")
+        run_subprocess(
+            ["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME],
+            "Removing marketplace entry",
+            verbose=args.verbose,
+        )
+        summary_rows.append(("Marketplace entry", "removed"))
+    else:
+        summary_rows.append(("Marketplace entry", "kept"))
 
-    print("\nUninstall complete.")
+    print_summary(summary_rows)

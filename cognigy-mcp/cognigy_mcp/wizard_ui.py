@@ -65,6 +65,24 @@ def print_summary(rows: list[tuple[str, str]]) -> None:
     console.print(Panel(table, title="Summary", border_style="green"))
 
 
+def print_drift_table(rows: list[tuple[str, str, str, str]]) -> None:
+    table = Table()
+    table.add_column("surface")
+    table.add_column("current")
+    table.add_column("expected")
+    table.add_column("status")
+    style = {"ok": "green", "drift": "yellow", "missing": "dim"}
+    for surface, current, expected, status in rows:
+        s = style[status]
+        table.add_row(surface, current, expected, f"[{s}]{status}[/{s}]")
+    console.print()
+    console.print(table)
+
+
+def print_step(text: str) -> None:
+    console.print(f"[cyan]›[/cyan] {text}")
+
+
 def print_error_panel(message: str, exc: Exception, debug: bool = False) -> None:
     body = message
     if isinstance(exc, StepFailure):
