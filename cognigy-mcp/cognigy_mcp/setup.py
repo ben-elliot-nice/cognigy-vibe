@@ -434,6 +434,7 @@ def _run_update(args) -> None:
 def _run_uninstall(args) -> None:
     from cognigy_mcp.reconcile import gather_state, PLUGIN_ID, MARKETPLACE_NAME
 
+    print_header("cognigy-vibe uninstall")
     state = gather_state()
     desktop_path = get_desktop_config_path()
     desktop_config: dict = {}
@@ -484,8 +485,10 @@ def _run_uninstall(args) -> None:
         resp = _prompt(f"Delete credentials at {cred_path}?", default="n")
         if resp.lower() in ("y", "yes"):
             cred_path.unlink()
+            print_step(f"Removed credentials at {cred_path}")
             summary_rows.append(("Credentials", f"removed ({cred_path})"))
         else:
+            print_step(f"Kept credentials at {cred_path}")
             summary_rows.append(("Credentials", f"kept ({cred_path})"))
 
     resp = _prompt(f"Remove the '{MARKETPLACE_NAME}' marketplace entry too?", default="n")

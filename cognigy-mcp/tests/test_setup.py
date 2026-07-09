@@ -563,6 +563,53 @@ def test_run_uninstall_deletes_credentials_on_confirmation(tmp_path):
     assert not env_path.exists()
 
 
+def test_run_uninstall_prints_credential_confirmation_before_later_step_failure(tmp_path, capsys):
+    """The credentials branch must print its own confirmation immediately,
+    not only via the final print_summary — a later step (e.g. marketplace
+    removal) raising StepFailure must not swallow it. Regression guard for
+    PR #189 review finding 1.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    args = type("Args", (), {"verbose": False})()
+    env_path = tmp_path / ".env"
+    env_path.write_text("COGNIGY_API_KEY=secret\n")
+    desktop_path = tmp_path / "claude_desktop_config.json"
+
+    failure = StepFailure("Removing marketplace entry", SubprocessResult(returncode=1, stdout="", stderr="boom"))
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "marketplace"]:
+            raise failure
+        return None
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="y"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+        with pytest.raises(StepFailure):
+            _run_uninstall(args)
+
+    assert not env_path.exists()
+    out = capsys.readouterr().out
+    assert "Removed credentials" in out
+    assert ".env" in out
+
+
+def test_run_uninstall_prints_header(tmp_path, capsys):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {"verbose": False})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    assert "cognigy-vibe uninstall" in capsys.readouterr().out
+
+
 def test_run_uninstall_does_not_remove_marketplace_by_default(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
     args = type("Args", (), {"verbose": False})()
