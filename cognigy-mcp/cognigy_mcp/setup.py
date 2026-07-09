@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import stat
-import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -454,19 +453,24 @@ def _run_uninstall(args) -> None:
         print("cognigy-vibe is not installed. Nothing to do.")
         return
 
+    summary_rows: list[tuple[str, str]] = []
+
     if has_plugin:
-        print(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})...")
-        subprocess.run(
+        print_step(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})")
+        run_subprocess(
             ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", state.plugin_scope],
-            check=True,
+            "Uninstalling plugin",
+            verbose=args.verbose,
         )
+        summary_rows.append(("Plugin", f"uninstalled (was scope: {state.plugin_scope})"))
 
     if has_desktop_entry:
-        print(f"Removing Desktop config entry at {desktop_path}...")
+        print_step(f"Removing Desktop config entry at {desktop_path}")
         del desktop_config["mcpServers"][MARKETPLACE_NAME]
         desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
         if sys.platform != "win32":
             desktop_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        summary_rows.append(("Desktop config", "entry removed"))
 
     cred_paths = [USER_ENV_PATH]
     if state.plugin_scope in ("project", "local"):
@@ -480,13 +484,20 @@ def _run_uninstall(args) -> None:
         resp = _prompt(f"Delete credentials at {cred_path}?", default="n")
         if resp.lower() in ("y", "yes"):
             cred_path.unlink()
-            print("Credentials removed.")
+            summary_rows.append(("Credentials", f"removed ({cred_path})"))
         else:
-            print("Keeping credentials.")
+            summary_rows.append(("Credentials", f"kept ({cred_path})"))
 
     resp = _prompt(f"Remove the '{MARKETPLACE_NAME}' marketplace entry too?", default="n")
     if resp.lower() in ("y", "yes"):
-        subprocess.run(["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME], check=True)
-        print("Marketplace entry removed.")
+        print_step(f"Removing '{MARKETPLACE_NAME}' marketplace entry")
+        run_subprocess(
+            ["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME],
+            "Removing marketplace entry",
+            verbose=args.verbose,
+        )
+        summary_rows.append(("Marketplace entry", "removed"))
+    else:
+        summary_rows.append(("Marketplace entry", "kept"))
 
-    print("\nUninstall complete.")
+    print_summary(summary_rows)
