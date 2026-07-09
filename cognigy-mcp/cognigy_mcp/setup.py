@@ -408,10 +408,18 @@ def _run_uninstall(args) -> None:
         del desktop_config["mcpServers"][MARKETPLACE_NAME]
         desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
 
-    if USER_ENV_PATH.exists():
-        resp = _prompt(f"Delete credentials at {USER_ENV_PATH}?", default="n")
+    cred_paths = [USER_ENV_PATH]
+    if state.plugin_scope in ("project", "local"):
+        cred_paths.append(Path.cwd() / ".env")
+
+    seen: set[Path] = set()
+    for cred_path in cred_paths:
+        if cred_path in seen or not cred_path.exists():
+            continue
+        seen.add(cred_path)
+        resp = _prompt(f"Delete credentials at {cred_path}?", default="n")
         if resp.lower() in ("y", "yes"):
-            USER_ENV_PATH.unlink()
+            cred_path.unlink()
             print("Credentials removed.")
         else:
             print("Keeping credentials.")

@@ -440,6 +440,33 @@ def test_run_uninstall_does_not_remove_marketplace_by_default(tmp_path):
     assert marketplace_calls == []
 
 
+def test_run_uninstall_prompts_for_project_scope_credentials(tmp_path, monkeypatch):
+    """A project/local-scope install writes credentials to Path.cwd()/.env,
+    not USER_ENV_PATH. Uninstall must detect and prompt for that path too.
+    Regression guard for PR #186 review finding 2.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+
+    monkeypatch.chdir(tmp_path)
+    project_env_path = tmp_path / ".env"
+    project_env_path.write_text("COGNIGY_API_KEY=secret\n")
+
+    user_env_path = tmp_path / "user-home" / ".env"  # does not exist
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    args = type("Args", (), {})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="project")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", user_env_path), \
+         patch("builtins.input", return_value="n") as mock_input, \
+         patch("subprocess.run"):
+        _run_uninstall(args)
+
+    prompted_paths = [str(call.args[0]) for call in mock_input.call_args_list]
+    assert any(str(project_env_path) in p for p in prompted_paths)
+    assert project_env_path.exists()  # user said no, credentials survive
+
+
 def test_run_uninstall_desktop_only_removes_entry_without_plugin_call(tmp_path):
     """Desktop-only installs (plugin_scope=None) must still be detected and cleaned up.
 
