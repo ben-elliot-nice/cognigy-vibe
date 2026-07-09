@@ -376,7 +376,7 @@ def _run_update(args) -> None:
     if drift_issues:
         apply_fixes(drift_issues, state)
         print("\nFixed local drift.")
-    sys.exit(0)
+    sys.exit(0 if state.package_version == latest else 1)
 
 
 def _run_uninstall(args) -> None:
