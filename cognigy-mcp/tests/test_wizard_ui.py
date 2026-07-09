@@ -43,3 +43,62 @@ def test_run_subprocess_verbose_does_not_raise_on_success():
     with patch("subprocess.run", return_value=_mock_completed_process(0, "line1\nline2", "")):
         result = run_subprocess(["echo", "hi"], "Running echo", verbose=True)
     assert result.stdout == "line1\nline2"
+
+
+def test_print_header_renders_without_raising():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        wizard_ui.print_header("cognigy-vibe setup wizard")
+    output = test_console.export_text()
+    assert "cognigy-vibe setup wizard" in output
+
+
+def test_print_section_renders_without_raising():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        wizard_ui.print_section(1, "Mode")
+    output = test_console.export_text()
+    assert "Mode" in output
+
+
+def test_print_summary_renders_rows():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        wizard_ui.print_summary([("Credentials", "/home/user/.config/cognigy-vibe/.env")])
+    output = test_console.export_text()
+    assert "Credentials" in output
+    assert "cognigy-vibe" in output
+
+
+def test_print_error_panel_hides_traceback_by_default():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError as exc:
+            wizard_ui.print_error_panel("Setup failed.", exc, debug=False)
+    output = test_console.export_text()
+    assert "Setup failed." in output
+    assert "Traceback" not in output
+
+
+def test_print_error_panel_shows_traceback_when_debug():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError as exc:
+            wizard_ui.print_error_panel("Setup failed.", exc, debug=True)
+    output = test_console.export_text()
+    assert "Traceback" in output
+    assert "boom" in output

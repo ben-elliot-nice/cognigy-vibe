@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import subprocess
+import traceback
 from dataclasses import dataclass
 
 from rich.console import Console
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.table import Table
 
 console = Console()
 
@@ -39,3 +43,32 @@ def run_subprocess(cmd: list[str], description: str, verbose: bool = False) -> S
         raise StepFailure(description, result)
     console.print(f"[green]✓[/green] {description}")
     return result
+
+
+def print_header(text: str) -> None:
+    console.print()
+    console.print(Panel(text, style="bold cyan"))
+
+
+def print_section(number: int, title: str) -> None:
+    console.print()
+    console.print(Rule(f"[bold]{number}. {title}[/bold]", style="cyan"))
+
+
+def print_summary(rows: list[tuple[str, str]]) -> None:
+    table = Table(show_header=False, box=None)
+    table.add_column(style="bold")
+    table.add_column()
+    for label, value in rows:
+        table.add_row(label, value)
+    console.print()
+    console.print(Panel(table, title="Summary", border_style="green"))
+
+
+def print_error_panel(message: str, exc: Exception, debug: bool = False) -> None:
+    body = message
+    if debug:
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        body = f"{message}\n\n{tb}"
+    console.print()
+    console.print(Panel(body, title="Setup failed", border_style="red"))
