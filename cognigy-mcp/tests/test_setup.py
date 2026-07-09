@@ -736,3 +736,25 @@ def test_main_status_command_propagates_system_exit_unchanged():
         main()
     assert exc_info.value.code == 0
     mock_panel.assert_not_called()
+
+
+def test_run_status_prints_header(capsys):
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": False, "verbose": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()):
+        with pytest.raises(SystemExit):
+            _run_status(args)
+    assert "cognigy-vibe status" in capsys.readouterr().out
+
+
+def test_run_update_prints_header(monkeypatch):
+    from cognigy_mcp.setup import _run_update
+    import io, contextlib
+    args = type("Args", (), {"check": False, "verbose": False})()
+    buf = io.StringIO()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"):
+        with contextlib.redirect_stdout(buf):
+            with pytest.raises(SystemExit):
+                _run_update(args)
+    assert "cognigy-vibe update" in buf.getvalue()

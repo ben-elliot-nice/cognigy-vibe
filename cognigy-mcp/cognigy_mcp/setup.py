@@ -9,7 +9,15 @@ import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from cognigy_mcp.config import USER_ENV_PATH
-from cognigy_mcp.wizard_ui import run_subprocess, print_header, print_section, print_summary, print_error_panel
+from cognigy_mcp.wizard_ui import (
+    run_subprocess,
+    print_header,
+    print_section,
+    print_summary,
+    print_error_panel,
+    print_drift_table,
+    print_step,
+)
 
 
 def get_desktop_config_path() -> Path:
@@ -341,9 +349,9 @@ def _run_install(args) -> None:
         print("After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
 
 
-def _print_state_table(state, issues) -> None:
+def _drift_table_rows(state, issues) -> list[tuple[str, str, str, str]]:
     from cognigy_mcp.config import CONFIG_SCHEMA_VERSION
-    rows = [
+    surfaces = [
         ("package_version", state.package_version, state.package_version),
         ("marketplace_ref", state.marketplace_ref, f"v{state.package_version}"),
         ("plugin_version", state.plugin_version, state.package_version),
@@ -351,18 +359,20 @@ def _print_state_table(state, issues) -> None:
         ("layout_schema_version", state.layout_schema_version, CONFIG_SCHEMA_VERSION),
     ]
     issue_map = {issue.surface: issue for issue in issues}
-    print(f"{'surface':<24}{'current':<18}{'expected':<12}status")
-    for surface, current, expected in rows:
+    rows = []
+    for surface, current, expected in surfaces:
         issue = issue_map.get(surface)
         status = issue.kind if issue else "ok"
-        print(f"{surface:<24}{str(current):<18}{str(expected):<12}{status}")
+        rows.append((surface, str(current), str(expected), status))
+    return rows
 
 
 def _run_status(args) -> None:
     from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes
+    print_header("cognigy-vibe status")
     state = gather_state()
     issues = diff_state(state)
-    _print_state_table(state, issues)
+    print_drift_table(_drift_table_rows(state, issues))
     drift_issues = [issue for issue in issues if issue.kind == "drift"]
 
     if args.fix:
@@ -378,6 +388,7 @@ def _run_update(args) -> None:
     import shutil
     from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes, check_pypi_latest
 
+    print_header("cognigy-vibe update")
     state = gather_state()
 
     try:
@@ -405,7 +416,7 @@ def _run_update(args) -> None:
 
     issues = diff_state(state)
     drift_issues = [issue for issue in issues if issue.kind == "drift"]
-    _print_state_table(state, issues)
+    print_drift_table(_drift_table_rows(state, issues))
 
     if args.check:
         if state.package_version != latest:
