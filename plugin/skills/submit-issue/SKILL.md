@@ -68,7 +68,7 @@ If `which gh` succeeded, run:
 
 ```bash
 gh issue create \
-  --repo ben-elliot-nice/cognigy-claude-plugin \
+  --repo ben-elliot-nice/cognigy-vibe \
   --label "bug" \
   --label "pending release" \
   --milestone "1.7.0" \
@@ -92,7 +92,7 @@ If `which gh` failed, tell the user:
 
 `gh` CLI is not installed. To file this issue manually:
 
-1. Open: https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/new
+1. Open: https://github.com/ben-elliot-nice/cognigy-vibe/issues/new
 
 2. Copy and paste this title:
 

@@ -129,7 +129,7 @@ def test_install_plugin_calls_claude_cli():
         install_plugin("user")
         assert mock_run.call_count == 2
         mock_run.assert_any_call(
-            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-vibe@v1.7.0"],
             "Adding marketplace",
             verbose=False,
         )
@@ -147,7 +147,7 @@ def test_install_plugin_version_pins_prerelease():
          patch("cognigy_mcp.setup.run_subprocess") as mock_run:
         install_plugin("project")
         mock_run.assert_any_call(
-            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0rc8"],
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-vibe@v1.7.0rc8"],
             "Adding marketplace",
             verbose=False,
         )
@@ -160,7 +160,7 @@ def test_install_plugin_passes_verbose_through():
          patch("cognigy_mcp.setup.run_subprocess") as mock_run:
         install_plugin("user", verbose=True)
         mock_run.assert_any_call(
-            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-claude-plugin@v1.7.0"],
+            ["claude", "plugin", "marketplace", "add", "ben-elliot-nice/cognigy-vibe@v1.7.0"],
             "Adding marketplace",
             verbose=True,
         )

@@ -2,7 +2,7 @@
 
 A local Python MCP server for building Cognigy AI agent demos with Claude Code. Covers the full Cognigy REST API surface — node creation, flow inspection, code push with conflict detection, session testing, and a 20-topic reference library.
 
-Part of the [cognigy-claude-plugin](https://github.com/ben-elliot-nice/cognigy-claude-plugin) — this package is the MCP server; the plugin repo also ships the Claude Code skills that drive it.
+Part of the [cognigy-vibe](https://github.com/ben-elliot-nice/cognigy-vibe) repo — this package is the MCP server; the plugin repo also ships the Claude Code skills that drive it.
 
 ## Installation
 
@@ -148,8 +148,8 @@ Topics are front-loaded in the tool description — no tool call needed to see w
 ## Development
 
 ```bash
-git clone https://github.com/ben-elliot-nice/cognigy-claude-plugin
-cd cognigy-claude-plugin/cognigy-vibe-mcp
+git clone https://github.com/ben-elliot-nice/cognigy-vibe
+cd cognigy-vibe/cognigy-vibe-mcp
 uv sync --extra dev
 uv run pytest tests/ -v
 ```

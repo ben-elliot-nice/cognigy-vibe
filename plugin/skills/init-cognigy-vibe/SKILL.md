@@ -85,7 +85,7 @@ If the user's region is not one of the above (e.g. a self-hosted or EU tenant), 
 
 Do not present a pre-selected default. Do not ask the user to type or paste a UUID.
 
-> **Note:** TTS/STT connection discovery is not yet supported — enter connection labels and voice IDs as shown in Cognigy UI → Settings → Connections, via plaintext prompt only. Automated discovery via the VoiceGateway API is tracked in [issue #172](https://github.com/ben-elliot-nice/cognigy-claude-plugin/issues/172) (targeted for 2.0.0).
+> **Note:** TTS/STT connection discovery is not yet supported — enter connection labels and voice IDs as shown in Cognigy UI → Settings → Connections, via plaintext prompt only. Automated discovery via the VoiceGateway API is tracked in [issue #172](https://github.com/ben-elliot-nice/cognigy-vibe/issues/172) (targeted for 2.0.0).
 
 ### 5. Write the files
 
