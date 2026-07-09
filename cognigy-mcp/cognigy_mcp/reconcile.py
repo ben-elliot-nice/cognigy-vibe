@@ -141,7 +141,11 @@ def apply_fixes(issues: list[DriftIssue], state: SetupState) -> None:
     drift_surfaces = {issue.surface for issue in issues if issue.kind == "drift"}
 
     if "marketplace_ref" in drift_surfaces or "plugin_version" in drift_surfaces:
-        install_plugin(state.plugin_scope or "user")
+        assert state.plugin_scope is not None, (
+            "plugin_scope is None but marketplace_ref/plugin_version drifted — "
+            "gather_state() should never produce this combination"
+        )
+        install_plugin(state.plugin_scope)
 
     if "desktop_pin" in drift_surfaces:
         path = get_desktop_config_path()

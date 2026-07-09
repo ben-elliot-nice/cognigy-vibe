@@ -201,6 +201,26 @@ def test_apply_fixes_never_touches_missing_surfaces(tmp_path):
     mock_install.assert_not_called()
 
 
+def test_apply_fixes_asserts_when_plugin_version_drift_has_no_scope():
+    """gather_state() should never produce plugin_version/marketplace_ref drift
+    paired with plugin_scope=None, since _read_plugin_install() reads both
+    from the same claude plugin list entry. If this invariant is ever
+    violated, fail loudly instead of silently defaulting to scope "user".
+    Regression guard for issue #185 fix 3.
+    """
+    state = _aligned_state(plugin_scope=None)
+    issues = [DriftIssue("plugin_version", "1.6.0", "1.7.0", "drift")]
+    with pytest.raises(AssertionError):
+        apply_fixes(issues, state)
+
+
+def test_apply_fixes_asserts_when_marketplace_ref_drift_has_no_scope():
+    state = _aligned_state(plugin_scope=None)
+    issues = [DriftIssue("marketplace_ref", "v1.6.0", "v1.7.0", "drift")]
+    with pytest.raises(AssertionError):
+        apply_fixes(issues, state)
+
+
 def test_check_pypi_latest_returns_version_string():
     with respx.mock:
         respx.get("https://pypi.org/pypi/cognigy-vibe-mcp/json").mock(
