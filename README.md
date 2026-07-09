@@ -15,7 +15,7 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ### Recommended — all users
 
-Run the setup wizard. It installs `uv` if needed, installs the plugin, and optionally configures your Cognigy credentials for Claude Code and/or Claude Desktop.
+Run the setup wizard. It installs `uv` if needed, then installs and configures the plugin.
 
 **Mac / Linux:**
 ```bash
@@ -32,14 +32,37 @@ bash plugin/bin/cognigy-setup.sh
 powershell -ExecutionPolicy Bypass -File plugin\bin\cognigy-setup.ps1
 ```
 
-**Wizard defaults:** installs + configures, both Claude Code and Desktop (if Desktop is detected), user scope.
+> **[SCREENSHOT: terminal running the setup wizard, showing the mode/client/scope selection prompts with rich-styled section headers]**
 
-**Wizard options (pass as flags):**
+Both scripts forward all arguments to the `cognigy-vibe-setup` console command, which supports four subcommands:
+
+| Command | Network | Mutates | Purpose |
+|---|---|---|---|
+| `cognigy-vibe-setup` / `cognigy-vibe-setup install` | No | Yes | Fresh install — the wizard above |
+| `cognigy-vibe-setup status` | No | No | Report drift between the installed package, marketplace pin, plugin version, and Desktop config pin |
+| `cognigy-vibe-setup status --fix` | No | Yes | Same check, applies fixes; never touches PyPI or upgrades the package |
+| `cognigy-vibe-setup update` | Yes | Yes | Check PyPI for a newer version, upgrade if stale, then reconcile the same surfaces as `status --fix` |
+| `cognigy-vibe-setup update --check` | Yes | No | Dry-run of `update` — reports drift, changes nothing |
+| `cognigy-vibe-setup uninstall` | No | Yes | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials |
+
+**Install-time options (pass as flags to `install`):**
 - `--install-only` — skip credential collection
 - `--client code|desktop|both`
 - `--scope user|project|local`
 
-After setup, open Claude Code or restart Claude Desktop. On the first tool call you will be prompted through onboarding.
+**Any subcommand:**
+- `--verbose` — show subprocess output inline instead of behind a spinner, and print a full traceback on failure
+
+Example, from a cloned repo:
+```bash
+bash plugin/bin/cognigy-setup.sh status
+bash plugin/bin/cognigy-setup.sh update --check
+bash plugin/bin/cognigy-setup.sh uninstall
+```
+
+> **[SCREENSHOT: terminal showing the summary box printed at the end of a successful install — credential path, plugin scope, Desktop config path]**
+
+After install, open Claude Code or restart Claude Desktop. On the first tool call you will be prompted through onboarding.
 
 ---
 
