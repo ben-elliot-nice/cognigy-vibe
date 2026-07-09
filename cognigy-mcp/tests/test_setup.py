@@ -496,6 +496,33 @@ def test_run_uninstall_desktop_only_removes_entry_without_plugin_call(tmp_path):
     assert "cognigy-vibe" not in data.get("mcpServers", {})
 
 
+def test_run_uninstall_degrades_gracefully_on_malformed_desktop_config(tmp_path, capsys):
+    """A malformed/hand-edited Desktop config must not crash uninstall.
+    Matches how reconcile._read_desktop_pin() already degrades gracefully
+    on the same file. Regression guard for PR #186 review finding 3.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text("not json")
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    out = capsys.readouterr().out
+    assert "warning" in out.lower()
+    assert str(desktop_path) in out
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
+        check=True,
+    )
+
+
 def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys):
     from cognigy_mcp.setup import _run_uninstall
     args = type("Args", (), {})()

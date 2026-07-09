@@ -387,8 +387,13 @@ def _run_uninstall(args) -> None:
     desktop_config: dict = {}
     has_desktop_entry = False
     if desktop_path.exists():
-        desktop_config = json.loads(desktop_path.read_text())
-        has_desktop_entry = MARKETPLACE_NAME in desktop_config.get("mcpServers", {})
+        try:
+            desktop_config = json.loads(desktop_path.read_text())
+            has_desktop_entry = MARKETPLACE_NAME in desktop_config.get("mcpServers", {})
+        except (json.JSONDecodeError, OSError):
+            print(f"  Warning: could not read Desktop config at {desktop_path}, skipping Desktop cleanup.")
+            desktop_config = {}
+            has_desktop_entry = False
 
     has_plugin = state.plugin_scope is not None
 
