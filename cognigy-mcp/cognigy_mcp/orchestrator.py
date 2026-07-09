@@ -108,20 +108,13 @@ class _Orchestrator:
     def _spawn(self) -> subprocess.Popen:
         for key in _ENV_KEYS:
             os.environ.pop(key, None)
-        # Cascade: load user-scope as a base, then let project .env override
-        # any keys it defines. This lets project .env win on shared keys
-        # (e.g. COGNIGY_API_KEY) while still inheriting keys only set at
-        # user-scope (e.g. COGNIGY_PROJECT_ID) when the project file omits them.
-        loaded_from = []
-        if USER_ENV_PATH.exists():
-            load_dotenv(dotenv_path=USER_ENV_PATH, override=True)
-            loaded_from.append(str(USER_ENV_PATH))
         project_env = Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env"
         if project_env.exists():
             load_dotenv(dotenv_path=project_env, override=True)
-            loaded_from.append(str(project_env))
-        if loaded_from:
-            _log(f"_spawn: loaded env cascade {loaded_from} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
+            _log(f"_spawn: loaded project env {project_env} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
+        elif USER_ENV_PATH.exists():
+            load_dotenv(dotenv_path=USER_ENV_PATH, override=True)
+            _log(f"_spawn: loaded user-scope env {USER_ENV_PATH} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
         else:
             _log("_spawn: no .env found — starting in degraded mode")
         mode = _detect_mode()
