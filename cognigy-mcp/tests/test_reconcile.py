@@ -92,6 +92,38 @@ def test_gather_state_soft_fails_absent_surfaces(tmp_path):
     assert state.layout_schema_version is None
 
 
+def test_read_marketplace_ref_returns_none_when_cli_returns_json_null():
+    """gather_state()'s marketplace read must degrade gracefully, not raise,
+    when the CLI returns valid-but-unexpected JSON (null instead of a list).
+    Regression guard for PR #186 review finding 1.
+    """
+    from cognigy_mcp.reconcile import _read_marketplace_ref
+
+    def _run(cmd, **kwargs):
+        result = MagicMock()
+        result.stdout = "null"
+        return result
+
+    with patch("subprocess.run", side_effect=_run):
+        assert _read_marketplace_ref() is None
+
+
+def test_read_plugin_install_returns_none_tuple_when_entry_is_not_a_dict():
+    """gather_state()'s plugin read must degrade gracefully, not raise,
+    when the CLI returns a JSON list containing a non-dict item.
+    Regression guard for PR #186 review finding 1.
+    """
+    from cognigy_mcp.reconcile import _read_plugin_install
+
+    def _run(cmd, **kwargs):
+        result = MagicMock()
+        result.stdout = json.dumps(["not-a-dict"])
+        return result
+
+    with patch("subprocess.run", side_effect=_run):
+        assert _read_plugin_install() == (None, None)
+
+
 def test_gather_state_handles_malformed_json_from_claude_cli(tmp_path):
     desktop_path = tmp_path / "claude_desktop_config.json"
     meta_path = tmp_path / ".setup-meta.json"

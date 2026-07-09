@@ -41,11 +41,11 @@ def _read_marketplace_ref() -> str | None:
             check=True, capture_output=True, text=True,
         )
         entries = json.loads(result.stdout)
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError, TypeError):
+        for entry in entries:
+            if entry.get("name") == MARKETPLACE_NAME:
+                return entry.get("ref")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError, TypeError, AttributeError):
         return None
-    for entry in entries:
-        if entry.get("name") == MARKETPLACE_NAME:
-            return entry.get("ref")
     return None
 
 
@@ -56,11 +56,11 @@ def _read_plugin_install() -> tuple[str | None, str | None]:
             check=True, capture_output=True, text=True,
         )
         entries = json.loads(result.stdout)
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError, TypeError):
+        for entry in entries:
+            if entry.get("id") == PLUGIN_ID:
+                return entry.get("version"), entry.get("scope")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError, TypeError, AttributeError):
         return None, None
-    for entry in entries:
-        if entry.get("id") == PLUGIN_ID:
-            return entry.get("version"), entry.get("scope")
     return None, None
 
 
