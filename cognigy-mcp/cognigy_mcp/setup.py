@@ -132,34 +132,72 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     return value or default
 
 
+_LEGACY_INSTALL_FLAGS = {"--install-only", "--client", "--scope"}
+
+
 def _parse_args() -> "argparse.Namespace":
     import argparse
+    argv = sys.argv[1:]
+    if not argv or argv[0] in _LEGACY_INSTALL_FLAGS:
+        argv = ["install"] + argv
+
     parser = argparse.ArgumentParser(
         prog="cognigy-vibe-setup",
-        description="Install and configure the cognigy-vibe plugin.",
+        description="Install, update, check, or uninstall the cognigy-vibe plugin.",
     )
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    install_p = sub.add_parser("install", help="Install and configure the plugin (default).")
+    install_p.add_argument(
         "--install-only",
         action="store_true",
         help="Skip credential collection; install plugin only.",
     )
-    parser.add_argument(
+    install_p.add_argument(
         "--client",
         choices=["code", "desktop", "both"],
         default=None,
         help="Which client(s) to configure (default: both if Desktop detected, else code).",
     )
-    parser.add_argument(
+    install_p.add_argument(
         "--scope",
         choices=["user", "project", "local"],
         default=None,
         help="Plugin install scope for Claude Code (default: user).",
     )
-    return parser.parse_args()
+
+    status_p = sub.add_parser("status", help="Report drift across install-related surfaces.")
+    status_p.add_argument(
+        "--fix",
+        action="store_true",
+        help="Apply fixes for any drift found. Never touches PyPI or upgrades the package.",
+    )
+
+    update_p = sub.add_parser("update", help="Check PyPI, upgrade if stale, and reconcile drift.")
+    update_p.add_argument(
+        "--check",
+        action="store_true",
+        help="Report what update would do without changing anything.",
+    )
+
+    sub.add_parser("uninstall", help="Remove the plugin, Desktop config entry, and optionally credentials.")
+
+    return parser.parse_args(argv)
 
 
 def main() -> None:
     args = _parse_args()
+    if args.command == "install":
+        _run_install(args)
+    elif args.command == "status":
+        _run_status(args)
+    elif args.command == "update":
+        _run_update(args)
+    elif args.command == "uninstall":
+        _run_uninstall(args)
+
+
+def _run_install(args) -> None:
     print("\ncognigy-vibe setup wizard\n")
 
     # 1. Mode (flag or prompt)
@@ -262,3 +300,140 @@ def main() -> None:
         print("  Note: the Desktop entry is pinned to the version installed today.")
         print("  After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
     print()
+
+
+def _print_state_table(state, issues) -> None:
+    from cognigy_mcp.config import CONFIG_SCHEMA_VERSION
+    rows = [
+        ("package_version", state.package_version, state.package_version),
+        ("marketplace_ref", state.marketplace_ref, f"v{state.package_version}"),
+        ("plugin_version", state.plugin_version, state.package_version),
+        ("desktop_pin", state.desktop_pin, state.package_version),
+        ("layout_schema_version", state.layout_schema_version, CONFIG_SCHEMA_VERSION),
+    ]
+    issue_map = {issue.surface: issue for issue in issues}
+    print(f"{'surface':<24}{'current':<18}{'expected':<12}status")
+    for surface, current, expected in rows:
+        issue = issue_map.get(surface)
+        status = issue.kind if issue else "ok"
+        print(f"{surface:<24}{str(current):<18}{str(expected):<12}{status}")
+
+
+def _run_status(args) -> None:
+    from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes
+    state = gather_state()
+    issues = diff_state(state)
+    _print_state_table(state, issues)
+    drift_issues = [issue for issue in issues if issue.kind == "drift"]
+
+    if args.fix:
+        if drift_issues:
+            apply_fixes(drift_issues, state)
+            print("\nFixed drift.")
+        sys.exit(0)
+
+    sys.exit(1 if drift_issues else 0)
+
+
+def _run_update(args) -> None:
+    import shutil
+    from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes, check_pypi_latest
+
+    state = gather_state()
+
+    try:
+        latest = check_pypi_latest("cognigy-vibe-mcp")
+    except Exception:
+        print(
+            "Could not reach PyPI to check for updates. "
+            "Run 'cognigy-vibe-setup status --fix' to reconcile local state without a version check.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if state.package_version == latest:
+        print(f"Already at latest ({latest}).")
+    elif not args.check:
+        if shutil.which("uv"):
+            print(f"Upgrading cognigy-vibe-mcp: {state.package_version} -> {latest}...")
+            subprocess.run(["uv", "tool", "upgrade", "cognigy-vibe-mcp"], check=True)
+        else:
+            print(
+                f"uv not found on PATH. Upgrade manually, then re-run: "
+                f"uv tool install cognigy-vibe-mcp=={latest} --force"
+            )
+        state = gather_state()
+
+    issues = diff_state(state)
+    drift_issues = [issue for issue in issues if issue.kind == "drift"]
+    _print_state_table(state, issues)
+
+    if args.check:
+        if state.package_version != latest:
+            print(f"\nPyPI has {latest}; installed is {state.package_version}.")
+        sys.exit(1 if (drift_issues or state.package_version != latest) else 0)
+
+    if drift_issues:
+        apply_fixes(drift_issues, state)
+        print("\nFixed local drift.")
+    sys.exit(0 if state.package_version == latest else 1)
+
+
+def _run_uninstall(args) -> None:
+    from cognigy_mcp.reconcile import gather_state, PLUGIN_ID, MARKETPLACE_NAME
+
+    state = gather_state()
+    desktop_path = get_desktop_config_path()
+    desktop_config: dict = {}
+    has_desktop_entry = False
+    if desktop_path.exists():
+        try:
+            desktop_config = json.loads(desktop_path.read_text())
+            has_desktop_entry = MARKETPLACE_NAME in desktop_config.get("mcpServers", {})
+        except (json.JSONDecodeError, OSError):
+            print(f"  Warning: could not read Desktop config at {desktop_path}, skipping Desktop cleanup.")
+            desktop_config = {}
+            has_desktop_entry = False
+
+    has_plugin = state.plugin_scope is not None
+
+    if not has_plugin and not has_desktop_entry:
+        print("cognigy-vibe is not installed. Nothing to do.")
+        return
+
+    if has_plugin:
+        print(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})...")
+        subprocess.run(
+            ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", state.plugin_scope],
+            check=True,
+        )
+
+    if has_desktop_entry:
+        print(f"Removing Desktop config entry at {desktop_path}...")
+        del desktop_config["mcpServers"][MARKETPLACE_NAME]
+        desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
+        if sys.platform != "win32":
+            desktop_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+    cred_paths = [USER_ENV_PATH]
+    if state.plugin_scope in ("project", "local"):
+        cred_paths.append(Path.cwd() / ".env")
+
+    seen: set[Path] = set()
+    for cred_path in cred_paths:
+        if cred_path in seen or not cred_path.exists():
+            continue
+        seen.add(cred_path)
+        resp = _prompt(f"Delete credentials at {cred_path}?", default="n")
+        if resp.lower() in ("y", "yes"):
+            cred_path.unlink()
+            print("Credentials removed.")
+        else:
+            print("Keeping credentials.")
+
+    resp = _prompt(f"Remove the '{MARKETPLACE_NAME}' marketplace entry too?", default="n")
+    if resp.lower() in ("y", "yes"):
+        subprocess.run(["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME], check=True)
+        print("Marketplace entry removed.")
+
+    print("\nUninstall complete.")
