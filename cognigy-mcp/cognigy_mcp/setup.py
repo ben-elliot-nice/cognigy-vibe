@@ -151,13 +151,22 @@ def _parse_args() -> "argparse.Namespace":
     if not argv or argv[0] in _BARE_FLAGS_IMPLYING_INSTALL:
         argv = ["install"] + argv
 
+    verbose_parent = argparse.ArgumentParser(add_help=False)
+    verbose_parent.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show captured subprocess output and full tracebacks on failure.",
+    )
+
     parser = argparse.ArgumentParser(
         prog="cognigy-vibe-setup",
         description="Install, update, check, or uninstall the cognigy-vibe plugin.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    install_p = sub.add_parser("install", help="Install and configure the plugin (default).")
+    install_p = sub.add_parser(
+        "install", help="Install and configure the plugin (default).", parents=[verbose_parent]
+    )
     install_p.add_argument(
         "--install-only",
         action="store_true",
@@ -175,41 +184,29 @@ def _parse_args() -> "argparse.Namespace":
         default=None,
         help="Plugin install scope for Claude Code (default: user).",
     )
-    install_p.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show captured subprocess output and full tracebacks on failure.",
-    )
 
-    status_p = sub.add_parser("status", help="Report drift across install-related surfaces.")
+    status_p = sub.add_parser(
+        "status", help="Report drift across install-related surfaces.", parents=[verbose_parent]
+    )
     status_p.add_argument(
         "--fix",
         action="store_true",
         help="Apply fixes for any drift found. Never touches PyPI or upgrades the package.",
     )
-    status_p.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show captured subprocess output and full tracebacks on failure.",
-    )
 
-    update_p = sub.add_parser("update", help="Check PyPI, upgrade if stale, and reconcile drift.")
+    update_p = sub.add_parser(
+        "update", help="Check PyPI, upgrade if stale, and reconcile drift.", parents=[verbose_parent]
+    )
     update_p.add_argument(
         "--check",
         action="store_true",
         help="Report what update would do without changing anything.",
     )
-    update_p.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show captured subprocess output and full tracebacks on failure.",
-    )
 
-    uninstall_p = sub.add_parser("uninstall", help="Remove the plugin, Desktop config entry, and optionally credentials.")
-    uninstall_p.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show captured subprocess output and full tracebacks on failure.",
+    sub.add_parser(
+        "uninstall",
+        help="Remove the plugin, Desktop config entry, and optionally credentials.",
+        parents=[verbose_parent],
     )
 
     return parser.parse_args(argv)
@@ -217,24 +214,19 @@ def _parse_args() -> "argparse.Namespace":
 
 def main() -> None:
     args = _parse_args()
-    runners = {
-        "install": _run_install,
-        "status": _run_status,
-        "update": _run_update,
-        "uninstall": _run_uninstall,
+    # One entry per command: (runner, failure message) travel together so a new
+    # subcommand can't add a runner while forgetting its error message (or vice versa).
+    commands = {
+        "install": (_run_install, "Setup failed."),
+        "status": (_run_status, "Status failed."),
+        "update": (_run_update, "Update failed."),
+        "uninstall": (_run_uninstall, "Uninstall failed."),
     }
-    failure_messages = {
-        "install": "Setup failed.",
-        "status": "Status failed.",
-        "update": "Update failed.",
-        "uninstall": "Uninstall failed.",
-    }
+    runner, failure_message = commands[args.command]
     try:
-        runners[args.command](args)
-    except KeyboardInterrupt:
-        raise
+        runner(args)
     except Exception as exc:
-        print_error_panel(failure_messages[args.command], exc, debug=args.verbose)
+        print_error_panel(failure_message, exc, debug=args.verbose)
         sys.exit(1)
 
 
@@ -404,6 +396,7 @@ def _run_update(args) -> None:
         print(f"Already at latest ({latest}).")
     elif not args.check:
         if shutil.which("uv"):
+            print(f"Upgrading cognigy-vibe-mcp: {state.package_version} -> {latest}...")
             run_subprocess(
                 ["uv", "tool", "upgrade", "cognigy-vibe-mcp"],
                 "Upgrading cognigy-vibe-mcp",

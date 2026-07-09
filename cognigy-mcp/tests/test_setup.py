@@ -435,6 +435,26 @@ def test_run_update_upgrades_package_when_stale(monkeypatch):
     )
 
 
+def test_run_update_prints_version_transition(monkeypatch, capsys):
+    """The upgrade step must show the old -> new version, not just
+    run_subprocess's bare description. Regression guard for PR #189
+    review finding 1.
+    """
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False, "verbose": False})()
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv")
+    states = iter([_state(package_version="1.6.0"), _state(package_version="1.7.0")])
+    with patch("cognigy_mcp.reconcile.gather_state", side_effect=lambda: next(states)), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.setup.run_subprocess"):
+        with pytest.raises(SystemExit):
+            _run_update(args)
+    out = capsys.readouterr().out
+    assert "1.6.0" in out
+    assert "1.7.0" in out
+    assert "->" in out
+
+
 def test_run_update_upgrade_failure_raises_step_failure(monkeypatch):
     from cognigy_mcp.setup import _run_update
     from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
@@ -604,7 +624,7 @@ def test_run_uninstall_prints_header(tmp_path, capsys):
 
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
          patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
-         patch("subprocess.run") as mock_run:
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
         _run_uninstall(args)
 
     assert "cognigy-vibe uninstall" in capsys.readouterr().out
