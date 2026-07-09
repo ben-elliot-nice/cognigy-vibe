@@ -80,7 +80,7 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 | `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `export_package` |
 | `tools/voice_ops.py` | `provision_webrtc_endpoint` — VoiceGateway webRTC endpoint provisioning with real/dummy Azure Speech connection path |
 | `tools/testing.py` | `talk_to_agent` — REST endpoint test harness |
-| `tools/explain.py` | `explain` — 36-topic in-server reference library |
+| `tools/explain.py` | `explain` — 37-topic in-server reference library |
 | `tools/dev_tools.py` | `reload_mcp` — dev-mode server respawn signal |
 
 ### State storage
