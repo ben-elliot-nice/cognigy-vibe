@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Literal
 
-from cognigy_mcp.config import SETUP_META_PATH
+from cognigy_mcp.config import CONFIG_SCHEMA_VERSION, SETUP_META_PATH
 
 
 @dataclass
@@ -102,3 +102,32 @@ def gather_state() -> SetupState:
         desktop_pin=_read_desktop_pin(),
         layout_schema_version=_read_layout_schema_version(),
     )
+
+
+def diff_state(state: SetupState) -> list[DriftIssue]:
+    issues: list[DriftIssue] = []
+    target = state.package_version
+    expected_ref = f"v{target}"
+
+    if state.marketplace_ref is None:
+        issues.append(DriftIssue("marketplace_ref", None, expected_ref, "missing"))
+    elif state.marketplace_ref != expected_ref:
+        issues.append(DriftIssue("marketplace_ref", state.marketplace_ref, expected_ref, "drift"))
+
+    if state.plugin_version is None:
+        issues.append(DriftIssue("plugin_version", None, target, "missing"))
+    elif state.plugin_version != target:
+        issues.append(DriftIssue("plugin_version", state.plugin_version, target, "drift"))
+
+    if state.desktop_pin is None:
+        issues.append(DriftIssue("desktop_pin", None, target, "missing"))
+    elif state.desktop_pin != target:
+        issues.append(DriftIssue("desktop_pin", state.desktop_pin, target, "drift"))
+
+    expected_schema = str(CONFIG_SCHEMA_VERSION)
+    if state.layout_schema_version is None:
+        issues.append(DriftIssue("layout_schema_version", None, expected_schema, "missing"))
+    elif str(state.layout_schema_version) != expected_schema:
+        issues.append(DriftIssue("layout_schema_version", str(state.layout_schema_version), expected_schema, "drift"))
+
+    return issues

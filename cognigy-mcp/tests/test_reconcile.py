@@ -2,7 +2,7 @@
 import json
 from unittest.mock import patch, MagicMock
 
-from cognigy_mcp.reconcile import SetupState, DriftIssue, gather_state
+from cognigy_mcp.reconcile import SetupState, DriftIssue, gather_state, diff_state
 
 
 def test_setup_state_holds_all_five_surfaces():
@@ -98,3 +98,51 @@ def test_gather_state_handles_malformed_json_from_claude_cli(tmp_path):
 
     assert state.marketplace_ref is None
     assert state.plugin_version is None
+
+
+def _aligned_state(**overrides):
+    base = dict(
+        package_version="1.7.0",
+        marketplace_ref="v1.7.0",
+        plugin_version="1.7.0",
+        plugin_scope="user",
+        desktop_pin="1.7.0",
+        layout_schema_version=1,
+    )
+    base.update(overrides)
+    return SetupState(**base)
+
+
+def test_diff_state_empty_when_everything_aligned():
+    assert diff_state(_aligned_state()) == []
+
+
+def test_diff_state_flags_marketplace_ref_drift():
+    issues = diff_state(_aligned_state(marketplace_ref="v1.6.0"))
+    assert len(issues) == 1
+    assert issues[0].surface == "marketplace_ref"
+    assert issues[0].current == "v1.6.0"
+    assert issues[0].expected == "v1.7.0"
+    assert issues[0].kind == "drift"
+
+
+def test_diff_state_flags_plugin_version_drift():
+    issues = diff_state(_aligned_state(plugin_version="1.6.0"))
+    assert issues == [DriftIssue(surface="plugin_version", current="1.6.0", expected="1.7.0", kind="drift")]
+
+
+def test_diff_state_flags_desktop_pin_drift():
+    issues = diff_state(_aligned_state(desktop_pin="1.6.0"))
+    assert issues == [DriftIssue(surface="desktop_pin", current="1.6.0", expected="1.7.0", kind="drift")]
+
+
+def test_diff_state_flags_layout_schema_drift():
+    issues = diff_state(_aligned_state(layout_schema_version=0))
+    assert issues == [DriftIssue(surface="layout_schema_version", current="0", expected="1", kind="drift")]
+
+
+def test_diff_state_flags_missing_surfaces_not_drift():
+    issues = diff_state(_aligned_state(marketplace_ref=None, plugin_version=None, plugin_scope=None))
+    surfaces = {i.surface: i.kind for i in issues}
+    assert surfaces["marketplace_ref"] == "missing"
+    assert surfaces["plugin_version"] == "missing"
