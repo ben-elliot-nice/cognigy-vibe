@@ -22,8 +22,10 @@ jobs:
 
           CURRENT=$(grep '^version = ' cognigy-vibe-mcp/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           # Fall back to old path on main for the transition from cognigy-mcp/ to cognigy-vibe-mcp/
-          MAIN=$(git show origin/main:cognigy-vibe-mcp/pyproject.toml 2>/dev/null | grep '^version = ' | sed 's/version = "\(.*\)"/\1/' || \
-                 git show origin/main:cognigy-mcp/pyproject.toml 2>/dev/null | grep '^version = ' | sed 's/version = "\(.*\)"/\1/')
+          MAIN=$(git show origin/main:cognigy-vibe-mcp/pyproject.toml 2>/dev/null | grep '^version = ' | sed 's/version = "\(.*\)"/\1/')
+          if [ -z "$MAIN" ]; then
+            MAIN=$(git show origin/main:cognigy-mcp/pyproject.toml 2>/dev/null | grep '^version = ' | sed 's/version = "\(.*\)"/\1/')
+          fi
 
           echo "main:    $MAIN"
           echo "current: $CURRENT"
