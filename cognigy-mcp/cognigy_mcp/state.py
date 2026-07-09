@@ -18,7 +18,25 @@ def _migrate_old_state() -> None:
             shutil.copytree(old, CONFIG_BASE)
             return
 
+
+def _migrate_flat_layout(config_base: Path) -> None:
+    """Move stray top-level project dirs from the pre-#171 flat layout into cache/."""
+    import shutil
+    if not config_base.exists():
+        return
+    cache_base = config_base / "cache"
+    for entry in config_base.iterdir():
+        if not entry.is_dir() or entry.name in ("logs", "cache"):
+            continue
+        dest = cache_base / entry.name
+        if dest.exists():
+            continue
+        cache_base.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(entry), str(dest))
+
+
 _migrate_old_state()
+_migrate_flat_layout(CONFIG_BASE)
 
 
 def _deep_get(d: dict, *keys: str) -> Any:
@@ -55,7 +73,7 @@ class ProjectState:
 
     def _bind(self, project_id: str | None) -> None:
         self.project_id = project_id
-        self.config_dir = CONFIG_BASE / (project_id or ".unscoped")
+        self.config_dir = CONFIG_BASE / "cache" / (project_id or ".unscoped")
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self._state_path = self.config_dir / ".state.json"
         self._seed_path = self.config_dir / ".state-seed.json"
