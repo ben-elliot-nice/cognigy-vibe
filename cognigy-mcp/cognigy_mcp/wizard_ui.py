@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import subprocess
-import traceback
 from dataclasses import dataclass
 
 from rich.console import Console
