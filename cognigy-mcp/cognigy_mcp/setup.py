@@ -405,8 +405,11 @@ def _run_update(args) -> None:
         print(f"Already at latest ({latest}).")
     elif not args.check:
         if shutil.which("uv"):
-            print(f"Upgrading cognigy-vibe-mcp: {state.package_version} -> {latest}...")
-            subprocess.run(["uv", "tool", "upgrade", "cognigy-vibe-mcp"], check=True)
+            run_subprocess(
+                ["uv", "tool", "upgrade", "cognigy-vibe-mcp"],
+                "Upgrading cognigy-vibe-mcp",
+                verbose=args.verbose,
+            )
         else:
             print(
                 f"uv not found on PATH. Upgrade manually, then re-run: "
