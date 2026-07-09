@@ -61,20 +61,20 @@ def test_inner_command_degraded():
 
 
 def test_inner_command_dev(monkeypatch):
-    monkeypatch.setenv("COGNIGY_VIBE_SOURCE_DIR", "/path/to/cognigy-mcp")
+    monkeypatch.setenv("COGNIGY_VIBE_SOURCE_DIR", "/path/to/cognigy-vibe-mcp")
     from cognigy_mcp.orchestrator import _inner_command
     cmd = _inner_command("dev")
-    expected = str(Path("/path/to/cognigy-mcp").resolve())
+    expected = str(Path("/path/to/cognigy-vibe-mcp").resolve())
     assert cmd == ["uv", "run", "--directory", expected, "-m", "cognigy_mcp.server"]
 
 
 def test_inner_command_dev_relative_path_resolved(monkeypatch, tmp_path):
     # Relative COGNIGY_VIBE_SOURCE_DIR (as set by .mcp.json) is resolved against CWD.
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("COGNIGY_VIBE_SOURCE_DIR", "./cognigy-mcp")
+    monkeypatch.setenv("COGNIGY_VIBE_SOURCE_DIR", "./cognigy-vibe-mcp")
     from cognigy_mcp.orchestrator import _inner_command
     cmd = _inner_command("dev")
-    assert cmd == ["uv", "run", "--directory", str(tmp_path / "cognigy-mcp"), "-m", "cognigy_mcp.server"]
+    assert cmd == ["uv", "run", "--directory", str(tmp_path / "cognigy-vibe-mcp"), "-m", "cognigy_mcp.server"]
 
 
 def test_inner_command_dev_missing_source_dir(monkeypatch):

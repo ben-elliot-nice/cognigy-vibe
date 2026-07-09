@@ -5,7 +5,7 @@
       "args": ["cognigy-vibe-mcp"],
       "env": {
         "COGNIGY_VIBE_DEV": "1",
-        "COGNIGY_VIBE_SOURCE_DIR": "./cognigy-mcp"
+        "COGNIGY_VIBE_SOURCE_DIR": "./cognigy-vibe-mcp"
       }
     }
   }

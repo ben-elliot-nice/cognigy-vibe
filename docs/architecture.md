@@ -16,7 +16,7 @@ Cognigy REST API
 
 ## Layer 1: cognigy-vibe MCP Server
 
-**Location:** `cognigy-mcp/`  
+**Location:** `cognigy-vibe-mcp/`  
 **Package:** `cognigy-vibe-mcp` (PyPI)  
 **Install:** `uvx cognigy-vibe-mcp`  
 **Server name (Claude sees):** `cognigy-vibe`
@@ -185,11 +185,11 @@ The onboarding gate fires before any `cognigy-vibe` tool call. On the first call
 
 ## Adding a New MCP Tool
 
-1. Add a `Tool` definition to the relevant module in `cognigy-mcp/cognigy_mcp/tools/`
+1. Add a `Tool` definition to the relevant module in `cognigy-vibe-mcp/cognigy_mcp/tools/`
 2. Add a handler function and register it in `make_handlers()`
-3. Add tests in `cognigy-mcp/tests/tools/`
+3. Add tests in `cognigy-vibe-mcp/tests/tools/`
 4. If it covers new Cognigy API patterns, add an `explain` topic in `explain.py`
-5. Bump the patch version in `cognigy-mcp/pyproject.toml` and `plugin/.claude-plugin/plugin.json`
+5. Bump the patch version in `cognigy-vibe-mcp/pyproject.toml` and `plugin/.claude-plugin/plugin.json`
 
 For new node types, add the type → extension mapping to `_NODE_EXTENSION_MAP` in `flow_ops.py` — no other changes needed.
 

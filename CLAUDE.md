@@ -98,7 +98,7 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 ## Rules
 
 - **Composite skills call atomic MCP tools** (`cognigy_get`, `cognigy_create`, etc.) — never hardcode `npx tsx` CLI calls in a composite skill.
-- **Do not bump versions in `dev` PRs.** CI will reject any PR to `dev` that changes the version in `cognigy-mcp/pyproject.toml` or `plugin/.claude-plugin/plugin.json`. Version bumps are pushed **directly to `dev`** (it is unprotected) as part of initiating a prerelease cycle — not via PR.
+- **Do not bump versions in `dev` PRs.** CI will reject any PR to `dev` that changes the version in `cognigy-vibe-mcp/pyproject.toml` or `plugin/.claude-plugin/plugin.json`. Version bumps are pushed **directly to `dev`** (it is unprotected) as part of initiating a prerelease cycle — not via PR.
 - **Shell commands:** if Claude is constructing the command, run each step as a separate Bash call. If a compound command is explicitly defined in a CLAUDE.md, run it as written.
 
 ## Code Review
@@ -154,7 +154,7 @@ mise trust
 
 Copy `.env.example` to `.env` and fill in your Cognigy credentials — `mise` auto-sources it when you enter the directory. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
 
-`.mcp.json` is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` are baked in. Claude Code picks it up automatically on next start. The server runs from local source (`./cognigy-mcp`) with `reload_mcp` available. After editing source files, call `reload_mcp` — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
+`.mcp.json` is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-vibe-mcp` are baked in. Claude Code picks it up automatically on next start. The server runs from local source (`./cognigy-vibe-mcp`) with `reload_mcp` available. After editing source files, call `reload_mcp` — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
 
 If you are only using the skills (not developing the MCP server), you can opt out of dev mode by adding `COGNIGY_VIBE_DEV=` (empty value) to your `.env` — `load_dotenv` override takes effect on the next spawn.
 
@@ -180,7 +180,7 @@ The following items are tracked but not currently in scope. If you ask Claude to
 
 Prereleases are **not** published automatically on every `dev` push. To cut a prerelease:
 
-1. Bump `cognigy-mcp/pyproject.toml` to the intended next version (e.g. `1.7.0`) — push directly to `dev` (not via PR). `plugin.json` is CI-managed; do not bump it manually.
+1. Bump `cognigy-vibe-mcp/pyproject.toml` to the intended next version (e.g. `1.7.0`) — push directly to `dev` (not via PR). `plugin.json` is CI-managed; do not bump it manually.
 2. Tag and push: `git tag v1.7.0rc1 && git push origin v1.7.0rc1`
 3. CI validates the base version exceeds current stable on PyPI, patches both `pyproject.toml` and `plugin.json` to the full RC version on an ephemeral commit, moves the tag to that commit, then publishes to PyPI. `dev` is not modified.
 

@@ -1,4 +1,4 @@
-# cognigy-mcp/cognigy_mcp/setup.py
+# cognigy-vibe-mcp/cognigy_mcp/setup.py
 from __future__ import annotations
 
 import json

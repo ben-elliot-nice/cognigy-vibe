@@ -88,7 +88,7 @@ The entry point is `cognigy-vibe:build-orchestrator` — a single-batch intervie
 
 ## MCP server — `cognigy-vibe-mcp`
 
-A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README.md)) exposing the Cognigy REST API surface plus a reference library. Install with `uv tool install cognigy-vibe-mcp`.
+A local Python MCP server (full docs: [cognigy-vibe-mcp/README.md](cognigy-vibe-mcp/README.md)) exposing the Cognigy REST API surface plus a reference library. Install with `uv tool install cognigy-vibe-mcp`.
 
 | Tool | Role |
 |---|---|
@@ -104,7 +104,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 | `talk_to_agent` | Drive a live session for smoke testing. |
 | `explain` | Topic reference library (node positioning, say-node schema, xApp events, knowledge store, …). |
 
-> The `cognigy-vibe-mcp` PyPI package is the MCP server only — narrower in scope than this repository, which also contains the Claude Code skills and marketplace manifest that pair with it. See [cognigy-mcp/README.md](cognigy-mcp/README.md) for the server's own docs.
+> The `cognigy-vibe-mcp` PyPI package is the MCP server only — narrower in scope than this repository, which also contains the Claude Code skills and marketplace manifest that pair with it. See [cognigy-vibe-mcp/README.md](cognigy-vibe-mcp/README.md) for the server's own docs.
 
 ---
 
@@ -114,7 +114,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 
 1. `mise trust` (once per clone).
 2. `cp .env.example .env` and fill in your Cognigy credentials.
-3. [`.mcp.json`](.mcp.json) is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` are baked in. Start Claude Code and it picks up local source automatically. See [Local Development Testing](CLAUDE.md#local-development-testing) for details.
+3. [`.mcp.json`](.mcp.json) is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-vibe-mcp` are baked in. Start Claude Code and it picks up local source automatically. See [Local Development Testing](CLAUDE.md#local-development-testing) for details.
 
 ### Contributing
 
@@ -128,7 +128,7 @@ plugin/                           plugin content installed by Claude Code
   .claude-plugin/plugin.json        plugin manifest (name, version)
   bin/                              setup wizard bootstrap scripts (cognigy-setup.sh / .ps1)
   skills/                           one directory per skill, each a SKILL.md
-cognigy-mcp/                      the cognigy-vibe-mcp Python server (+ tests, own README)
+cognigy-vibe-mcp/                 the cognigy-vibe-mcp Python server (+ tests, own README)
 docs/                             plugin-development docs (architecture, design specs)
 scripts/                          explain-topic build tooling
 .githooks/                        pre-commit hook (GitGuardian)

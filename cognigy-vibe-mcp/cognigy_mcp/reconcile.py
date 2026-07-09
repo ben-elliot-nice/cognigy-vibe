@@ -1,4 +1,4 @@
-# cognigy-mcp/cognigy_mcp/reconcile.py
+# cognigy-vibe-mcp/cognigy_mcp/reconcile.py
 from __future__ import annotations
 import json
 import re

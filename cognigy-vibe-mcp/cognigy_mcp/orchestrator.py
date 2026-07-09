@@ -1,4 +1,4 @@
-# cognigy-mcp/cognigy_mcp/orchestrator.py
+# cognigy-vibe-mcp/cognigy_mcp/orchestrator.py
 from __future__ import annotations
 
 import json
@@ -101,7 +101,7 @@ def _inner_command(mode: str) -> list[str]:
         if not source_dir:
             sys.stderr.write("[orchestrator] COGNIGY_VIBE_SOURCE_DIR must be set for dev mode\n")
             sys.exit(1)
-        # Resolve relative paths (e.g. ./cognigy-mcp from .mcp.json) against CWD.
+        # Resolve relative paths (e.g. ./cognigy-vibe-mcp from .mcp.json) against CWD.
         return ["uv", "run", "--directory", str(Path(source_dir).resolve()), "-m", "cognigy_mcp.server"]
     return [sys.executable, "-m", "cognigy_mcp.server"]
 

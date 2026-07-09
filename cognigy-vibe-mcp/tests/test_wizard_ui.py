@@ -1,4 +1,4 @@
-# cognigy-mcp/tests/test_wizard_ui.py
+# cognigy-vibe-mcp/tests/test_wizard_ui.py
 from unittest.mock import patch, MagicMock
 import pytest
 

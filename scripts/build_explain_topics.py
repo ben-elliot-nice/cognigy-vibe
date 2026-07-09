@@ -2,7 +2,7 @@
 """Build explain topics from markdown resource files.
 
 Generates:
-  cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py
+  cognigy-vibe-mcp/cognigy_mcp/tools/_explain_topics_generated.py
   plugin/skills/explain/SKILL.md
 
 Run with: uv run scripts/build_explain_topics.py
@@ -16,7 +16,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 RESOURCES = REPO_ROOT / "plugin" / "skills" / "explain" / "resources"
 TEMPLATE = REPO_ROOT / "plugin" / "skills" / "explain" / "SKILL.md.template"
-GENERATED_PY = REPO_ROOT / "cognigy-mcp" / "cognigy_mcp" / "tools" / "_explain_topics_generated.py"
+GENERATED_PY = REPO_ROOT / "cognigy-vibe-mcp" / "cognigy_mcp" / "tools" / "_explain_topics_generated.py"
 GENERATED_SKILL = REPO_ROOT / "plugin" / "skills" / "explain" / "SKILL.md"
 
 

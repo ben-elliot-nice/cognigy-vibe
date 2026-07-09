@@ -1,4 +1,4 @@
-# cognigy-mcp/cognigy_mcp/wizard_ui.py
+# cognigy-vibe-mcp/cognigy_mcp/wizard_ui.py
 from __future__ import annotations
 
 import subprocess

@@ -34,9 +34,9 @@ jobs:
           else
             VERSION=$(python3 -c "
           import re
-          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-mcp/pyproject.toml').read(), re.MULTILINE)
+          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-vibe-mcp/pyproject.toml').read(), re.MULTILINE)
           if not m:
-              raise SystemExit('Could not parse version from cognigy-mcp/pyproject.toml')
+              raise SystemExit('Could not parse version from cognigy-vibe-mcp/pyproject.toml')
           print(m.group(1))
             ")
           fi
@@ -69,7 +69,7 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           # Patch pyproject.toml
-          sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" cognigy-mcp/pyproject.toml
+          sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" cognigy-vibe-mcp/pyproject.toml
           echo "Patched pyproject.toml to ${VERSION}"
 
           # Patch plugin.json version field and MCP args pin
@@ -92,7 +92,7 @@ jobs:
           # Commit, retag, push — dev stays clean; tag points to the patched snapshot
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git add cognigy-mcp/pyproject.toml plugin/.claude-plugin/plugin.json
+          git add cognigy-vibe-mcp/pyproject.toml plugin/.claude-plugin/plugin.json
           git commit -m "chore(release): patch versions to ${VERSION} [skip ci]"
           git tag -f "${TAG}"
           git push origin "${TAG}" --force
@@ -119,13 +119,13 @@ jobs:
       - name: Build
         if: steps.check.outputs.skip == 'false'
         run: |
-          cd cognigy-mcp
+          cd cognigy-vibe-mcp
           uv build
 
       - name: Publish to PyPI
         if: steps.check.outputs.skip == 'false'
         run: |
-          cd cognigy-mcp
+          cd cognigy-vibe-mcp
           uv publish
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}

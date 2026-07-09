@@ -1,4 +1,4 @@
-# cognigy-mcp/tests/test_reconcile.py
+# cognigy-vibe-mcp/tests/test_reconcile.py
 import json
 from unittest.mock import patch, MagicMock
 

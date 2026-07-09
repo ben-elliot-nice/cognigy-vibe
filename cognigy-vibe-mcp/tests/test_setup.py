@@ -1,4 +1,4 @@
-# cognigy-mcp/tests/test_setup.py
+# cognigy-vibe-mcp/tests/test_setup.py
 import json
 import os
 import stat
