@@ -232,3 +232,431 @@ def test_main_passes_verbose_to_error_panel_debug():
          pytest.raises(SystemExit):
         main()
     assert mock_panel.call_args.kwargs["debug"] is True
+
+
+def test_parse_args_defaults_to_install_with_no_argv(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup"])
+    args = _parse_args()
+    assert args.command == "install"
+
+
+def test_parse_args_defaults_to_install_when_only_legacy_flags_given(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "--install-only", "--scope", "project"])
+    args = _parse_args()
+    assert args.command == "install"
+    assert args.install_only is True
+    assert args.scope == "project"
+
+
+def test_parse_args_explicit_install_subcommand(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "install", "--client", "code"])
+    args = _parse_args()
+    assert args.command == "install"
+    assert args.client == "code"
+
+
+def test_parse_args_status(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "status"])
+    args = _parse_args()
+    assert args.command == "status"
+    assert args.fix is False
+
+
+def test_parse_args_status_fix(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "status", "--fix"])
+    args = _parse_args()
+    assert args.command == "status"
+    assert args.fix is True
+
+
+def test_parse_args_update(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "update"])
+    args = _parse_args()
+    assert args.command == "update"
+    assert args.check is False
+
+
+def test_parse_args_update_check(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "update", "--check"])
+    args = _parse_args()
+    assert args.command == "update"
+    assert args.check is True
+
+
+def test_parse_args_uninstall(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall"])
+    args = _parse_args()
+    assert args.command == "uninstall"
+
+
+def test_parse_args_bare_help_shows_top_level_subcommands(monkeypatch, capsys):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "--help"])
+    with pytest.raises(SystemExit):
+        _parse_args()
+    output = capsys.readouterr().out
+    assert "status" in output
+    assert "update" in output
+
+
+def test_parse_args_typo_subcommand_reports_invalid_choice(monkeypatch, capsys):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "satus"])
+    with pytest.raises(SystemExit):
+        _parse_args()
+    err = capsys.readouterr().err
+    assert "invalid choice" in err
+    assert "'satus'" in err
+    assert "install" in err
+    assert "status" in err
+    assert "update" in err
+    assert "uninstall" in err
+
+
+from cognigy_mcp.reconcile import SetupState, DriftIssue
+
+
+def _state(**overrides):
+    base = dict(
+        package_version="1.7.0", marketplace_ref="v1.7.0", plugin_version="1.7.0",
+        plugin_scope="user", desktop_pin="1.7.0", layout_schema_version=1,
+    )
+    base.update(overrides)
+    return SetupState(**base)
+
+
+def test_run_status_exits_zero_when_aligned(capsys):
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()):
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 0
+    assert "marketplace_ref" in capsys.readouterr().out
+
+
+def test_run_status_exits_nonzero_when_drift_found_without_fix():
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_version="1.6.0")):
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 1
+
+
+def test_run_status_fix_applies_fixes_and_exits_zero():
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": True})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_version="1.6.0")), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply:
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 0
+    mock_apply.assert_called_once()
+    called_issues = mock_apply.call_args[0][0]
+    assert all(issue.kind == "drift" for issue in called_issues)
+
+
+def test_run_status_fix_does_not_call_apply_fixes_when_nothing_drifted():
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": True})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply:
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 0
+    mock_apply.assert_not_called()
+
+
+def test_run_update_hard_fails_when_pypi_unreachable(capsys):
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", side_effect=Exception("network down")), \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 1
+    assert "status --fix" in capsys.readouterr().err
+    mock_run.assert_not_called()
+
+
+def test_run_update_short_circuits_when_already_latest():
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply, \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 0
+    mock_run.assert_not_called()  # no `uv tool upgrade` call
+    mock_apply.assert_not_called()  # aligned state, nothing to fix
+
+
+def test_run_update_exits_nonzero_when_uv_missing_and_upgrade_never_happened(monkeypatch):
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(package_version="1.6.0")), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply, \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 1
+    mock_run.assert_not_called()  # no `uv tool upgrade` call, uv not on PATH
+
+
+def test_run_update_upgrades_package_when_stale(monkeypatch):
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/uv")
+    states = iter([_state(package_version="1.6.0"), _state(package_version="1.7.0")])
+    with patch("cognigy_mcp.reconcile.gather_state", side_effect=lambda: next(states)), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 0
+    mock_run.assert_called_once_with(["uv", "tool", "upgrade", "cognigy-vibe-mcp"], check=True)
+
+
+def test_run_update_check_reports_without_mutating():
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": True})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(package_version="1.6.0")), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply, \
+         patch("subprocess.run") as mock_run:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 1
+    mock_run.assert_not_called()
+    mock_apply.assert_not_called()
+
+
+def test_run_update_applies_fixes_when_drift_found_and_not_check():
+    from cognigy_mcp.setup import _run_update
+    args = type("Args", (), {"check": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(desktop_pin="1.6.0")), \
+         patch("cognigy_mcp.reconcile.check_pypi_latest", return_value="1.7.0"), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply:
+        with pytest.raises(SystemExit) as exc:
+            _run_update(args)
+    assert exc.value.code == 0
+    mock_apply.assert_called_once()
+
+
+def test_run_uninstall_noop_when_not_installed(tmp_path, capsys):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+    mock_run.assert_not_called()
+    assert "not installed" in capsys.readouterr().out.lower()
+
+
+def test_run_uninstall_removes_plugin_and_desktop_entry(tmp_path):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
+        check=True,
+    )
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod not meaningful on Windows")
+def test_run_uninstall_retightens_desktop_config_permissions(tmp_path):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    desktop_path.chmod(0o644)
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run"):
+        _run_uninstall(args)
+
+    mode = oct(stat.S_IMODE(desktop_path.stat().st_mode))
+    assert mode == "0o600"
+
+
+def test_run_uninstall_prompts_before_deleting_credentials(tmp_path):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    env_path = tmp_path / ".env"
+    env_path.write_text("COGNIGY_API_KEY=secret\n")
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run"):
+        _run_uninstall(args)
+
+    assert env_path.exists()  # user said no, credentials survive
+
+
+def test_run_uninstall_deletes_credentials_on_confirmation(tmp_path):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    env_path = tmp_path / ".env"
+    env_path.write_text("COGNIGY_API_KEY=secret\n")
+    desktop_path = tmp_path / "claude_desktop_config.json"
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="y"), \
+         patch("subprocess.run"):
+        _run_uninstall(args)
+
+    assert not env_path.exists()
+
+
+def test_run_uninstall_does_not_remove_marketplace_by_default(tmp_path):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    env_path = tmp_path / ".env"
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    marketplace_calls = [
+        call for call in mock_run.call_args_list
+        if call.args[0][:3] == ["claude", "plugin", "marketplace"]
+    ]
+    assert marketplace_calls == []
+
+
+def test_run_uninstall_prompts_for_project_scope_credentials(tmp_path, monkeypatch):
+    """A project/local-scope install writes credentials to Path.cwd()/.env,
+    not USER_ENV_PATH. Uninstall must detect and prompt for that path too.
+    Regression guard for PR #186 review finding 2.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+
+    monkeypatch.chdir(tmp_path)
+    project_env_path = tmp_path / ".env"
+    project_env_path.write_text("COGNIGY_API_KEY=secret\n")
+
+    user_env_path = tmp_path / "user-home" / ".env"  # does not exist
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    args = type("Args", (), {})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="project")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", user_env_path), \
+         patch("builtins.input", return_value="n") as mock_input, \
+         patch("subprocess.run"):
+        _run_uninstall(args)
+
+    prompted_paths = [str(call.args[0]) for call in mock_input.call_args_list]
+    assert any(str(project_env_path) in p for p in prompted_paths)
+    assert project_env_path.exists()  # user said no, credentials survive
+
+
+def test_run_uninstall_desktop_only_removes_entry_without_plugin_call(tmp_path):
+    """Desktop-only installs (plugin_scope=None) must still be detected and cleaned up.
+
+    A user who ran `install --client desktop` never registers a Code plugin,
+    so plugin_scope is None even though a live Desktop config entry exists.
+    Regression guard for issue #185 fix 1.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    plugin_uninstall_calls = [
+        call for call in mock_run.call_args_list
+        if call.args[0][:3] == ["claude", "plugin", "uninstall"]
+    ]
+    assert plugin_uninstall_calls == []
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+
+
+def test_run_uninstall_degrades_gracefully_on_malformed_desktop_config(tmp_path, capsys):
+    """A malformed/hand-edited Desktop config must not crash uninstall.
+    Matches how reconcile._read_desktop_pin() already degrades gracefully
+    on the same file. Regression guard for PR #186 review finding 3.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text("not json")
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    out = capsys.readouterr().out
+    assert "warning" in out.lower()
+    assert str(desktop_path) in out
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "user"],
+        check=True,
+    )
+
+
+def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("subprocess.run") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_not_called()
+    assert "not installed" in capsys.readouterr().out.lower()
