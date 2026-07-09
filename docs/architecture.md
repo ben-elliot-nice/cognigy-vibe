@@ -23,15 +23,17 @@ Cognigy REST API
 
 The MCP server is the only thing that talks to the Cognigy API. It handles authentication, per-project state management, filesystem cache, and conflict detection. Skills call MCP tools — they never make HTTP requests directly.
 
-### Tools (14 total)
+### Tools (20 total: 19 always registered + 1 dev-only)
 
 | Group | Tools |
 |---|---|
-| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource` |
+| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
 | Flow ops | `cognigy_get`, `cognigy_list`, `cognigy_create`, `cognigy_update`, `cognigy_delete`, `cognigy_invoke`, `get_flow_chart` |
-| File push | `push_code_node`, `push_html_node` |
+| File push | `push_code_node`, `push_html_node`, `push_agent_tool`, `push_agent_avatar`, `export_package` |
+| Voice | `provision_webrtc_endpoint` |
 | Testing | `talk_to_agent` |
 | Guidance | `explain` |
+| Dev only | `reload_mcp` (gated on `COGNIGY_VIBE_DEV=1`) |
 
 ### Key behaviours
 
@@ -62,15 +64,26 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 
 | Module | Responsibility |
 |---|---|
-| `server.py` | MCP server wiring, auto-resync middleware, tool dispatch |
+| `server.py` | MCP server wiring, degraded/full/dev mode selection, config cascade (`_find_config_file`), auto-resync middleware, tool dispatch |
 | `api.py` | `CognigyClient` — thin httpx wrapper; derives endpoint URL from base URL |
 | `state.py` | `ProjectState` — name→ID mappings, seed/runtime merge, interaction timestamp |
 | `cache.py` | `Cache` — filesystem TTL cache for resource JSON + code node snapshots |
-| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource` |
-| `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer |
-| `tools/file_push.py` | `push_code_node` (conflict detection), `push_html_node` |
+| `config.py` | Path constants — `CONFIG_BASE` (`~/.config/cognigy-vibe`), `USER_ENV_PATH` (`CONFIG_BASE/.env`), `SETUP_META_PATH` (`CONFIG_BASE/.setup-meta.json`); `CONFIG_SCHEMA_VERSION` for the on-disk layout version |
+| `filters.py` | `strip_response` — removes internal fields (`__v`, `transpiled`) from API responses |
+| `validation.py` | `validate()` / `make_schema()` — Pydantic-model argument validation shared across tool handlers |
+| `launcher.py` | `cognigy-vibe-launch` console-script entry point — resolves installed package version, hands off to `orchestrator.main()` |
+| `orchestrator.py` | Outer supervisor process — spawns/monitors the inner server subprocess, handles the dev-mode restart protocol (rc=42 sentinel), logs to `~/.config/cognigy-vibe/logs/` |
+| `migrate.py` | `safe_move()` — best-effort, race-safe file move used by layout migrations |
+| `setup.py` | `cognigy-vibe-setup` console-script entry point — `install`/`status`/`update`/`uninstall` subcommands |
+| `reconcile.py` | `SetupState`/`DriftIssue` dataclasses, `gather_state()`/`diff_state()`/`apply_fixes()`, `check_pypi_latest()` — drift detection and reconciliation backing `status`/`update` |
+| `wizard_ui.py` | `rich`-based terminal presentation helpers (`print_header`, `print_section`, `print_summary`, `print_drift_table`, `print_step`, `print_error_panel`) and `run_subprocess()`/`StepFailure` — shared UI layer for all `setup.py` subcommands |
+| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
+| `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer, `cognigy_invoke` operation routing |
+| `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `export_package` |
+| `tools/voice_ops.py` | `provision_webrtc_endpoint` — VoiceGateway webRTC endpoint provisioning with real/dummy Azure Speech connection path |
 | `tools/testing.py` | `talk_to_agent` — REST endpoint test harness |
-| `tools/explain.py` | `explain` — 21-topic in-server reference library |
+| `tools/explain.py` | `explain` — 37-topic in-server reference library |
+| `tools/dev_tools.py` | `reload_mcp` — dev-mode server respawn signal |
 
 ### State storage
 
@@ -94,6 +107,10 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 ```
 
 State is loaded at startup by deep-merging seed into runtime. `sync_remote_state` populates `flows`, `agents`, `endpoints`, and `tools` categories. `resolve_resource` and `get_build_state` read from this without making API calls. The `~/.config/cognigy-vibe/cache/<project-id>/` directory is auto-created by the MCP server on first use of any stateful tool for that project. Existing installs on the pre-#171 flat layout are migrated automatically on first run.
+
+### Config file cascade
+
+`server.py`'s `_find_config_file()` resolves the active `default-demo-config.json` at startup by walking from `cwd` up through ancestor directories, then falling back to `~/.config/cognigy-vibe/config.json`. The first file found wins — there is no merging across levels. A malformed or unreadable candidate is skipped with a stderr message (distinguishing `JSONDecodeError` from `OSError`) rather than aborting the walk. `COGNIGY_PROJECT_ROOT` is a separate mechanism: it controls where `.env` is read from and does not participate in this cascade.
 
 ### Reference docs (runtime guidance)
 
