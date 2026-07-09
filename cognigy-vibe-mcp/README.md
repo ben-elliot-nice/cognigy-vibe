@@ -70,7 +70,7 @@ Credentials are read from a `.env` file in the project root (see Environment var
 | `COGNIGY_VIBE_RESYNC_HOURS` | No | `4` | Hours of idle before auto-resync |
 | `COGNIGY_VIBE_CACHE_TTL` | No | `300` | Resource cache TTL in seconds |
 | `COGNIGY_VIBE_DEV` | No | — | Set to `1` to enable dev mode (requires credentials configured) |
-| `COGNIGY_VIBE_SOURCE_DIR` | No | — | Path to `cognigy-mcp/` source tree; required when `COGNIGY_VIBE_DEV=1`. Relative paths are resolved from CWD (e.g. `./cognigy-mcp` works when Claude Code opens the repo root). |
+| `COGNIGY_VIBE_SOURCE_DIR` | No | — | Path to `cognigy-vibe-mcp/` source tree; required when `COGNIGY_VIBE_DEV=1`. Relative paths are resolved from CWD (e.g. `./cognigy-vibe-mcp` works when Claude Code opens the repo root). |
 
 ## Startup modes
 
@@ -149,9 +149,9 @@ Topics are front-loaded in the tool description — no tool call needed to see w
 
 ```bash
 git clone https://github.com/ben-elliot-nice/cognigy-claude-plugin
-cd cognigy-claude-plugin/cognigy-mcp
+cd cognigy-claude-plugin/cognigy-vibe-mcp
 uv sync --extra dev
 uv run pytest tests/ -v
 ```
 
-To develop against local source with hot-reload, the repo's `.mcp.json` already sets `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-mcp` — no `.env` additions needed. Ask Claude to call `reload_mcp` after editing source files — the server respawns from updated code without a terminal restart.
+To develop against local source with hot-reload, the repo's `.mcp.json` already sets `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-vibe-mcp` — no `.env` additions needed. Ask Claude to call `reload_mcp` after editing source files — the server respawns from updated code without a terminal restart.

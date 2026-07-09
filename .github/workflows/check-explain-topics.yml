@@ -24,7 +24,7 @@ jobs:
         run: |
           if ! git diff --exit-code \
               plugin/skills/explain/SKILL.md \
-              cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py; then
+              cognigy-vibe-mcp/cognigy_mcp/tools/_explain_topics_generated.py; then
             echo ""
             echo "ERROR: Generated files are out of sync with resources/."
             echo "Run 'uv run scripts/build_explain_topics.py' locally and commit the result."

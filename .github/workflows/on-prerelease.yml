@@ -22,9 +22,9 @@ jobs:
         run: |
           PYPROJECT_VERSION=$(python3 -c "
           import re
-          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-mcp/pyproject.toml').read(), re.MULTILINE)
+          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', open('cognigy-vibe-mcp/pyproject.toml').read(), re.MULTILINE)
           if not m:
-              raise SystemExit('Could not parse version from cognigy-mcp/pyproject.toml')
+              raise SystemExit('Could not parse version from cognigy-vibe-mcp/pyproject.toml')
           print(m.group(1))
           ")
 

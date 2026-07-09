@@ -1,4 +1,4 @@
-# cognigy-mcp/cognigy_mcp/tools/dev_tools.py
+# cognigy-vibe-mcp/cognigy_mcp/tools/dev_tools.py
 from __future__ import annotations
 
 import os

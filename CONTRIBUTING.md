@@ -12,7 +12,7 @@ If the work tracks a GitHub issue, name the branch `feat/<number>-<slug>` — e.
 
 ## Rules
 
-- **Do not bump versions in dev PRs.** CI rejects any PR to `dev` that changes the version in `cognigy-mcp/pyproject.toml` or `plugin/.claude-plugin/plugin.json`. Version bumps are pushed directly to `dev` by the maintainer to initiate a prerelease cycle — not via PR.
+- **Do not bump versions in dev PRs.** CI rejects any PR to `dev` that changes the version in `cognigy-vibe-mcp/pyproject.toml` or `plugin/.claude-plugin/plugin.json`. Version bumps are pushed directly to `dev` by the maintainer to initiate a prerelease cycle — not via PR.
 - **Composite skills call atomic MCP tools** (`cognigy_get`, `cognigy_create`, etc.) — never hardcode `npx tsx` CLI calls in a skill.
 
 ## Pull requests

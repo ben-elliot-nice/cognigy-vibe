@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-EXPLAIN_PY = REPO_ROOT / "cognigy-mcp" / "cognigy_mcp" / "tools" / "explain.py"
+EXPLAIN_PY = REPO_ROOT / "cognigy-vibe-mcp" / "cognigy_mcp" / "tools" / "explain.py"
 RESOURCES = REPO_ROOT / "plugin" / "skills" / "explain" / "resources"
 
 # (relative_output_path, description, group)
