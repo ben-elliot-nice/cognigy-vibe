@@ -132,34 +132,72 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     return value or default
 
 
+_COMMANDS = {"install", "status", "update", "uninstall"}
+
+
 def _parse_args() -> "argparse.Namespace":
     import argparse
+    argv = sys.argv[1:]
+    if not argv or argv[0] not in _COMMANDS:
+        argv = ["install"] + argv
+
     parser = argparse.ArgumentParser(
         prog="cognigy-vibe-setup",
-        description="Install and configure the cognigy-vibe plugin.",
+        description="Install, update, check, or uninstall the cognigy-vibe plugin.",
     )
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    install_p = sub.add_parser("install", help="Install and configure the plugin (default).")
+    install_p.add_argument(
         "--install-only",
         action="store_true",
         help="Skip credential collection; install plugin only.",
     )
-    parser.add_argument(
+    install_p.add_argument(
         "--client",
         choices=["code", "desktop", "both"],
         default=None,
         help="Which client(s) to configure (default: both if Desktop detected, else code).",
     )
-    parser.add_argument(
+    install_p.add_argument(
         "--scope",
         choices=["user", "project", "local"],
         default=None,
         help="Plugin install scope for Claude Code (default: user).",
     )
-    return parser.parse_args()
+
+    status_p = sub.add_parser("status", help="Report drift across install-related surfaces.")
+    status_p.add_argument(
+        "--fix",
+        action="store_true",
+        help="Apply fixes for any drift found. Never touches PyPI or upgrades the package.",
+    )
+
+    update_p = sub.add_parser("update", help="Check PyPI, upgrade if stale, and reconcile drift.")
+    update_p.add_argument(
+        "--check",
+        action="store_true",
+        help="Report what update would do without changing anything.",
+    )
+
+    sub.add_parser("uninstall", help="Remove the plugin, Desktop config entry, and optionally credentials.")
+
+    return parser.parse_args(argv)
 
 
 def main() -> None:
     args = _parse_args()
+    if args.command == "install":
+        _run_install(args)
+    elif args.command == "status":
+        _run_status(args)
+    elif args.command == "update":
+        _run_update(args)
+    elif args.command == "uninstall":
+        _run_uninstall(args)
+
+
+def _run_install(args) -> None:
     print("\ncognigy-vibe setup wizard\n")
 
     # 1. Mode (flag or prompt)
@@ -262,3 +300,15 @@ def main() -> None:
         print("  Note: the Desktop entry is pinned to the version installed today.")
         print("  After a cognigy-vibe-mcp upgrade, re-run this wizard to update the pin.")
     print()
+
+
+def _run_status(args) -> None:
+    raise NotImplementedError  # implemented in Task 7
+
+
+def _run_update(args) -> None:
+    raise NotImplementedError  # implemented in Task 8
+
+
+def _run_uninstall(args) -> None:
+    raise NotImplementedError  # implemented in Task 9

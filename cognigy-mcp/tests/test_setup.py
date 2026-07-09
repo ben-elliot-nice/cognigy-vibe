@@ -154,3 +154,66 @@ def test_install_plugin_rejects_invalid_scope():
     from cognigy_mcp.setup import install_plugin
     with pytest.raises(ValueError, match="Invalid scope"):
         install_plugin("global")
+
+
+def test_parse_args_defaults_to_install_with_no_argv(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup"])
+    args = _parse_args()
+    assert args.command == "install"
+
+
+def test_parse_args_defaults_to_install_when_only_legacy_flags_given(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "--install-only", "--scope", "project"])
+    args = _parse_args()
+    assert args.command == "install"
+    assert args.install_only is True
+    assert args.scope == "project"
+
+
+def test_parse_args_explicit_install_subcommand(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "install", "--client", "code"])
+    args = _parse_args()
+    assert args.command == "install"
+    assert args.client == "code"
+
+
+def test_parse_args_status(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "status"])
+    args = _parse_args()
+    assert args.command == "status"
+    assert args.fix is False
+
+
+def test_parse_args_status_fix(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "status", "--fix"])
+    args = _parse_args()
+    assert args.command == "status"
+    assert args.fix is True
+
+
+def test_parse_args_update(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "update"])
+    args = _parse_args()
+    assert args.command == "update"
+    assert args.check is False
+
+
+def test_parse_args_update_check(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "update", "--check"])
+    args = _parse_args()
+    assert args.command == "update"
+    assert args.check is True
+
+
+def test_parse_args_uninstall(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall"])
+    args = _parse_args()
+    assert args.command == "uninstall"
