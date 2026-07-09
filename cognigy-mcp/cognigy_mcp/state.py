@@ -5,7 +5,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-CONFIG_BASE = Path.home() / ".config" / "cognigy-vibe"
+from cognigy_mcp.config import CONFIG_BASE
+from cognigy_mcp.migrate import safe_move
 
 # Migrate state from old locations on first access
 def _migrate_old_state() -> None:
@@ -21,7 +22,6 @@ def _migrate_old_state() -> None:
 
 def _migrate_flat_layout(config_base: Path) -> None:
     """Move stray top-level project dirs from the pre-#171 flat layout into cache/."""
-    import shutil
     if not config_base.exists():
         return
     cache_base = config_base / "cache"
@@ -32,7 +32,7 @@ def _migrate_flat_layout(config_base: Path) -> None:
         if dest.exists():
             continue
         cache_base.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(entry), str(dest))
+        safe_move(entry, dest)
 
 
 _migrate_old_state()

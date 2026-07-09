@@ -199,6 +199,24 @@ def test_migrate_flat_layout_noop_if_config_base_missing(tmp_path):
     assert not config_base.exists()
 
 
+def test_migrate_flat_layout_survives_concurrent_migration_race(tmp_path, monkeypatch):
+    """Simulates a second process winning the race: dest.exists() is False
+    when this process checks it, but the entry vanishes before the move
+    actually runs (the other process already relocated it)."""
+    from cognigy_mcp import state
+
+    config_base = tmp_path / "cognigy-vibe"
+    proj_dir = config_base / "proj-123"
+    proj_dir.mkdir(parents=True)
+
+    def fake_move(s, d):
+        raise FileNotFoundError(s)
+
+    monkeypatch.setattr("shutil.move", fake_move)
+
+    state._migrate_flat_layout(config_base)  # must not raise
+
+
 def test_migrate_flat_layout_ignores_files_at_root(tmp_path):
     from cognigy_mcp.state import _migrate_flat_layout
     config_base = tmp_path / "cognigy-vibe"

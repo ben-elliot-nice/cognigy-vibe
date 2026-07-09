@@ -450,6 +450,26 @@ def test_migrate_flat_logs_noop_if_config_base_missing(tmp_path):
     assert not config_base.exists()
 
 
+def test_migrate_flat_logs_survives_concurrent_migration_race(tmp_path, monkeypatch):
+    """Simulates a second orchestrator process winning the race: dest.exists()
+    is False when this process checks it, but the log file vanishes before
+    the move actually runs (the other process already relocated it)."""
+    from cognigy_mcp.orchestrator import _migrate_flat_logs
+
+    config_base = tmp_path / "cognigy-vibe"
+    config_base.mkdir()
+    (config_base / "cognigy-vibe-mcp-1.5.4.log").write_text("old")
+    log_dir = config_base / "logs"
+    log_dir.mkdir()
+
+    def fake_move(s, d):
+        raise FileNotFoundError(s)
+
+    monkeypatch.setattr("shutil.move", fake_move)
+
+    _migrate_flat_logs(config_base, log_dir)  # must not raise
+
+
 def test_migrate_flat_logs_ignores_non_log_files(tmp_path):
     from cognigy_mcp.orchestrator import _migrate_flat_logs
     config_base = tmp_path / "cognigy-vibe"

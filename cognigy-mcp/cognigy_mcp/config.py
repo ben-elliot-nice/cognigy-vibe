@@ -1,3 +1,4 @@
 from pathlib import Path
 
-USER_ENV_PATH: Path = Path.home() / ".config" / "cognigy-vibe" / ".env"
+CONFIG_BASE: Path = Path.home() / ".config" / "cognigy-vibe"
+USER_ENV_PATH: Path = CONFIG_BASE / ".env"
