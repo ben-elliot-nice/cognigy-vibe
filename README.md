@@ -1,9 +1,9 @@
-# cognigy-claude-plugin
+# cognigy-vibe
 
 [![PyPI version](https://img.shields.io/pypi/v/cognigy-vibe-mcp?label=cognigy-vibe-mcp)](https://pypi.org/project/cognigy-vibe-mcp/)
-[![Check version bump](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-version-bump.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-version-bump.yml)
-[![Check explain topics](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-explain-topics.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/check-explain-topics.yml)
-[![Release (production)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/on-push-main.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-claude-plugin/actions/workflows/on-push-main.yml)
+[![Check version bump](https://github.com/ben-elliot-nice/cognigy-vibe/actions/workflows/check-version-bump.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-vibe/actions/workflows/check-version-bump.yml)
+[![Check explain topics](https://github.com/ben-elliot-nice/cognigy-vibe/actions/workflows/check-explain-topics.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-vibe/actions/workflows/check-explain-topics.yml)
+[![Release (production)](https://github.com/ben-elliot-nice/cognigy-vibe/actions/workflows/on-push-main.yml/badge.svg)](https://github.com/ben-elliot-nice/cognigy-vibe/actions/workflows/on-push-main.yml)
 
 Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en/docs/claude-code) — scope, design, build, and smoke-test Cognigy.AI agent demos end-to-end.
 
@@ -17,7 +17,7 @@ Run the setup wizard. It installs `uv` if needed, then installs and configures t
 
 **Mac / Linux:**
 ```bash
-bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-claude-plugin/dev/plugin/bin/cognigy-setup.sh)
+bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-vibe/dev/plugin/bin/cognigy-setup.sh)
 ```
 
 **Windows (PowerShell):**

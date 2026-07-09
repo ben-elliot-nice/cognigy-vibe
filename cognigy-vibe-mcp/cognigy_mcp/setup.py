@@ -76,7 +76,7 @@ def install_plugin(scope: str, verbose: bool = False) -> None:
         raise ValueError(f"Invalid scope: {scope!r}. Must be one of: user, project, local")
     ver = get_installed_version()
     run_subprocess(
-        ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-claude-plugin@v{ver}"],
+        ["claude", "plugin", "marketplace", "add", f"ben-elliot-nice/cognigy-vibe@v{ver}"],
         "Adding marketplace",
         verbose=verbose,
     )

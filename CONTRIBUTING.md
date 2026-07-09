@@ -1,4 +1,4 @@
-# Contributing to cognigy-claude-plugin
+# Contributing to cognigy-vibe
 
 ## Branching
 

@@ -140,7 +140,7 @@ claude plugin install superpowers@superpowers-dev
 
 **Cognigy** (`cognigy-vibe@cognigy-vibe`) — Cognigy-specific skills:
 ```bash
-claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
+claude plugin marketplace add ben-elliot-nice/cognigy-vibe
 claude plugin install cognigy-vibe@cognigy-vibe
 ```
 
