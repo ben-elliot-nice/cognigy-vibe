@@ -413,6 +413,26 @@ def test_run_uninstall_removes_plugin_and_desktop_entry(tmp_path):
     assert "cognigy-vibe" not in data.get("mcpServers", {})
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod not meaningful on Windows")
+def test_run_uninstall_retightens_desktop_config_permissions(tmp_path):
+    from cognigy_mcp.setup import _run_uninstall
+    args = type("Args", (), {})()
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    desktop_path.chmod(0o644)
+    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("subprocess.run"):
+        _run_uninstall(args)
+
+    mode = oct(stat.S_IMODE(desktop_path.stat().st_mode))
+    assert mode == "0o600"
+
+
 def test_run_uninstall_prompts_before_deleting_credentials(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
     args = type("Args", (), {})()

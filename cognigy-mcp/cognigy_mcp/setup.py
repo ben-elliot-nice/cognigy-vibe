@@ -412,6 +412,8 @@ def _run_uninstall(args) -> None:
         print(f"Removing Desktop config entry at {desktop_path}...")
         del desktop_config["mcpServers"][MARKETPLACE_NAME]
         desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
+        if sys.platform != "win32":
+            desktop_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
     cred_paths = [USER_ENV_PATH]
     if state.plugin_scope in ("project", "local"):
