@@ -75,6 +75,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         url_token = ep_result.get("URLToken") or ep_result.get("urlToken", "")
         demo_url = f"{endpoint_base}/demo/{url_token}"
 
+        state.set("endpoints", m.endpoint_name, value={
+            "id": endpoint_id,
+            "urlToken": url_token,
+            "flowReferenceId": m.flow_reference_id,
+        })
+        cache.set("endpoints", endpoint_id, ep_result)
+
         if is_dummy:
             client.delete(f"/v2.0/connections/{connection_id}")
             connection_id = None

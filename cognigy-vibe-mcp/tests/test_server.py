@@ -123,6 +123,7 @@ def test_find_config_file_in_ancestor(tmp_path, monkeypatch):
     child = tmp_path / "acme-demo"
     child.mkdir()
     monkeypatch.chdir(child)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     cfg = {"$schemaVersion": 2, "connection": {"region": "na1"}}
     (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
     result, source = _find_config_file()
@@ -151,10 +152,53 @@ def test_find_config_file_not_found(tmp_path, monkeypatch):
     assert source is None
 
 
+def test_find_config_file_does_not_escape_home_boundary(tmp_path, monkeypatch):
+    # cwd is not under $HOME (e.g. CI checkout, /tmp) — must not climb past cwd
+    # onto unrelated ancestors looking for a stray config.
+    outside_home = tmp_path / "not-home"
+    child = outside_home / "acme-demo"
+    child.mkdir(parents=True)
+    monkeypatch.chdir(child)
+    fake_home = tmp_path / "home-dir"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    cfg = {"$schemaVersion": 2, "connection": {"region": "stray"}}
+    (outside_home / "default-demo-config.json").write_text(json.dumps(cfg))
+    result, source = _find_config_file()
+    assert result is None
+    assert source is None
+
+
+def test_find_config_file_uses_project_root_env_over_cwd(tmp_path, monkeypatch):
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_root))
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    cfg = {"$schemaVersion": 2, "connection": {"region": "root-anchored"}}
+    (project_root / "default-demo-config.json").write_text(json.dumps(cfg))
+    result, source = _find_config_file()
+    assert result is not None
+    assert result["connection"]["region"] == "root-anchored"
+
+
+def test_find_config_file_warns_on_schema_version_mismatch(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    cfg = {"$schemaVersion": 1, "connection": {"region": "au1"}}
+    (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
+    result, source = _find_config_file()
+    assert result is not None
+    assert "schemaVersion" in capsys.readouterr().err
+
+
 def test_find_config_file_cwd_wins_over_ancestor(tmp_path, monkeypatch):
     child = tmp_path / "acme-demo"
     child.mkdir()
     monkeypatch.chdir(child)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     parent_cfg = {"$schemaVersion": 2, "connection": {"region": "au1"}}
     child_cfg = {"$schemaVersion": 2, "connection": {"region": "na1"}}
     (tmp_path / "default-demo-config.json").write_text(json.dumps(parent_cfg))

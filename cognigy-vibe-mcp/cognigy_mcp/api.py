@@ -77,6 +77,7 @@ class CognigyClient:
         self._raise_for_status(resp)
         return resp.json()
 
+    @_RETRY
     def post(self, path: str, body: dict) -> dict:
         resp = self._http.post(self._base + path, json=body)
         self._raise_for_status(resp)

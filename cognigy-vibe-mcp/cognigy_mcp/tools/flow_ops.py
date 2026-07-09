@@ -477,6 +477,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             )})
         if current.get("type") == "say" and "config" in body:
             body = {**body, "config": _normalise_say_config(body["config"])}
+        if current.get("type") == "aiAgentToolAnswer" and "config" in body:
+            body = {**body, "config": _normalise_answer_config(body["config"])}
         if m.merge_config and "config" in body and "config" in current:
             current_config = {k: v for k, v in current["config"].items() if k not in BLOCKED_IN_CONFIG}
             merged = _deep_merge(current_config, body["config"])
