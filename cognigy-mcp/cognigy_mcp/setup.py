@@ -138,7 +138,7 @@ _COMMANDS = {"install", "status", "update", "uninstall"}
 def _parse_args() -> "argparse.Namespace":
     import argparse
     argv = sys.argv[1:]
-    if not argv or argv[0] not in _COMMANDS:
+    if not argv or (argv[0] not in _COMMANDS and argv[0] not in ("-h", "--help")):
         argv = ["install"] + argv
 
     parser = argparse.ArgumentParser(

@@ -219,6 +219,17 @@ def test_parse_args_uninstall(monkeypatch):
     assert args.command == "uninstall"
 
 
+def test_parse_args_bare_help_shows_top_level_subcommands(monkeypatch, capsys):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "--help"])
+    with pytest.raises(SystemExit):
+        _parse_args()
+    output = capsys.readouterr().out
+    assert "status" in output
+    assert "update" in output
+    assert "uninstall" in output
+
+
 from cognigy_mcp.reconcile import SetupState, DriftIssue
 
 
