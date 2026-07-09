@@ -107,7 +107,7 @@ A local Python MCP server (full docs: [cognigy-mcp/README.md](cognigy-mcp/README
 | `talk_to_agent` | Drive a live session for smoke testing. |
 | `explain` | Topic reference library (node positioning, say-node schema, xApp events, knowledge store, …). |
 
-> The `cognigy-vibe-mcp` PyPI package is the MCP server only — narrower in scope than this repository, which also contains the Claude Code skills, hooks, and marketplace manifest that pair with it. See [cognigy-mcp/README.md](cognigy-mcp/README.md) for the server's own docs.
+> The `cognigy-vibe-mcp` PyPI package is the MCP server only — narrower in scope than this repository, which also contains the Claude Code skills and marketplace manifest that pair with it. See [cognigy-mcp/README.md](cognigy-mcp/README.md) for the server's own docs.
 
 ---
 
@@ -132,7 +132,7 @@ plugin/                           plugin content installed by Claude Code
   bin/                              setup wizard bootstrap scripts (cognigy-setup.sh / .ps1)
   skills/                           one directory per skill, each a SKILL.md
 cognigy-mcp/                      the cognigy-vibe-mcp Python server (+ tests, own README)
-docs/                             plugin-development docs (architecture, rename-impact, design specs)
+docs/                             plugin-development docs (architecture, design specs)
 scripts/                          explain-topic build tooling
 .githooks/                        pre-commit hook (GitGuardian)
 .github/workflows/                CI: version-bump check, explain-topic check, prerelease + production release
@@ -140,5 +140,5 @@ scripts/                          explain-topic build tooling
 
 ### Maintainers
 
-Ben Elliot — [ben.elliot@nice.com](mailto:ben.elliot@nice.com)
+Ben Elliot — [ben.elliot@nice.com](mailto:ben.elliot@nice.com)  
 Ben Hancock — [ben.hancock@nice.com](mailto:ben.hancock@nice.com)
