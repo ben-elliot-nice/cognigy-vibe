@@ -13,18 +13,11 @@ Cognigy AI agent development skills for [Claude Code](https://docs.claude.com/en
 
 ## Installation
 
-### Recommended — all users
-
 Run the setup wizard. It installs `uv` if needed, then installs and configures the plugin.
 
 **Mac / Linux:**
 ```bash
 bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-claude-plugin/dev/plugin/bin/cognigy-setup.sh)
-```
-
-Or, if you have already cloned the repo:
-```bash
-bash plugin/bin/cognigy-setup.sh
 ```
 
 **Windows (PowerShell):**
@@ -34,31 +27,16 @@ powershell -ExecutionPolicy Bypass -File plugin\bin\cognigy-setup.ps1
 
 > **[SCREENSHOT: terminal running the setup wizard, showing the mode/client/scope selection prompts with rich-styled section headers]**
 
-Both scripts forward all arguments to the `cognigy-vibe-setup` console command, which supports several subcommands:
+After the first install, use `uvx cognigy-vibe-setup` directly for everything else:
 
-| Command | Network | Mutates | Purpose |
-|---|---|---|---|
-| `cognigy-vibe-setup` / `cognigy-vibe-setup install` | No | Yes | Fresh install — the wizard above |
-| `cognigy-vibe-setup status` | No | No | Report drift between the installed package, marketplace pin, plugin version, and Desktop config pin |
-| `cognigy-vibe-setup status --fix` | No | Yes | Same check, applies fixes; never touches PyPI or upgrades the package |
-| `cognigy-vibe-setup update` | Yes | Yes | Check PyPI for a newer version, upgrade if stale, then reconcile the same surfaces as `status --fix` |
-| `cognigy-vibe-setup update --check` | Yes | No | Dry-run of `update` — reports drift, changes nothing |
-| `cognigy-vibe-setup uninstall` | No | Yes | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials |
+| Command | Flags | Purpose |
+|---|---|---|
+| `uvx cognigy-vibe-setup install` | `--install-only`, `--client code\|desktop\|both`, `--scope user\|project\|local` | Fresh install — the wizard above (also the default when no subcommand is given) |
+| `uvx cognigy-vibe-setup status` | `--fix` | Report drift between the installed package, marketplace pin, plugin version, and Desktop config pin; `--fix` applies fixes without touching PyPI |
+| `uvx cognigy-vibe-setup update` | `--check` | Check PyPI for a newer version and upgrade if stale, then reconcile the same surfaces as `status --fix`; `--check` is a dry run |
+| `uvx cognigy-vibe-setup uninstall` | — | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials |
 
-**Install-time options (pass as flags to `install`):**
-- `--install-only` — skip credential collection
-- `--client code|desktop|both`
-- `--scope user|project|local`
-
-**Any subcommand:**
-- `--verbose` — show subprocess output inline instead of behind a spinner, and print a full traceback on failure
-
-Example, from a cloned repo:
-```bash
-bash plugin/bin/cognigy-setup.sh status
-bash plugin/bin/cognigy-setup.sh update --check
-bash plugin/bin/cognigy-setup.sh uninstall
-```
+Any subcommand also accepts `--verbose` (inline diagnostic output and a full traceback on failure) and `--help`.
 
 > **[SCREENSHOT: terminal showing the summary box printed at the end of a successful install — credential path, plugin scope, Desktop config path]**
 
@@ -66,23 +44,19 @@ After install, open Claude Code or restart Claude Desktop. On the first tool cal
 
 ---
 
-### Advanced — uv already installed, Code only
+## Configuration
 
-Prerequisites: [install uv](https://docs.astral.sh/uv/getting-started/installation/).
+Two files, discovered by directory walk-up — no manual wiring required.
 
-```bash
-claude plugin marketplace add ben-elliot-nice/cognigy-claude-plugin
-claude plugin install cognigy-vibe@cognigy-vibe
-```
+**Credentials — `.env`:** holds `COGNIGY_BASE_URL`, `COGNIGY_API_KEY`, and optionally `COGNIGY_PROJECT_ID`. On startup the server walks up from the current directory toward your home directory looking for `.env`; the first one found sets `COGNIGY_PROJECT_ROOT` for that session. If none is found on the way up, it falls back to a user-scope `.env` at `~/.config/cognigy-vibe/.env`. If neither exists, the server starts in degraded mode — every tool stays visible, but calls return setup guidance until a `.env` is created.
 
-Create a `.env` in your project root:
 ```
 COGNIGY_BASE_URL=https://cognigy-api-au1.nicecxone.com
 COGNIGY_API_KEY=<your-api-key>
 COGNIGY_PROJECT_ID=<your-project-id>   # optional — set later via sync_remote_state
 ```
 
-Run `claude` from the project directory. The server finds `.env` automatically.
+**Build defaults — `default-demo-config.json`:** captures LLM references, TTS/STT, and naming defaults for `cognigy-vibe:build-orchestrator`. Discovered by the same walk-up (first match wins, no merging across levels), with a final fallback to `~/.config/cognigy-vibe/config.json`. Written by `cognigy-vibe:init-cognigy-vibe` — run that skill once per machine (or per workspace, for different defaults) rather than authoring this file by hand.
 
 ---
 
