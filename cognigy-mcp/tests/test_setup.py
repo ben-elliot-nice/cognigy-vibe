@@ -217,3 +217,58 @@ def test_parse_args_uninstall(monkeypatch):
     monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall"])
     args = _parse_args()
     assert args.command == "uninstall"
+
+
+from cognigy_mcp.reconcile import SetupState, DriftIssue
+
+
+def _state(**overrides):
+    base = dict(
+        package_version="1.7.0", marketplace_ref="v1.7.0", plugin_version="1.7.0",
+        plugin_scope="user", desktop_pin="1.7.0", layout_schema_version=1,
+    )
+    base.update(overrides)
+    return SetupState(**base)
+
+
+def test_run_status_exits_zero_when_aligned(capsys):
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()):
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 0
+    assert "marketplace_ref" in capsys.readouterr().out
+
+
+def test_run_status_exits_nonzero_when_drift_found_without_fix():
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": False})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_version="1.6.0")):
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 1
+
+
+def test_run_status_fix_applies_fixes_and_exits_zero():
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": True})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_version="1.6.0")), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply:
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 0
+    mock_apply.assert_called_once()
+    called_issues = mock_apply.call_args[0][0]
+    assert all(issue.kind == "drift" for issue in called_issues)
+
+
+def test_run_status_fix_does_not_call_apply_fixes_when_nothing_drifted():
+    from cognigy_mcp.setup import _run_status
+    args = type("Args", (), {"fix": True})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state()), \
+         patch("cognigy_mcp.reconcile.apply_fixes") as mock_apply:
+        with pytest.raises(SystemExit) as exc:
+            _run_status(args)
+    assert exc.value.code == 0
+    mock_apply.assert_not_called()

@@ -302,8 +302,37 @@ def _run_install(args) -> None:
     print()
 
 
+def _print_state_table(state, issues) -> None:
+    from cognigy_mcp.config import CONFIG_SCHEMA_VERSION
+    rows = [
+        ("package_version", state.package_version, state.package_version),
+        ("marketplace_ref", state.marketplace_ref, f"v{state.package_version}"),
+        ("plugin_version", state.plugin_version, state.package_version),
+        ("desktop_pin", state.desktop_pin, state.package_version),
+        ("layout_schema_version", state.layout_schema_version, CONFIG_SCHEMA_VERSION),
+    ]
+    issue_map = {issue.surface: issue for issue in issues}
+    print(f"{'surface':<24}{'current':<18}{'expected':<12}status")
+    for surface, current, expected in rows:
+        issue = issue_map.get(surface)
+        status = issue.kind if issue else "ok"
+        print(f"{surface:<24}{str(current):<18}{str(expected):<12}{status}")
+
+
 def _run_status(args) -> None:
-    raise NotImplementedError  # implemented in Task 7
+    from cognigy_mcp.reconcile import gather_state, diff_state, apply_fixes
+    state = gather_state()
+    issues = diff_state(state)
+    _print_state_table(state, issues)
+    drift_issues = [issue for issue in issues if issue.kind == "drift"]
+
+    if args.fix:
+        if drift_issues:
+            apply_fixes(drift_issues, state)
+            print("\nFixed drift.")
+        sys.exit(0)
+
+    sys.exit(1 if drift_issues else 0)
 
 
 def _run_update(args) -> None:
