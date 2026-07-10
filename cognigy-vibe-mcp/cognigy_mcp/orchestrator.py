@@ -237,6 +237,9 @@ class _Orchestrator:
             self._child.kill()
             self._child.wait()
         child = self._spawn()
+        # Drain stderr before any blocking stdout read — a verbose child can fill
+        # the 64KB stderr pipe and deadlock on the handshake response otherwise.
+        self._start_stderr_logger(child)
         self._replay_handshake(child)
 
         pending = self._pending_call
@@ -252,7 +255,6 @@ class _Orchestrator:
             self._notify_tools_changed()
 
         self._start_reader(child)
-        self._start_stderr_logger(child)
         self._monitor_child(child)
         self._child = child
         _log("do_restart: complete")

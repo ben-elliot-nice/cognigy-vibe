@@ -15,32 +15,51 @@ from cognigy_mcp.state import ProjectState
 from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain, dev_tools, voice_ops
 
 
+_CONFIG_SCHEMA_VERSION = 2
+
+
+def _load_config_candidate(candidate: Path) -> "dict | None":
+    try:
+        data = json.loads(candidate.read_text())
+    except json.JSONDecodeError as e:
+        print(f"cognigy-vibe: skipping malformed config {candidate}: {e}", file=sys.stderr)
+        return None
+    except OSError as e:
+        print(f"cognigy-vibe: cannot read config {candidate}: {e}", file=sys.stderr)
+        return None
+    if data.get("$schemaVersion") != _CONFIG_SCHEMA_VERSION:
+        print(
+            f"cognigy-vibe: {candidate} has $schemaVersion={data.get('$schemaVersion')!r}, "
+            f"expected {_CONFIG_SCHEMA_VERSION} — fields may be missing or misread",
+            file=sys.stderr,
+        )
+    return data
+
+
 def _find_config_file() -> "tuple[dict | None, str | None]":
-    """Cascade: cwd → ancestors → ~/.config/cognigy-vibe/config.json. First wins, no merging."""
-    home = Path.home()
-    current = Path.cwd().resolve()
+    """Cascade: COGNIGY_PROJECT_ROOT (or cwd) → ancestors (bounded by $HOME, if an ancestor)
+    → ~/.config/cognigy-vibe/config.json. First wins, no merging."""
+    home = Path.home().resolve()
+    current = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd()))).resolve()
+    # Only climb toward $HOME when it's actually an ancestor — otherwise (CI checkout,
+    # /tmp, a mounted volume) don't escape the starting directory onto unrelated ancestors.
+    stop = home if (home == current or home in current.parents) else current
 
     while True:
         candidate = current / "default-demo-config.json"
         if candidate.exists():
-            try:
-                return json.loads(candidate.read_text()), str(candidate)
-            except json.JSONDecodeError as e:
-                print(f"cognigy-vibe: skipping malformed config {candidate}: {e}", file=sys.stderr)
-            except OSError as e:
-                print(f"cognigy-vibe: cannot read config {candidate}: {e}", file=sys.stderr)
-        if current == home or current == current.parent:
+            data = _load_config_candidate(candidate)
+            if data is not None:
+                return data, str(candidate)
+        if current == stop or current == current.parent:
             break
         current = current.parent
 
     global_config = home / ".config" / "cognigy-vibe" / "config.json"
     if global_config.exists():
-        try:
-            return json.loads(global_config.read_text()), str(global_config)
-        except json.JSONDecodeError as e:
-            print(f"cognigy-vibe: skipping malformed config {global_config}: {e}", file=sys.stderr)
-        except OSError as e:
-            print(f"cognigy-vibe: cannot read config {global_config}: {e}", file=sys.stderr)
+        data = _load_config_candidate(global_config)
+        if data is not None:
+            return data, str(global_config)
 
     return None, None
 

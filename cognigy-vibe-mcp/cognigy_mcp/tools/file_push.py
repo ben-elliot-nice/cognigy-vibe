@@ -304,11 +304,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         data = path.read_bytes()
 
-        if data[:4] != b'\x89PNG':
-            return _ok({"error": f"File is not a PNG (wrong magic bytes): {path.name}"})
-
         if len(data) < 24:
             return _ok({"error": f"File is too small to be a valid PNG: {path.name}"})
+
+        if data[:8] != b'\x89PNG\r\n\x1a\n':
+            return _ok({"error": f"File is not a PNG (wrong magic bytes): {path.name}"})
+
+        if data[12:16] != b'IHDR':
+            return _ok({"error": f"File is not a valid PNG (missing IHDR chunk): {path.name}"})
 
         w = struct.unpack('>I', data[16:20])[0]
         h = struct.unpack('>I', data[20:24])[0]

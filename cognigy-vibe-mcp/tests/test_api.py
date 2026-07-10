@@ -322,13 +322,39 @@ def test_get_429_with_zero_retry_after_uses_floor(mock_sleep, client):
     mock_sleep.assert_called_once_with(1.0)
 
 
-def test_post_5xx_raises_immediately_without_retry(client):
+@patch("time.sleep")
+def test_post_5xx_retries_and_succeeds(mock_sleep, client):
+    with respx.mock:
+        respx.post(f"{BASE}/v2.0/flows").mock(side_effect=[
+            httpx.Response(503, json={"error": "unavailable"}),
+            httpx.Response(201, json={"_id": "flow-123"}),
+        ])
+        result = client.post("/v2.0/flows", {"name": "Test"})
+    assert result["_id"] == "flow-123"
+    assert mock_sleep.call_count == 1
+
+
+@patch("time.sleep")
+def test_post_5xx_raises_after_exhausting_retries(mock_sleep, client):
     with respx.mock:
         route = respx.post(f"{BASE}/v2.0/flows").mock(
             return_value=httpx.Response(503, json={"error": "unavailable"})
         )
         with pytest.raises(ApiError) as exc:
             client.post("/v2.0/flows", {"name": "Test"})
+    assert exc.value.status_code == 503
+    assert route.call_count == 3
+
+
+def test_post_retry_false_does_not_retry_on_5xx(client):
+    """Non-idempotent creates with no server-side dedupe (e.g. provisioning a
+    connection/endpoint by name) must not retry a 5xx into a duplicate create."""
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/connections").mock(
+            return_value=httpx.Response(503, json={"error": "unavailable"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.post("/v2.0/connections", {"name": "Test"}, retry=False)
     assert exc.value.status_code == 503
     assert route.call_count == 1
 

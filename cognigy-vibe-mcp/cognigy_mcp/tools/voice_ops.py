@@ -52,7 +52,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             "resourceLevel": "project",
             "projectId": m.project_id,
             "fields": {"apiKey": effective_key, "region": m.region},
-        })
+        }, retry=False)
         connection_id = conn_result["_id"]
 
         try:
@@ -63,7 +63,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "flowReferenceId": m.flow_reference_id,
                 "projectId": m.project_id,
                 "webrtcWidgetConfig": {"active": True},
-            })
+            }, retry=False)
         except Exception:
             try:
                 client.delete(f"/v2.0/connections/{connection_id}")
@@ -74,6 +74,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         endpoint_id = ep_result["_id"]
         url_token = ep_result.get("URLToken") or ep_result.get("urlToken", "")
         demo_url = f"{endpoint_base}/demo/{url_token}"
+
+        state.set("endpoints", m.endpoint_name, value={
+            "id": endpoint_id,
+            "urlToken": url_token,
+            "flowReferenceId": m.flow_reference_id,
+        })
+        cache.set("endpoints", endpoint_id, ep_result)
 
         if is_dummy:
             client.delete(f"/v2.0/connections/{connection_id}")
