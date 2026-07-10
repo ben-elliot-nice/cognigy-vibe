@@ -346,6 +346,19 @@ def test_post_5xx_raises_after_exhausting_retries(mock_sleep, client):
     assert route.call_count == 3
 
 
+def test_post_retry_false_does_not_retry_on_5xx(client):
+    """Non-idempotent creates with no server-side dedupe (e.g. provisioning a
+    connection/endpoint by name) must not retry a 5xx into a duplicate create."""
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/connections").mock(
+            return_value=httpx.Response(503, json={"error": "unavailable"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.post("/v2.0/connections", {"name": "Test"}, retry=False)
+    assert exc.value.status_code == 503
+    assert route.call_count == 1
+
+
 def test_delete_404_treated_as_success(client):
     with respx.mock:
         respx.delete(f"{BASE}/v2.0/flows/flow-123").mock(

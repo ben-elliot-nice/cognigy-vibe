@@ -77,11 +77,22 @@ class CognigyClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    @_RETRY
-    def post(self, path: str, body: dict) -> dict:
+    def post(self, path: str, body: dict, *, retry: bool = True) -> dict:
+        """retry=False for non-idempotent creates with no server-side dedupe, where a
+        5xx received after the write actually committed would retry into a duplicate
+        (e.g. provisioning a connection/endpoint by name)."""
+        if retry:
+            return self._post_retrying(path, body)
+        return self._post_once(path, body)
+
+    def _post_once(self, path: str, body: dict) -> dict:
         resp = self._http.post(self._base + path, json=body)
         self._raise_for_status(resp)
         return resp.json()
+
+    @_RETRY
+    def _post_retrying(self, path: str, body: dict) -> dict:
+        return self._post_once(path, body)
 
     @_RETRY
     def patch(self, path: str, body: dict) -> dict:
