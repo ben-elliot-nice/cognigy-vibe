@@ -1,0 +1,19 @@
+{
+  "name": "cognigy-vibe",
+  "description": "Cognigy AI agent development skills for Claude Code",
+  "version": "1.7.0",
+  "author": {
+    "name": "Ben Elliot",
+    "email": "ben.elliot@nice.com"
+  },
+  "homepage": "https://github.com/ben-elliot-nice/cognigy-vibe",
+  "repository": "https://github.com/ben-elliot-nice/cognigy-vibe",
+  "license": "MIT",
+  "keywords": ["cognigy", "ai-agents", "conversational-ai", "mcp", "skills", "nice"],
+  "mcpServers": {
+    "cognigy-vibe": {
+      "command": "uvx",
+      "args": ["--from", "cognigy-vibe-mcp==1.7.0", "cognigy-vibe-launch"]
+    }
+  }
+}

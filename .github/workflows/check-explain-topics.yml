@@ -3,7 +3,7 @@ name: Check explain topics
 on:
   pull_request:
     paths:
-      - 'skills/explain/resources/**'
+      - 'plugin/skills/explain/resources/**'
       - 'scripts/build_explain_topics.py'
 
 jobs:
@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: true
 
@@ -23,8 +23,8 @@ jobs:
       - name: Fail if generated files are out of sync
         run: |
           if ! git diff --exit-code \
-              skills/explain/SKILL.md \
-              cognigy-mcp/cognigy_mcp/tools/_explain_topics_generated.py; then
+              plugin/skills/explain/SKILL.md \
+              cognigy-vibe-mcp/cognigy_mcp/tools/_explain_topics_generated.py; then
             echo ""
             echo "ERROR: Generated files are out of sync with resources/."
             echo "Run 'uv run scripts/build_explain_topics.py' locally and commit the result."
