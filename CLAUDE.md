@@ -106,7 +106,6 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 - **PR review is automated via CI**, not a manual step. Commenting `@claude-review` on a PR triggers `.github/workflows/claude-code-review.yml`, which runs the official `pr-review-toolkit` plugin and posts findings as a PR comment.
 - **Re-review after fixes**: once a PR has had one `@claude-review` comment, every subsequent push auto re-triggers a review — no need to re-tag.
 - **Byline**: automated CI reviews sign as `*— Claude Reviewer*`. The implementer loop (applying fixes) signs as `*— claude implementer*`.
-- Both bylines go at the bottom of the comment body.
 
 ## OpenAPI Spec
 
