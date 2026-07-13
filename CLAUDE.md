@@ -107,7 +107,6 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 - **Re-review after fixes**: once a PR has had one `@claude-review` comment, every subsequent push auto re-triggers a review — no need to re-tag.
 - **Byline**: automated CI reviews sign as `*— Claude Reviewer*`. The implementer loop (applying fixes) signs as `*— claude implementer*`.
 - Both bylines go at the bottom of the comment body.
-- The manual `/review` skill still exists for ad hoc review of a PR or a local working diff, but is no longer a required step before merging.
 
 ## OpenAPI Spec
 
