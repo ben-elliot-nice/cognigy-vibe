@@ -48,6 +48,7 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `tts.voiceId` | string | required | Provider-specific voice ID | enter from Cognigy UI → Connections |
 | `tts.label` | string | required | Cognigy synthesizer connection label | enter from Cognigy UI → Connections |
 | `stt.vendor` | string | required | STT provider name | `"Microsoft"` |
+| `stt.model` | string | required | STT model identifier | enter from Cognigy UI → Connections |
 | `stt.language` | string | required | STT language/locale code | `"en-AU"` |
 | `stt.label` | string | required | Cognigy recognizer connection label | enter from Cognigy UI → Connections |
 | `stt.hints` | array | optional | Static STT hint phrases | `[]` |
@@ -85,7 +86,7 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 | `llm.toolChoice` | S1.1 Step 4 | `aiAgentJob` node `config.toolChoice` — set at creation; re-verified in S1.2 |
 | `locale` | S1.5(c) | Set Session Config `locale`; also endpoint locale binding |
 | `tts.*` | S1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
-| `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, language, connection label, hints, dynamicHints) |
+| `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, model, language, connection label, hints, dynamicHints) |
 | `channel.voiceGateway.endpointName` | S1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
 | `channel.voiceGateway.mode` | S1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
 | `channel.voiceGateway.bindFlow` | S1.5(d) | Whether to bind this endpoint to the demo flow |
