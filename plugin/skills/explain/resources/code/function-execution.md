@@ -41,6 +41,6 @@ timeout) from other providers' conventions.
 Discovery recipe if you need to create one:
   1. If a Function already exists in the target project, read its real shape:
      cognigy_list(resource_type="functions", project_id="<projectId>", full_objects=true)
-  2. Fall back to the OpenAPI spec (per this repo's CLAUDE.md, `./openapi.json`
-     or fetched per-environment) as the authoritative schema reference — it is
-     not wired into any MCP tool, so this is a manual/human step.
+  2. Fall back to describe_resource_schema(resource_type="functions", operation="create") —
+     it looks up the field-level shape directly from the live OpenAPI spec (no session
+     cookie needed, just the same API key already configured).

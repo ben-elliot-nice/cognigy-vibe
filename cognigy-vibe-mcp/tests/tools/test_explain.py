@@ -651,7 +651,7 @@ def test_function_execution_admits_create_body_gap(mock_client, state, cache):
     text = result[0].text
     assert "Creating a Function" in text
     assert "full_objects=true" in text, "Must give the cognigy_list discovery recipe"
-    assert "openapi.json" in text, "Must point to openapi.json as the manual fallback"
+    assert "describe_resource_schema" in text, "Must point to describe_resource_schema as the fallback"
 
 
 # ── Issue #207: sendMetadata documentation ───────────────────────────────────
