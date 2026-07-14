@@ -38,6 +38,31 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
 ## S0.0 — Load build config (BLOCKING preflight — runs before the interview)
 
+**Step 0 — Workspace anchor detection.** Before anything else, determine whether cwd is already inside an existing `Demo Builds/<brand>-demo/` directory. Every later phase (SA, SB, S1.3, S1.4, S1.5, S1.8, package export) writes artifacts relative to a single resolved anchor, `$DEMO_DIR` — this step computes it once so nothing downstream nests a second `Demo Builds/` folder inside an existing one.
+
+Run:
+
+```bash
+ANCHOR=""
+CHECK="$PWD"
+while [ "$CHECK" != "/" ] && [ "$CHECK" != "$HOME" ]; do
+  PARENT="$(dirname "$CHECK")"
+  if [ "$(basename "$PARENT")" = "Demo Builds" ]; then
+    ANCHOR="$CHECK"
+    break
+  fi
+  CHECK="$PARENT"
+done
+echo "ANCHOR=$ANCHOR"
+```
+
+- **`ANCHOR` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `Demo Builds/<customer-slug>-demo` (relative to cwd) once the customer name is known from S0 Q1, and created fresh in SA.
+- **`ANCHOR` is non-empty** → cwd (or an ancestor) is already an existing build directory. Hold `ANCHOR`. Once S0 Q1 (customer name) is collected, apply the S11 "Folder name" rule (`[customer]-demo`, lowercase) to get the expected slug, and compare it against `basename "$ANCHOR"`:
+  - **Match** → this is a continuation of the same build. Set `$DEMO_DIR="$ANCHOR"`. It already exists — do not create or nest a new `Demo Builds/` folder inside it; skip the `mkdir -p` in SA.
+  - **Mismatch** → cwd is inside a *different* customer's build directory. STOP before SA and ask the user directly: *"You're currently inside `<ANCHOR>`, which looks like an existing build for `<basename slug>`, but this build is for `<new customer>`. I don't want to nest a new build folder inside another customer's directory. Do you want to `cd` back to the session workspace root first, or is `<ANCHOR>` actually intended for this build?"* Do not silently proceed either way — this is a BLOCKING confirmation, not a warning.
+
+Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document says `Demo Builds/<customer>-demo` (or, in the S10 hand-back template, `Demo Builds/[customer]-demo`).
+
 **Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
 **Step 2 — Interview.** Run the S0 interview (below) to collect customer and build details.
