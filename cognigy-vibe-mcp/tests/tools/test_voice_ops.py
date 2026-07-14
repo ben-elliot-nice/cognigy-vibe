@@ -401,16 +401,11 @@ def test_provision_webrtc_endpoint_missing_flow_reference_id_returns_validation_
 def test_default_connection_type_and_fields_are_azure(mock_client, state, cache, monkeypatch):
     """Omitting connection_type/connection_fields preserves today's Azure default shape."""
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
-    mock_client.post.side_effect = [
-        {"_id": "conn-1"},
-        {"_id": "ep-1", "URLToken": "tok"},
-    ]
-    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    _args(mock_client)
 
     handlers = make_handlers(mock_client, state, cache)
     handlers["provision_webrtc_endpoint"]({
         "project_id": "proj-1",
-        "flow_id": "fid",
         "flow_reference_id": "fref",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
@@ -424,16 +419,11 @@ def test_default_connection_type_and_fields_are_azure(mock_client, state, cache,
 def test_generic_connection_type_and_fields_pass_through(mock_client, state, cache, monkeypatch):
     """A caller-supplied connection_type/connection_fields flows through untouched, proving genericity."""
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
-    mock_client.post.side_effect = [
-        {"_id": "conn-1"},
-        {"_id": "ep-1", "URLToken": "tok"},
-    ]
-    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    _args(mock_client)
 
     handlers = make_handlers(mock_client, state, cache)
     handlers["provision_webrtc_endpoint"]({
         "project_id": "proj-1",
-        "flow_id": "fid",
         "flow_reference_id": "fref",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
@@ -449,16 +439,11 @@ def test_generic_connection_type_and_fields_pass_through(mock_client, state, cac
 def test_connection_fields_cannot_override_api_key(mock_client, state, cache, monkeypatch):
     """A caller-supplied connection_fields={'apiKey': ...} must never override the real API key."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-secret-key")
-    mock_client.post.side_effect = [
-        {"_id": "conn-1"},
-        {"_id": "ep-1", "URLToken": "tok"},
-    ]
-    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    _args(mock_client)
 
     handlers = make_handlers(mock_client, state, cache)
     handlers["provision_webrtc_endpoint"]({
         "project_id": "proj-1",
-        "flow_id": "fid",
         "flow_reference_id": "fref",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
