@@ -50,7 +50,7 @@ Collect the schema. Group into ≤3 batches:
 |---|---|
 | **Identity & tenant** | owner initials; `connection.region` (known NICE CXone regions only — see table below); **API key** (→ `.env`) |
 | **LLM** | Discovered live — see below (no manual UUID entry) |
-| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language — **plaintext entry only, never a picklist.** There is no discovery mechanism for these values — any `AskUserQuestion` options list would be fabricated. Ask the user to type each value as shown in Cognigy UI → Settings → Connections. No defaults provided. |
+| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/model/label/language — **plaintext entry only, never a picklist.** There is no discovery mechanism for these values — any `AskUserQuestion` options list would be fabricated. Ask the user to type each value as shown in Cognigy UI → Settings → Connections. No defaults provided. |
 | **Channel & preview** | channel type (default voice-webRTC); VoiceGateway endpoint name (default `Click-to-Call`); voice-preview speech provider + connection name/region |
 
 `temperatureVoice` (0.2), `temperatureChat` (0.5), `maxTokens` (400), `toolChoice` (auto), `voiceBehaviour` (barge-in/VAD off) are written at defaults without a question unless the user asks.

@@ -898,6 +898,7 @@ cognigy_create {
       ttsLanguage: "<from buildConfig.tts.language>",
       ttsLabel: "<from buildConfig.tts.label>",
       sttVendor: "<from buildConfig.stt.vendor>",
+      sttModel: "<from buildConfig.stt.model>",
       sttLanguage: "<from buildConfig.stt.language>",
       sttLabel: "<from buildConfig.stt.label>",
       sttHints: ["<Customer brand name>", "<Persona name>", "<domain term 1>", "<domain term 2>", "<domain term 3>"],
@@ -920,7 +921,7 @@ JSON form (what the node emits in the flow definition — for reference):
 ```json
 {
   "synthesizer": { "vendor": "<from buildConfig.tts.vendor>", "language": "<from buildConfig.tts.language>", "voice": "<from buildConfig.tts.voice_id>", "label": "<from buildConfig.tts.label>", "options": { "model_id": "<from buildConfig.tts.model>" } },
-  "recognizer": { "language": "<from buildConfig.stt.language>", "label": "<from buildConfig.stt.label>", "vendor": "<from buildConfig.stt.vendor>", "punctuation": true, "profanityOption": "raw", "vad": { "enable": false } },
+  "recognizer": { "language": "<from buildConfig.stt.language>", "label": "<from buildConfig.stt.label>", "vendor": "<from buildConfig.stt.vendor>", "options": { "model": "<from buildConfig.stt.model>" }, "punctuation": true, "profanityOption": "raw", "vad": { "enable": false } },
   "bargeIn": { "enable": false, "actionHook": "voice", "dtmfBargein": false }
 }
 ```
