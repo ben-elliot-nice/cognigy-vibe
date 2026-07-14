@@ -151,6 +151,12 @@ First time in a new clone, trust the mise config:
 mise trust
 ```
 
+Install dev dependencies (test tooling lives in an optional-dependencies group, so plain `uv sync` skips it):
+
+```bash
+cd cognigy-vibe-mcp && uv sync --extra dev
+```
+
 Copy `.env.example` to `.env` and fill in your Cognigy credentials — `mise` auto-sources it when you enter the directory. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.
 
 `.mcp.json` is pre-configured for dev mode — `COGNIGY_VIBE_DEV=1` and `COGNIGY_VIBE_SOURCE_DIR=./cognigy-vibe-mcp` are baked in. Claude Code picks it up automatically on next start. The server runs from local source (`./cognigy-vibe-mcp`) with `reload_mcp` available. After editing source files, call `reload_mcp` — the server respawns from updated source and the tool list refreshes in the same session. No terminal restart needed.
