@@ -872,3 +872,88 @@ def test_cognigy_create_missing_body_returns_validation_error(mock_client, state
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "body" for d in data["details"])
+
+
+def test_cognigy_get_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(400, "Invalid value for field 'sourceType'")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "flows", "resource_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "Invalid value for field 'sourceType'" in data["detail"]
+
+
+def test_cognigy_list_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(403, "Forbidden")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({"resource_type": "flows", "project_id": "proj-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 403
+
+
+def test_cognigy_create_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.post.side_effect = ApiError(400, "Invalid value for field 'sourceType'")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({"resource_type": "knowledgestores", "body": {"sourceType": "bogus"}})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "sourceType" in data["detail"]
+
+
+def test_cognigy_update_get_current_propagates_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(404, "Not found")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_update"]({
+        "resource_type": "flows", "resource_id": "flow-1", "body": {"name": "New Name"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 404
+
+
+def test_cognigy_update_patch_propagates_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.return_value = {"_id": "flow-1", "type": "flow"}
+    mock_client.patch.side_effect = ApiError(500, "Encountered an unknown error")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_update"]({
+        "resource_type": "flows", "resource_id": "flow-1", "body": {"name": "New Name"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 500
+
+
+def test_cognigy_delete_propagates_non_404_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.delete.side_effect = ApiError(400, "Cannot delete: in use")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_delete"]({"resource_type": "flows", "resource_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+
+
+def test_cognigy_invoke_propagates_api_error_as_structured_response(mock_client, state, cache):
+    """Regression test for #216: cognigy_invoke must surface the upstream status/detail
+    instead of letting ApiError propagate into an opaque unstructured MCP error."""
+    from cognigy_mcp.api import ApiError
+    mock_client.post.side_effect = ApiError(400, "Invalid value for field 'sourceType'")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "knowledgestore",
+        "resource_id": "ks123",
+        "operation": "run",
+        "body": {"connector_id": "conn-1", "sourceType": "bogus"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "sourceType" in data["detail"]
