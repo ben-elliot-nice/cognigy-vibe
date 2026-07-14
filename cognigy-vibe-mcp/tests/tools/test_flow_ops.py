@@ -200,6 +200,23 @@ def test_cognigy_invoke_move_node_plural_resource_type(mock_client, state, cache
     )
 
 
+def test_cognigy_invoke_knowledgestore_run_hits_connector_path(mock_client, state, cache):
+    """resource_type='knowledgestore' + operation='run' must keep the /connectors/{id}/run
+    special-case path — normalising to the plural 'knowledgestores' must not break it."""
+    mock_client.post.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_invoke"]({
+        "resource_type": "knowledgestore",
+        "resource_id": "ks123",
+        "operation": "run",
+        "body": {"connector_id": "conn-1"},
+    })
+    mock_client.post.assert_called_once_with(
+        "/v2.0/knowledgestores/ks123/connectors/conn-1/run",
+        {"connector_id": "conn-1"},
+    )
+
+
 def test_get_flow_chart_hierarchy_uses_real_api_format(mock_client, state, cache):
     """_build_hierarchy must use rel['node'], rel['next'], rel['children'] — not nodeId/nextId/childIds."""
     mock_client.get.return_value = {

@@ -511,7 +511,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         m, err = validate(CognigyInvokeArgs, args)
         if err:
             return err
-        rtype = _normalise_rtype(m.resource_type)
+        rtype = "node" if m.resource_type.lower() in ("node", "nodes") else m.resource_type
         path = _invoke_path(rtype, m.resource_id, m.operation, m.body, m.flow_id)
         if path is None:
             return _ok({"error": f"flow_id required for {m.resource_type}/{m.operation}"})
