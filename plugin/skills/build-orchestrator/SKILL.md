@@ -457,7 +457,7 @@ If step 1 fails with a "not loaded" / missing-credentials error, `cognigy-vibe` 
 
 ### 1.2 Patch the AI Agent Job Node — all job config fields (cognigy-vibe)
 
-`create_ai_agent` (S1.1 Step 1) creates the `aiAgentJob` node. `update_ai_agent` (S1.1 Step 3) already sets the key job fields — this step patches the remaining node-level config that `update_ai_agent` does not cover: `memoryContextInjection` and `toolChoice`. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
+S1.1 Step 4 creates the `aiAgentJob` node with its core persona/LLM fields already set, including `toolChoice`. This step patches `memoryContextInjection` (not set at creation) and re-asserts `toolChoice` as a safety check, then verifies both took effect. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
 **This step is mandatory.** Without it the agent loses caller context mid-conversation.
 
 `cognigy_update` does an always-fresh GET + deep merge — `merge_config: true` ensures a safe patch:
@@ -475,7 +475,7 @@ cognigy_update {
 }
 ```
 
-> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch S1.1 Step 3 (`update_ai_agent`) if so.
+> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch the `aiAgentJob` node's config (S1.1 Step 4 shape, via `cognigy_update` with `merge_config: true`) if so.
 
 > Verify by `cognigy_get` on the same node: confirm `memoryContextInjection` and `toolChoice` are set and hold your values, not defaults.
 
@@ -1192,7 +1192,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 | Layer | persona.md H2 heading | Agent-level field | Job Node config field (after S1.2 patch) |
 |---|---|---|---|
 | (a) **Persona** — WHO the agent is (incl. brand voice) | `## Persona` | agent `description` | n/a — agent-level only |
-| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `update_ai_agent` S1.1 Step 3; **≤ 1000 chars**) | n/a — agent-level only |
+| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `cognigy_update(resource_type="aiagents", ...)` S1.1 Step 4; **≤ 1000 chars**) | n/a — agent-level only |
 | (c) **Job Description** — WHAT this job handles | `## Job Description` | n/a | `description` (= `jobDescription`) |
 | (d) **Job Instructions** — HOW this job procedurally runs | `## Job Instructions` | n/a | `instructions` (= `jobInstructions`) |
 
@@ -1200,7 +1200,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 
 **Extraction rule for S1.1 + S1.2:** parse `{Customer}-agent-persona.md` by H2 heading and map each block to its OWN field — they are **NOT** concatenated:
 - agent `description` = `## Persona` block only (1A — WHO, incl. brand voice).
-- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `update_ai_agent` S1.1 Step 3 — see S1.1).
+- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `cognigy_update(resource_type="aiagents", ...)` S1.1 Step 4 — see S1.1).
 - `jobDescription` = `## Job Description` block (2A).
 - `jobInstructions` = `## Job Instructions` block (2B, S2.5 empathy library verbatim).
 
