@@ -59,9 +59,22 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `channel.voiceGateway.bindFlow` | boolean | required | Whether to bind this endpoint to the flow | `true` |
 | `voicePreview.speechProvider` | string | required | In-UI preview speech provider name | `"Microsoft Azure Speech Services"` |
 | `voicePreview.connectionName` | string | required | Cognigy connection label for preview | `"Test"` |
-| `voicePreview.region` | string | required | Azure region for preview | `"australiaeast"` |
+| `voicePreview.connectionType` | string | required | Cognigy connection `type` for the preview speech provider | `"MicrosoftSpeechProvider"` |
+| `voicePreview.connectionFields` | object | required | Non-credential connection fields, vendor-specific shape | `{"region": "australiaeast"}` |
 | `voiceBehaviour.bargeIn` | boolean | optional | Enable barge-in (caller interrupts agent) | `false` |
 | `voiceBehaviour.vad` | boolean | optional | Enable voice activity detection | `false` |
+
+> **Why preview differs from the runtime VoiceGateway endpoint.** Voice
+> *preview* (the in-browser Click-to-Call widget) uses a single speech
+> connection for one vendor — `voicePreview.connectionType` /
+> `voicePreview.connectionFields` describe that one connection.
+> `voicePreview.speechProvider` is a human-readable label only (e.g.
+> "Microsoft Azure Speech Services") — it is descriptive metadata and is
+> not consumed by any tool. The runtime VoiceGateway endpoint's
+> `tts.*`/`stt.*` config (see the "Voice — TTS/STT" wizard group) is a
+> separate pairing of two vendors — one for synthesis, one for
+> recognition — because it serves live telephony calls. Do not model
+> `voicePreview` as a TTS/STT split — it isn't one.
 
 ### 2. Cascade discovery order
 
@@ -94,7 +107,7 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 | `connection.baseUrl` | MCP auth + as-built doc | API host for all Cognigy API calls in this session |
 | `connection.endpointBase` | As-built doc / baseline | Endpoint host recorded in `[customer]-baseline.md` |
 | `connection.region` | S0.0 summary display | Shown in config confirmation table |
-| `voicePreview.*` | S1.5(c) | In-UI voice preview connection (Azure Speech Services) |
+| `voicePreview.*` | S1.5(g) | In-UI voice preview connection (`provision_webrtc_endpoint`) |
 | `voiceBehaviour.bargeIn` | S1.5(c) | Set Session Config `bargeIn` |
 | `voiceBehaviour.vad` | S1.5(c) | Set Session Config `enableVoiceActivityDetection` |
 | `owner.initials` | S1.1 | Build artefact naming prefix |
