@@ -626,3 +626,16 @@ def test_connections_topic_documents_create_body(mock_client, state, cache):
     assert '"extension"' in text, "Must document the extension field"
     assert '"resourceLevel"' in text, "Must document the resourceLevel field"
     assert "MicrosoftSpeechProvider" in text, "Must show a real, verified connection type example"
+
+
+# ── Issue #207: endpoint-config channel-type field divergence ───────────────
+
+def test_endpoint_config_documents_rest_channel_field_divergence(mock_client, state, cache):
+    """endpoint-config must document that 'rest' channel reverses the flowId/flowReferenceId convention."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "endpoint-config"})
+    text = result[0].text
+    assert "rest" in text.lower()
+    assert "Field 'flowReferenceId' is not allowed" in text, \
+        "Must document the exact API rejection message for the rest channel"
+    assert "voiceGateway2" in text
