@@ -242,15 +242,17 @@ e.g. "AMP sounds warmer and more human than Colonial First State (institutional)
 
 The build skill keeps the interview UX. Scoping the demo — the 12 facts + design conversation — is delegated to the purpose-built sub-skill.
 
-**Output directory:** create the demo folder before invoking `cognigy-vibe:scope-demo`, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default, which is always the session workspace root):
+**Output directory:** Use `$DEMO_DIR` resolved in S0.0 Step 0, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default):
 
 ```bash
-mkdir -p "Demo Builds/<customer>-demo"
+# Only create it if ANCHOR was empty (i.e. it doesn't already exist).
+# If ANCHOR matched in S0.0 Step 0, $DEMO_DIR already exists — skip this.
+mkdir -p "$DEMO_DIR"
 ```
 
-Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
+Pass `output_dir: "$DEMO_DIR"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
 
-> **Note:** Claude's cwd remains the session workspace root throughout — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
+> **Note:** When `ANCHOR` was empty (the common case), Claude's cwd is the session workspace root and does not change when the demo folder is created — `$DEMO_DIR` is a fresh subdirectory of cwd. When `ANCHOR` matched, cwd is already inside `$DEMO_DIR` — subsequent relative paths below still resolve correctly either way because every phase reads from `$DEMO_DIR`, not from a re-derived literal path. See `explain("session-workspace")` for the directory model and S0.0 Step 0 for anchor detection.
 
 **Invoke in context-provided mode.** Pass the interview answers verbatim so Phase 1 has nothing to ask about. Mapping (interview Q → scope-demo Fact):
 
