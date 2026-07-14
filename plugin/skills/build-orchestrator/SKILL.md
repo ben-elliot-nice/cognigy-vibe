@@ -481,6 +481,30 @@ cognigy_update {
 
 > Verify by `cognigy_get` on the same node: confirm `memoryContextInjection` and `toolChoice` are set and hold your values, not defaults.
 
+### 1.2.5 Delete the platform's auto-scaffolded placeholder tool
+
+S1.1's `cognigy_create` call (see `explain("agent-job-node")`) triggers the same
+server-side behavior as any other `aiAgentJob` node creation: Cognigy auto-scaffolds a
+default placeholder `aiAgentJobTool` child node (observed example: `unlock_account`)
+that this plugin never created and never wants left in the build. See
+`explain("agent-tool-scaffold")`.
+
+Using the same `get_flow_chart` call from S1.2 (you already fetched the `aiAgentJob` node
+ID from it), find the `aiAgentJobTool` child under it — before S1.3 has created any real
+tools, it is the only one — and delete it:
+
+```
+cognigy_delete {
+  resource_type: "node",
+  resource_id: "<scaffoldToolNodeId>",
+  flow_id: "<flowId>"
+}
+```
+
+Do this before S1.3 runs. Do not edit the scaffold tool in place. If no
+`aiAgentJobTool` child is present, the platform didn't scaffold one this time — skip
+the delete and proceed to S1.3. If more than one is present, delete all of them.
+
 ### 1.3 Author tools as `.tool.json` files, then push (cognigy-vibe `push_agent_tool`)
 
 **Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `Demo Builds/<customer>-demo/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). The benefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (S6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)

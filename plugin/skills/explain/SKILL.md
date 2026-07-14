@@ -23,6 +23,7 @@ aiagent:
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
   agent-tool-json            .tool.json convention — field reference, toolType selection, toolId uniqueness rule
   agent-tool-patterns        Tool granularity options (granular/consolidated/action-parameterized) and context.toolResponse channel
+  agent-tool-scaffold        Platform auto-scaffolds a default placeholder tool on aiAgentJob node creation — detect and delete it before authoring real tools
   multi-agent-architecture   Concierge + Specialists pattern, specialist job types, routing, context schema, stub agent
   tool-conditions            CognigyScript condition field, hiding tools from LLM
   tool-selection             when to use push_agent_tool vs push_code_node vs cognigy_create vs cognigy_update
