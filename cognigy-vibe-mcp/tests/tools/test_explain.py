@@ -639,3 +639,15 @@ def test_endpoint_config_documents_rest_channel_field_divergence(mock_client, st
     assert "Field 'flowReferenceId' is not allowed" in text, \
         "Must document the exact API rejection message for the rest channel"
     assert "voiceGateway2" in text
+
+
+# ── Issue #207: functions create-body-shape gap admission ───────────────────
+
+def test_function_execution_admits_create_body_gap(mock_client, state, cache):
+    """function-execution must admit no verified create-body shape exists and give a discovery recipe."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "function-execution"})
+    text = result[0].text
+    assert "Creating a Function" in text
+    assert "full_objects=true" in text, "Must give the cognigy_list discovery recipe"
+    assert "openapi.json" in text, "Must point to openapi.json as the manual fallback"

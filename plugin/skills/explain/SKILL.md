@@ -33,7 +33,7 @@ aiagent:
 code:
   code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest response shape and storage config
   cognigyScript              interpolation contexts, what works where
-  function-execution         async pattern, inject-back via sessions API
+  function-execution         async pattern, inject-back via sessions API, create-body-shape gap
   output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
   profile-editing            Writing to the Cognigy contact profile — why direct mutation doesn't persist, api.updateProfile behaviour, and getProfileVar/setProfileVar/mergeProfileVar utility functions
   session-injection          context/state inject for in-session testing
