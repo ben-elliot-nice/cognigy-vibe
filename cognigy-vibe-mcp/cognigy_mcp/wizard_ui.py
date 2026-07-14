@@ -83,7 +83,7 @@ def print_step(text: str) -> None:
     console.print(f"[cyan]›[/cyan] {text}")
 
 
-def print_error_panel(message: str, exc: Exception, debug: bool = False) -> None:
+def print_error_panel(message: str, exc: Exception, debug: bool = False, title: str = "Setup failed") -> None:
     body = message
     if isinstance(exc, StepFailure):
         captured = "\n".join(filter(None, [exc.result.stdout.strip(), exc.result.stderr.strip()]))
@@ -93,4 +93,4 @@ def print_error_panel(message: str, exc: Exception, debug: bool = False) -> None
         tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         body = f"{body}\n\n{tb}"
     console.print()
-    console.print(Panel(body, title="Setup failed", border_style="red"))
+    console.print(Panel(body, title=title, border_style="red"))
