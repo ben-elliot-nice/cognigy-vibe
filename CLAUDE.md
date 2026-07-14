@@ -34,7 +34,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
    - The skill presents 4 options. **Always choose option 2 (Push and create PR).**
    - The skill will `git push -u origin <branch>` and run `gh pr create`.
    - **PRs target `dev`**, not `main`. The `dev → main` promotion (cutting a stable release) is the maintainer's responsibility and happens separately.
-   - If the branch tracks a GitHub issue, include `Closes #<number>` in the PR body — GitHub will auto-close the issue on merge.
+   - If the branch tracks a GitHub issue, include `Closes #<number>` in the PR body for traceability. This does **not** auto-close the issue — `main`, not `dev`, is the repo's default branch, and GitHub only auto-closes on merges to the default branch.
 
 8. **Verify PR and check for conflicts**
    ```bash
@@ -67,10 +67,11 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 11. **Report to user** — final CI status (`success` / `failure`), PR URL, and any actions taken (rebases, force-pushes, re-runs).
 
-12. **Close the issue** — once the PR is merged, verify the related GitHub issue is closed. If `Closes #<number>` was in the PR body it will have auto-closed; otherwise close it manually:
+12. **Label, don't close** — once the PR is merged to `dev`, add the `pending release` label to the issue and remove `wip` if present (check current labels first: `gh issue view <number> --json labels`):
     ```bash
-    gh issue close <number> --comment "Resolved in PR #<pr-number>"
+    gh issue edit <number> --add-label "pending release" --remove-label wip
     ```
+    Do **not** close the issue here — merging to `dev` is not a release, and `dev` isn't the default branch so GitHub's `Closes #` auto-close never fires on this merge anyway. Closing only happens when the fix actually ships to `main` (the `dev → main` promotion), which is the maintainer's responsibility.
 
 ## Hotfix Workflow
 
