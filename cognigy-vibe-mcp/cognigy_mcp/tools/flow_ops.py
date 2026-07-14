@@ -371,7 +371,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             cache.set(rtype, rid, data)
             source = "api"
         if m.fields:
-            data = {k: data[k] for k in m.fields if k in data}
+            filtered = {k: data[k] for k in m.fields if k in data}
+            if not filtered:
+                return _ok({
+                    "error": "none of the requested fields exist on this resource",
+                    "requested_fields": m.fields,
+                    "available_fields": sorted(data.keys()),
+                })
+            data = filtered
         data = strip_response(data)
         return _ok({**data, "_source": source})
 
@@ -413,6 +420,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result_data = data if not isinstance(data, list) else {"items": data, "count": len(data)}
         if m.fields:
             items = result_data.get("items", [])
+            available = {k for item in items for k in item.keys()}
+            if items and not (set(m.fields) & available):
+                return _ok({
+                    "error": "none of the requested fields exist on any item in this list",
+                    "requested_fields": m.fields,
+                    "available_fields": sorted(available),
+                })
             filtered = [{k: item[k] for k in m.fields if k in item} for item in items]
             result_data = {"items": filtered, "count": len(filtered)}
         if m.full_objects:

@@ -64,13 +64,24 @@ which gh
 
 ## Step 3a: Submit via gh (if available)
 
-If `which gh` succeeded, run:
+If `which gh` succeeded, first ensure the `claude-submission` label exists (creating it is a no-op if it's already there):
+
+```bash
+gh label create "claude-submission" \
+  --repo ben-elliot-nice/cognigy-vibe \
+  --description "Filed autonomously by Claude from conversation context" \
+  --color "5319e7" \
+  --force
+```
+
+Then run:
 
 ```bash
 gh issue create \
   --repo ben-elliot-nice/cognigy-vibe \
   --label "bug" \
   --label "pending release" \
+  --label "claude-submission" \
   --milestone "1.7.0" \
   --title "<title>" \
   --body "$(cat <<'EOF'
@@ -82,6 +93,7 @@ EOF
 Always include:
 - `--label "bug"` — all issues filed via this skill are bugs
 - `--label "pending release"` — fixed in dev, awaiting promotion to main
+- `--label "claude-submission"` — every issue filed via this skill is Claude-authored; lets the issue list be filtered to separate these from user-filed issues
 - `--milestone "1.7.0"` — current active milestone; update if a different milestone is in scope
 
 Report the created issue URL to the user.
