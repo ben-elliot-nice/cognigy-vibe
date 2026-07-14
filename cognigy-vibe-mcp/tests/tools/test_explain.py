@@ -575,3 +575,27 @@ def test_explain_topic_wrong_type_returns_validation_error(mock_client, state, c
     result = handlers["explain"]({"topic": 123})
     assert result.isError is True
     assert len(result.content) == 1
+
+
+def test_voice_gateway_documents_vendor_enum_and_real_flat_shape(mock_client, state, cache):
+    """Regression #211: voice-gateway must document the real flat setSessionConfig
+    shape and the lowercase vendor-slug enum — not a nested synthesizer/recognizer
+    shape, and not vendor casing that silently falls back to Cognigy's "custom"."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "voice-gateway"})
+    text = result[0].text
+
+    # Canonical lowercase vendor slugs must be documented
+    for slug in ["aws", "deepgram", "deepgramflux", "elevenlabs", "google", "microsoft", "nuance", "speechmatics"]:
+        assert slug in text, f"voice-gateway must document vendor slug '{slug}'"
+
+    # Must explicitly warn that these are lowercase API slugs, not Cognigy UI display names
+    assert "custom" in text.lower(), "Must explain the 'custom' fallback that gave issue #211 its symptom"
+
+    # Must NOT present the old fictional nested synthesizer/recognizer/bargeIn shape
+    assert '"synthesizer"' not in text, "Must not document the fictional nested synthesizer shape"
+    assert '"recognizer"' not in text, "Must not document the fictional nested recognizer shape"
+    assert '"bargeIn"' not in text, "Must not document the fictional nested bargeIn shape"
+
+    # Must document the real flat shape's vendor fields
+    assert "ttsVendor" in text and "sttVendor" in text, "Must document the real flat ttsVendor/sttVendor keys"
