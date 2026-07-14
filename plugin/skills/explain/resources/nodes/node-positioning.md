@@ -1,6 +1,6 @@
 ---
 topic: node-positioning
-description: append vs appendChild modes, child branch population for Once, IF, ifThenElse nodes, lookup default branch
+description: append vs appendChild modes, moving an existing node via cognigy_update, child branch population for Once, IF, ifThenElse nodes, lookup default branch
 group: nodes
 ---
 
@@ -15,6 +15,13 @@ Use when adding aiAgentJobTool as a child of an aiAgentJob node.
   body: {"type": "aiAgentJobTool", "mode": "appendChild", "target": "<aiAgentJobNodeId>"}
 
 See explain("agent-job-node") for the aiAgentJob node's own creation/insertion sequence.
+
+### Moving an existing node
+There is no `cognigy_invoke` move operation — `resource_type="node", operation="move"` is not
+a real API endpoint and 404s (see issue #237). To reposition an existing node, PATCH it via
+`cognigy_update` with the same `mode`/`target` fields used at creation time:
+  cognigy_update(resource_type="node", resource_id="<nodeId>", flow_id="<flowId>",
+    body={"mode": "append", "target": "<node-to-move-after>"})
 
 ### Common mistakes
 - Using chartReference as target → 404 "Failed to find chart node"
