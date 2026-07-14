@@ -5,7 +5,7 @@
 This plugin gives Claude Code structured access to the Cognigy API for building AI agent demos. It is built in two layers: a Python MCP server and a set of composite skills.
 
 ```
-Composite skills       add-aiagent-job, design-agent-*, init-cognigy-vibe, scope-demo
+Composite skills       design-agent-*, init-cognigy-vibe, scope-demo
       ↓ call MCP tools
 cognigy-vibe MCP       cognigy_create, cognigy_update, get_flow_chart, push_code_node, explain ...
       ↓ calls
@@ -128,7 +128,6 @@ Skills orchestrate MCP tool calls and user interaction to accomplish higher-leve
 
 | Skill | Purpose |
 |---|---|
-| `cognigy-vibe:add-aiagent-job` | Add an AI Agent Job node + tool nodes to an existing flow |
 | `cognigy-vibe:scope-demo` | Four-phase discovery → demo plan document |
 | `cognigy-vibe:design-agent` | Orchestrate full agent design workflow |
 | `cognigy-vibe:design-agent-persona` | Agent identity, brand voice, compliance framing |

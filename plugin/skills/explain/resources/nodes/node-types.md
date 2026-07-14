@@ -27,6 +27,7 @@ This is an alias for flow-chart-reading + extension-map combined.
   aiAgentJob        AI Agent job (extension: @cognigy/basic-nodes)
   aiAgentJobTool    AI Agent tool branch (extension: @cognigy/basic-nodes)
   aiAgentToolAnswer Tool result surface (extension: @cognigy/basic-nodes)
+  See explain("agent-job-node") for the aiAgentJob creation sequence and config schema.
 
 For extension details: explain("extension-map")
 For chart reading and hierarchy: explain("flow-chart-reading")

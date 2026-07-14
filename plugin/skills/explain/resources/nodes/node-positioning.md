@@ -14,6 +14,8 @@ Only reliable insertion mode. Target = node you want to insert AFTER.
 Use when adding aiAgentJobTool as a child of an aiAgentJob node.
   body: {"type": "aiAgentJobTool", "mode": "appendChild", "target": "<aiAgentJobNodeId>"}
 
+See explain("agent-job-node") for the aiAgentJob node's own creation/insertion sequence.
+
 ### Common mistakes
 - Using chartReference as target → 404 "Failed to find chart node"
 - New flows have Start and End nodes; list them first to get Start ID as initial append target

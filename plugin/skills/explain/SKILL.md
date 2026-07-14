@@ -18,6 +18,7 @@ aiagent:
   agent-avatar-image         Custom avatar image on AI Agent — data URI pattern, imageOptimizedFormat, file spec, push_agent_avatar usage
   agent-behavioral-rules     Silent tool execution, outcome-based framing, compliance rules in tool descriptions
   agent-handover             Escalation to human pattern and handover context artefact design (two-consumer model)
+  agent-job-node             aiAgentJob node — assumptions, resolution/insertion procedure, config schema, tool-node creation
   agent-persona-authoring    AI Agent description and instructions field authoring — structure, constraints, speaking style
   agent-tool-branch          aiAgentJobTool + code + toolAnswer assembly, tool args access
   agent-tool-json            .tool.json convention — field reference, toolType selection, toolId uniqueness rule

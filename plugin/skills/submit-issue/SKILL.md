@@ -11,7 +11,7 @@ File a GitHub issue for a bug or unexpected behaviour in this plugin (an MCP ser
 
 From the current conversation, extract:
 
-- **Component**: The specific MCP tool (e.g. `cognigy_create`, `resolve_resource`) or skill (e.g. `add-aiagent-job`) that failed. Use `unknown` if unclear.
+- **Component**: The specific MCP tool (e.g. `cognigy_create`, `resolve_resource`) or skill (e.g. `build-config`) that failed. Use `unknown` if unclear.
 - **What happened**: The observed behaviour — what actually occurred.
 - **What was expected**: The correct/intended behaviour.
 - **Reproduction steps**: Numbered steps that would reproduce the failure.
@@ -27,7 +27,7 @@ From the current conversation, extract:
 
 Examples:
 - `[cognigy_create] 500 error when creating aiAgentJob node`
-- `[add-aiagent-job skill] resolve_resource returns no match for valid flow name`
+- `[agent-job-node explain topic] resolve_resource returns no match for valid flow name`
 
 **Body:**
 

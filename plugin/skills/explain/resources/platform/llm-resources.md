@@ -44,7 +44,7 @@ Builders configure LLMs by **label** (readable, stable across people); the build
 
 ### Assigning an org-level LLM to a new project
 
-Use `assign_org_llm` after `create_ai_agent`. It appends the project to the LLM's `assignedToProjects` list safely:
+Use `assign_org_llm` after creating the agent resource (`cognigy_create(resource_type="aiagents", ...)`). It appends the project to the LLM's `assignedToProjects` list safely:
 
 ```
 assign_org_llm {
@@ -91,7 +91,7 @@ manage_packages {
 ### `_id` vs `referenceId`
 
 - `_id` — MongoDB ObjectId hex string. Required by `assign_org_llm` and for direct API calls (`GET /v2.0/largelanguagemodels/<_id>`).
-- `referenceId` — UUID. Required by `update_ai_agent.jobConfig.llmProviderReferenceId`.
+- `referenceId` — UUID. Required by the `aiAgentJob` node's `config.llmProviderReferenceId` — see `explain("agent-job-node")`.
 
 Both are returned by `cognigy_list`. Store both in `buildConfig.llm.options[]` (`id` for assignment, `referenceId` for the job config patch).
 

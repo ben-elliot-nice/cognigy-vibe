@@ -71,7 +71,7 @@ In the recap that follows S0.6, show a compact table:
 
 Ask: *"Proceed with these defaults, switch LLM to a listed alternate, or override a field for this build only?"*
 
-Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 2 reads; it is always set before S1 runs.
+Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 3 reads; it is always set before S1 runs.
 
 Per-build overrides update `buildConfig` in memory for this run only — they do not rewrite the config file. To permanently change defaults, the user re-runs `cognigy-vibe:init-cognigy-vibe`.
 
@@ -307,7 +307,7 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 
 All build defaults come from `buildConfig` (loaded via `get_build_state`). `buildConfig` is populated from live tenant discovery by `cognigy-vibe:init-cognigy-vibe` — there are no hardcoded defaults in this skill. Read `cognigy-vibe:build-config` for the full schema reference.
 
-> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 3 / S1.2 `cognigy_update`.
+> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 4 / S1.2 `cognigy_update`.
 
 ---
 
@@ -363,64 +363,89 @@ Do not proceed on stale in-memory facts from a prior session. The design docs on
 
 **Extraction rule (per S2 — each block to its OWN field, NOT concatenated):**
 - agent `description` = `## Persona` block (1A) — **≤ 1000 chars**
-- agent `instructions` = `## Special Instructions` block (1B) — **≤ 1000 chars**; set via `update_ai_agent` in S1.1 Step 3
-- `jobDescription` = `## Job Description` block (2A, H2 stripped) — set via `cognigy_update` on the `aiAgentJob` node (S1.2)
-- `jobInstructions` = `## Job Instructions` block (2B, H2 stripped, S2.5 empathy library verbatim) — set via `cognigy_update` on the `aiAgentJob` node (S1.2)
+- agent `instructions` = `## Special Instructions` block (1B) — **≤ 1000 chars**; set via `cognigy_update(resource_type="aiagents", ...)` in Step 4
+- `jobDescription` = `## Job Description` block (2A, H2 stripped) — set on the `aiAgentJob` node in Step 4
+- `jobInstructions` = `## Job Instructions` block (2B, H2 stripped, S2.5 empathy library verbatim) — set on the `aiAgentJob` node in Step 4
 
 **🔴 Pre-flight character gate (BLOCKING).** Before the agent-creation calls, count the characters of BOTH the `## Persona` block and the `## Special Instructions` block. If EITHER exceeds **1000**, condense it (the persona sub-skill should already keep both under budget — see S2) and re-count. Do NOT make the call with an over-length field — Cognigy throws a save error the agent silently survives, and reconciling that mid-build is exactly the friction this gate removes.
 
-> **Re-count required on any subsequent patch.** If `cognigy_update` is called later in the session to update the agent `description` or `instructions` fields (e.g. after a persona edit), re-run the ≤1000-char count on the new value **before** sending the call. The pre-flight gate runs once before S1.1 Steps 1–3; it does not automatically re-run on later patches. A post-patch over-length field silently fails on save and survives undetected until S1.7 Phase A assertion 12.
+> **Re-count required on any subsequent patch.** If `cognigy_update` is called later in the session to update the agent `description` or `instructions` fields (e.g. after a persona edit), re-run the ≤1000-char count on the new value **before** sending the call. The pre-flight gate runs once before S1.1 Steps 1–4; it does not automatically re-run on later patches.
 
-**The agent-creation surface is two NiCE calls, not one.** `create_ai_agent` accepts ONLY `{ name, description, projectId?, knowledgeStoreReferenceId? }` — every other field (job fields, LLM, temperature, locale) is set by `update_ai_agent` or a S1.2 node patch. Build it in three steps.
+**Build the agent + job node in four steps, all with cognigy-vibe — no other MCP required.**
 
-**Step 1 — Create project + agent + flow + endpoint (`create_ai_agent`).**
+**Step 1 — Create project + flow + endpoint.**
 
-```
-create_ai_agent {
-  name: "<Customer>_Demo_BH",
-  description: "<## Persona block (1A) ONLY — ≤1000 chars, brand voice included, NO Special Instructions concatenated>"
-}
-```
-
-Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.referenceId`, `endpoint.URLToken`, `endpoint.endpointUrl`. **Capture all IDs immediately.**
+Create the project, flow, and endpoint via the standard `cognigy_create` primitive calls
+already used elsewhere in this doc for these resource types (`resource_type="projects"`,
+`"flows"`, `"endpoints"`). Capture `projectId`, `flow.id` (mongo), `flow.referenceId`,
+`endpoint.URLToken`, `endpoint.endpointUrl` from the responses.
 
 > ⚠️ Returned `endpointUrl` uses host `cognigy-api-au1.nicecxone.com` — that 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>` in the as-built doc.
 
-**Step 2 — LLM gate.** Confirm the selected LLM is available in the new project before relying on generation.
+**Step 2 — Create the agent resource.**
+
+```
+cognigy_create(resource_type="aiagents", body={
+  "name": "<Customer>_Demo_BH",
+  "description": "<## Persona block (1A) ONLY — ≤1000 chars, brand voice included, NO Special Instructions concatenated>",
+  "projectId": "<projectId from Step 1>"
+})
+```
+
+Capture `agent.id` (mongo `_id`) and `agent.referenceId` (UUID — required by the Job node's `aiAgent` config field, see Step 4).
+
+> **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
+
+**Step 3 — LLM gate.** Confirm the selected LLM is available in the new project before relying on generation.
 
 1. `cognigy_list { resource_type: "largelanguagemodels", project_id: "<new projectId>" }` — check if `buildConfig.llm.selected.referenceId` appears in the result.
-2. **If present** → proceed to Step 3.
+2. **If present** → proceed to Step 4.
 3. **If absent AND `buildConfig.llm.selected.resourceLevel == "organisation"`** → call `assign_org_llm { project_id: "<new projectId>", llm_id: "<buildConfig.llm.selected.id>" }`. On `already_assigned` or `assigned` → proceed. On any error → surface to user and stop.
 4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy-vibe:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
 
 > **Note:** Do not use `manage_packages` export/import as the primary LLM wiring path — it is a fallback for project-scoped LLMs only. `assign_org_llm` is the correct path for org-level LLMs (the default for any config populated by `init-cognigy-vibe`).
-**Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the S1.1.5 MCP wire-up step.
+
+**Step 4 — Rename agent + set remaining agent fields, then create the Job node.**
+
+First, the agent-level rename and guardrails:
 
 ```
-update_ai_agent {
-  aiAgentId: "<agent.id>",
-  name: "<personaName from persona.md>",        // renames the AGENT; project keeps <Customer>_Demo_BH
-  instructions: "<## Special Instructions block (1B) — ≤ 1000 chars>",
-  jobConfig: {
-    jobName: "<Customer> Concierge — <Persona>",
-    jobDescription: "<## Job Description block (2A) from {Customer}-agent-persona.md>",
-    jobInstructions: "<## Job Instructions block (2B) — INCLUDING the S2.5 empathy library verbatim>",
-    llmProviderReferenceId: "<buildConfig.llm.selected.referenceId — confirmed available in this project by Step 2>",
-    temperature: "<buildConfig.llm.temperatureVoice>",   // voice/transactional default; use buildConfig.llm.temperatureChat for primarily conversational chat channels (webchat/WhatsApp)
-    maxTokens: "<buildConfig.llm.maxTokens>"
+cognigy_update(resource_type="aiagents", resource_id="<agent.id>", body={
+  "name": "<personaName from persona.md>",
+  "instructions": "<## Special Instructions block (1B) — ≤ 1000 chars>"
+})
+```
+
+This renames the AGENT; the project keeps `<Customer>_Demo_BH`. The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Step 2) and `instructions` (Step 4) first. The agent `instructions` field (1B) is distinct from the job-node `jobInstructions` (2B) — different levels, set by different calls.
+
+Then create the `aiAgentJob` node — see `explain("agent-job-node")` for the full schema, insertion procedure, and gotchas. This build's field mapping:
+
+```
+cognigy_create(resource_type="node", flow_id="<flow.id from Step 1>", body={
+  "type": "aiAgentJob",
+  "label": "<Customer> Concierge — <Persona>",
+  "target": "<Start node ID, from get_flow_chart>",
+  "mode": "append",
+  "config": {
+    "aiAgent": "<agent.referenceId from Step 2>",
+    "name": "<Customer> Concierge — <Persona>",
+    "description": "<## Job Description block (2A) from {Customer}-agent-persona.md>",
+    "instructions": "<## Job Instructions block (2B) — INCLUDING the S2.5 empathy library verbatim>",
+    "llmProviderReferenceId": "<buildConfig.llm.selected.referenceId — confirmed available in this project by Step 3>",
+    "temperature": "<buildConfig.llm.temperatureVoice>",
+    "maxTokens": "<buildConfig.llm.maxTokens>",
+    "toolChoice": "auto",
+    "memoryType": "inherit",
+    "knowledgeSearchBehavior": "onDemand"
   }
-}
+})
 ```
 
-The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Step 1) and `instructions` (Step 3) first. The agent `instructions` field (1B) is distinct from the job-node `jobInstructions` (2B) — different levels, both set in this one call.
-
-> **Always bundle `jobConfig` (or another job field) with a `name` change.** A *name-only* `update_ai_agent` returns a misleading `404 "node to update does not exist for the specified locale"` even though the agent rename commits — because the job-node patch has nothing to write. The Step 3 call above already bundles `jobConfig`, so it is safe; never issue a bare `update_ai_agent { aiAgentId, name }`.
-
-> **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
+Use `buildConfig.llm.temperatureChat` instead of `temperatureVoice` for primarily conversational chat channels (webchat/WhatsApp). Capture the response `_id` as `<aiAgentJobNodeId>` — S1.2 patches the two fields not set here (`memoryContextInjection`, `toolChoice` overrides if needed) and verifies the write.
 
 ### 1.1.5 — Bind cognigy-vibe to the new project (in-session, no restart)
 
-All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 3:
+All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 4:
 
 1. Confirm `cognigy-vibe` is live: `cognigy_list { resource_type: "projects" }` should succeed.
 2. Bind the new project: `sync_remote_state({ project_id: "<projectId from S1.1 Step 1>" })`.
@@ -432,7 +457,7 @@ If step 1 fails with a "not loaded" / missing-credentials error, `cognigy-vibe` 
 
 ### 1.2 Patch the AI Agent Job Node — all job config fields (cognigy-vibe)
 
-`create_ai_agent` (S1.1 Step 1) creates the `aiAgentJob` node. `update_ai_agent` (S1.1 Step 3) already sets the key job fields — this step patches the remaining node-level config that `update_ai_agent` does not cover: `memoryContextInjection` and `toolChoice`. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
+S1.1 Step 4 creates the `aiAgentJob` node with its core persona/LLM fields already set, including `toolChoice`. This step patches `memoryContextInjection` (not set at creation) and re-asserts `toolChoice` as a safety check, then verifies both took effect. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
 **This step is mandatory.** Without it the agent loses caller context mid-conversation.
 
 `cognigy_update` does an always-fresh GET + deep merge — `merge_config: true` ensures a safe patch:
@@ -450,7 +475,7 @@ cognigy_update {
 }
 ```
 
-> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch S1.1 Step 3 (`update_ai_agent`) if so.
+> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch the `aiAgentJob` node's config (S1.1 Step 4 shape, via `cognigy_update` with `merge_config: true`) if so.
 
 > Verify by `cognigy_get` on the same node: confirm `memoryContextInjection` and `toolChoice` are set and hold your values, not defaults.
 
@@ -759,7 +784,7 @@ cognigy_create {
   body: { type: "once", mode: "append", target: "<startNodeId>", label: "Once", config: {} }
 }
 ```
-> `<startNodeId>` is NOT returned by S1.1 Steps 1–3. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
+> `<startNodeId>` is NOT returned by S1.1 Steps 1–4. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
 
 Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_flow_chart` after this call.
 
@@ -1167,7 +1192,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 | Layer | persona.md H2 heading | Agent-level field | Job Node config field (after S1.2 patch) |
 |---|---|---|---|
 | (a) **Persona** — WHO the agent is (incl. brand voice) | `## Persona` | agent `description` | n/a — agent-level only |
-| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `update_ai_agent` S1.1 Step 3; **≤ 1000 chars**) | n/a — agent-level only |
+| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `cognigy_update(resource_type="aiagents", ...)` S1.1 Step 4; **≤ 1000 chars**) | n/a — agent-level only |
 | (c) **Job Description** — WHAT this job handles | `## Job Description` | n/a | `description` (= `jobDescription`) |
 | (d) **Job Instructions** — HOW this job procedurally runs | `## Job Instructions` | n/a | `instructions` (= `jobInstructions`) |
 
@@ -1175,7 +1200,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 
 **Extraction rule for S1.1 + S1.2:** parse `{Customer}-agent-persona.md` by H2 heading and map each block to its OWN field — they are **NOT** concatenated:
 - agent `description` = `## Persona` block only (1A — WHO, incl. brand voice).
-- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `update_ai_agent` S1.1 Step 3 — see S1.1).
+- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `cognigy_update(resource_type="aiagents", ...)` S1.1 Step 4 — see S1.1).
 - `jobDescription` = `## Job Description` block (2A).
 - `jobInstructions` = `## Job Instructions` block (2B, S2.5 empathy library verbatim).
 
