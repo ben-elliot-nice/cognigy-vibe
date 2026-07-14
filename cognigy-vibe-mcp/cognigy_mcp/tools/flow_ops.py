@@ -266,7 +266,7 @@ def _normalise_rtype(rtype: str) -> str:
     return _RESOURCE_TYPE_ALIASES.get(rtype.lower(), rtype)
 
 
-def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict, flow_id: str | None) -> str | None:
+def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict) -> str:
     mapping = {
         ("flow", "clone"): f"/v2.0/flows/{resource_id}/clone",
         ("aiagent", "train"): f"/v2.0/aiagents/{resource_id}/train",
@@ -572,9 +572,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "resource_id=..., flow_id=..., body={\"mode\": \"append\", \"target\": \"<node-to-move-after>\"}). "
                 'See explain("node-positioning") for mode/target semantics.'
             )})
-        path = _invoke_path(rtype, m.resource_id, m.operation, m.body, m.flow_id)
-        if path is None:
-            return _ok({"error": f"flow_id required for {rtype}/{m.operation}"})
+        path = _invoke_path(rtype, m.resource_id, m.operation, m.body)
         try:
             result = client.post(path, m.body)
         except ApiError as exc:
