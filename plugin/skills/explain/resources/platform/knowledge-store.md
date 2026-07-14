@@ -62,6 +62,10 @@ prerequisite is met before creating a store.
   Poll GET /v2.0/tasks/{taskId} (see the pattern in export_package's task polling,
   or cognigy_get) if you need to confirm ingestion completed before querying chunks.
 
+  A transient 5xx on the upload itself is not automatically retried — uploading a file is a
+  non-idempotent create with no server-side dedupe, so retrying a failed request could create
+  a duplicate Knowledge Source. Re-run push_knowledge_source_file yourself if it errors.
+
 ### Trigger ingestion via connector
   cognigy_invoke(resource_type="knowledgestore", resource_id=<ksId>,
     operation="run", body={"connector_id": "<connectorId>"})
