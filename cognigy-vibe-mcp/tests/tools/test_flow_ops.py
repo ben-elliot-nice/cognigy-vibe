@@ -192,50 +192,36 @@ def test_cognigy_create_plural_nodes_routes_to_chart(mock_client, state, cache):
     assert mock_client.post.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes"
 
 
-def test_cognigy_invoke_move_node(mock_client, state, cache):
-    mock_client.post.return_value = {}
+def test_cognigy_invoke_node_move_is_unsupported(mock_client, state, cache):
+    """node/move is not a real API endpoint — issue #237: it 404s against every
+    tried resource shape. cognigy_invoke must reject it with guidance toward
+    cognigy_update's mode/target mechanism instead of POSTing to a fake path."""
     handlers = make_handlers(mock_client, state, cache)
-    handlers["cognigy_invoke"]({
+    result = handlers["cognigy_invoke"]({
         "resource_type": "node",
         "resource_id": "node-1",
         "operation": "move",
         "body": {"mode": "append", "target": "node-0"},
         "flow_id": "flow-1",
     })
-    mock_client.post.assert_called_once_with(
-        "/v2.0/flows/flow-1/chart/nodes/node-1/move",
-        {"mode": "append", "target": "node-0"},
-    )
+    data = json.loads(result[0].text)
+    assert "cognigy_update" in data["error"]
+    mock_client.post.assert_not_called()
 
 
-def test_cognigy_invoke_move_node_plural_resource_type(mock_client, state, cache):
-    """resource_type='nodes' must route the same as 'node' — invoke should normalise like get/list/create/update/delete."""
-    mock_client.post.return_value = {}
-    handlers = make_handlers(mock_client, state, cache)
-    handlers["cognigy_invoke"]({
-        "resource_type": "nodes",
-        "resource_id": "node-1",
-        "operation": "move",
-        "body": {"mode": "append", "target": "node-0"},
-        "flow_id": "flow-1",
-    })
-    mock_client.post.assert_called_once_with(
-        "/v2.0/flows/flow-1/chart/nodes/node-1/move",
-        {"mode": "append", "target": "node-0"},
-    )
-
-
-def test_cognigy_invoke_move_node_missing_flow_id_error_uses_normalised_rtype(mock_client, state, cache):
-    """Error message should say 'node/move', not 'nodes/move', when resource_type='nodes'."""
+def test_cognigy_invoke_node_move_plural_resource_type_is_unsupported(mock_client, state, cache):
+    """resource_type='nodes' must be rejected the same way as 'node'."""
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["cognigy_invoke"]({
         "resource_type": "nodes",
         "resource_id": "node-1",
         "operation": "move",
         "body": {"mode": "append", "target": "node-0"},
+        "flow_id": "flow-1",
     })
     data = json.loads(result[0].text)
-    assert data["error"] == "flow_id required for node/move"
+    assert "cognigy_update" in data["error"]
+    mock_client.post.assert_not_called()
 
 
 def test_cognigy_invoke_knowledgestore_run_hits_connector_path(mock_client, state, cache):

@@ -16,6 +16,13 @@ Use when adding aiAgentJobTool as a child of an aiAgentJob node.
 
 See explain("agent-job-node") for the aiAgentJob node's own creation/insertion sequence.
 
+### Moving an existing node
+There is no `cognigy_invoke` move operation — `resource_type="node", operation="move"` is not
+a real API endpoint and 404s (see issue #237). To reposition an existing node, PATCH it via
+`cognigy_update` with the same `mode`/`target` fields used at creation time:
+  cognigy_update(resource_type="node", resource_id="<nodeId>", flow_id="<flowId>",
+    body={"mode": "append", "target": "<node-to-move-after>"})
+
 ### Common mistakes
 - Using chartReference as target → 404 "Failed to find chart node"
 - New flows have Start and End nodes; list them first to get Start ID as initial append target

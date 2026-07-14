@@ -139,8 +139,10 @@ TOOLS: list[Tool] = [
     Tool(
         name="cognigy_invoke",
         description="Run a named operation on a Cognigy resource. "
-                    "Operations: node/move, flow/clone, aiagent/train, "
-                    "knowledgestore/run, sessions/inject-context, sessions/inject-state."
+                    "Operations: flow/clone, aiagent/train, "
+                    "knowledgestore/run, sessions/inject-context, sessions/inject-state. "
+                    "To reposition an existing node, use cognigy_update with body={mode, target} "
+                    "instead — there is no node/move operation."
                     + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyInvokeArgs),
     ),
@@ -265,10 +267,7 @@ def _normalise_rtype(rtype: str) -> str:
 
 
 def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict, flow_id: str | None) -> str | None:
-    if resource_type == "node" and operation == "move" and not flow_id:
-        return None  # caller must check
     mapping = {
-        ("node", "move"): f"/v2.0/flows/{flow_id}/chart/nodes/{resource_id}/move",
         ("flow", "clone"): f"/v2.0/flows/{resource_id}/clone",
         ("aiagent", "train"): f"/v2.0/aiagents/{resource_id}/train",
         ("sessions", "inject-context"): f"/v2.0/sessions/{resource_id}/context/inject",
@@ -566,6 +565,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if err:
             return err
         rtype = "node" if m.resource_type.lower() in ("node", "nodes") else m.resource_type
+        if rtype == "node" and m.operation == "move":
+            return _ok({"error": (
+                "node/move is not a supported operation — there is no dedicated move endpoint. "
+                "To reposition an existing node, use cognigy_update(resource_type=\"node\", "
+                "resource_id=..., flow_id=..., body={\"mode\": \"append\", \"target\": \"<node-to-move-after>\"}). "
+                'See explain("node-positioning") for mode/target semantics.'
+            )})
         path = _invoke_path(rtype, m.resource_id, m.operation, m.body, m.flow_id)
         if path is None:
             return _ok({"error": f"flow_id required for {rtype}/{m.operation}"})
