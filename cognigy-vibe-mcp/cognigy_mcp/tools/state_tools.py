@@ -34,6 +34,14 @@ class AssignOrgLlmArgs(BaseModel):
     llm_id: str = Field(description="MongoDB _id of the org-level LLM (not referenceId)")
 
 
+class SetProjectGenerativeAISettingsArgs(BaseModel):
+    project_id: str = Field(description="Cognigy project _id to configure")
+    use_case_settings: dict[str, str] = Field(
+        description="Map of Generative AI use-case key (e.g. 'aiAgent', 'knowledgeSearch') "
+                     "to the target LLM's MongoDB _id"
+    )
+
+
 _RESOURCE_TYPE_ALIASES: dict[str, str] = {
     "project": "projects",
     "flow": "flows",
@@ -51,6 +59,12 @@ _RESOURCE_TYPE_ALIASES: dict[str, str] = {
     "snapshot": "snapshots",
     "playbook": "playbooks",
 }
+
+GENERATION_USE_CASES: list[str] = [
+    "aiAgent", "gptPromptNode", "aiEnhancedOutputs", "sentimentAnalysis",
+    "designTimeGeneration", "answerExtraction", "conversationAnalyzer",
+]
+KNOWLEDGE_USE_CASE = "knowledgeSearch"
 
 
 def _normalise_rtype(rtype: str) -> str:
@@ -98,6 +112,17 @@ TOOLS: list[Tool] = [
             "Errors if the LLM is project-scoped (use manage_packages instead) or not found."
         ),
         inputSchema=make_schema(AssignOrgLlmArgs),
+    ),
+    Tool(
+        name="set_project_generative_ai_settings",
+        description=(
+            "Set which LLM a project uses for each Cognigy Generative AI use-case "
+            "(aiAgent, gptPromptNode, knowledgeSearch, etc.) via a project-level settings PATCH. "
+            "This is what actually activates a model for these platform features — assigning an "
+            "LLM to a project via assign_org_llm alone does not. Partial PATCH is safe: only the "
+            "use-cases passed in use_case_settings are touched, others are left untouched."
+        ),
+        inputSchema=make_schema(SetProjectGenerativeAISettingsArgs),
     ),
 ]
 
@@ -281,9 +306,34 @@ def make_handlers(
             return _ok({"error": "patch_failed", "detail": str(exc)})
         return _ok({"assigned": True, "llm_name": llm.get("name", ""), "project_id": m.project_id})
 
+    def _set_project_generative_ai_settings(args: dict) -> list[TextContent]:
+        m, err = validate(SetProjectGenerativeAISettingsArgs, args)
+        if err:
+            return err
+        body = {
+            "generativeAISettings": {
+                "useCasesSettings": {
+                    key: {"largeLanguageModelId": llm_id}
+                    for key, llm_id in m.use_case_settings.items()
+                }
+            }
+        }
+        try:
+            client.patch(f"/v2.0/projects/{m.project_id}/settings", body)
+        except ApiError as exc:
+            return _ok({"error": "patch_failed", "status": exc.status_code, "detail": str(exc)})
+        except Exception as exc:
+            return _ok({"error": "patch_failed", "detail": str(exc)})
+        return _ok({
+            "updated": True,
+            "project_id": m.project_id,
+            "use_cases": list(m.use_case_settings),
+        })
+
     return {
         "sync_remote_state": _sync_remote_state,
         "get_build_state": _get_build_state,
         "resolve_resource": _resolve_resource,
         "assign_org_llm": _assign_org_llm,
+        "set_project_generative_ai_settings": _set_project_generative_ai_settings,
     }

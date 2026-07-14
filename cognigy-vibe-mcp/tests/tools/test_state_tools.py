@@ -362,3 +362,74 @@ def test_assign_org_llm_missing_project_id_returns_validation_error(mock_client,
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "project_id" for d in data["details"])
+
+
+def test_set_project_generative_ai_settings_success(mock_client, state, cache):
+    mock_client.patch.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"aiAgent": "llm-1", "gptPromptNode": "llm-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["updated"] is True
+    assert data["project_id"] == "proj-1"
+    assert sorted(data["use_cases"]) == ["aiAgent", "gptPromptNode"]
+    call_args = mock_client.patch.call_args[0]
+    assert call_args[0] == "/v2.0/projects/proj-1/settings"
+    assert call_args[1] == {
+        "generativeAISettings": {
+            "useCasesSettings": {
+                "aiAgent": {"largeLanguageModelId": "llm-1"},
+                "gptPromptNode": {"largeLanguageModelId": "llm-1"},
+            }
+        }
+    }
+
+
+def test_set_project_generative_ai_settings_patch_failed_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.patch.side_effect = ApiError(403, "Forbidden")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"knowledgeSearch": "llm-embed-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "patch_failed"
+    assert data["status"] == 403
+
+
+def test_set_project_generative_ai_settings_generic_exception(mock_client, state, cache):
+    mock_client.patch.side_effect = ConnectionError("timeout")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"knowledgeSearch": "llm-embed-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "patch_failed"
+    assert "timeout" in data["detail"]
+
+
+def test_set_project_generative_ai_settings_missing_required_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({"project_id": "proj-1"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "use_case_settings" for d in data["details"])
+
+
+def test_set_project_generative_ai_settings_in_tools_list():
+    names = [t.name for t in TOOLS]
+    assert "set_project_generative_ai_settings" in names
+
+
+def test_generation_use_cases_constant():
+    from cognigy_mcp.tools.state_tools import GENERATION_USE_CASES, KNOWLEDGE_USE_CASE
+    assert GENERATION_USE_CASES == [
+        "aiAgent", "gptPromptNode", "aiEnhancedOutputs", "sentimentAnalysis",
+        "designTimeGeneration", "answerExtraction", "conversationAnalyzer",
+    ]
+    assert KNOWLEDGE_USE_CASE == "knowledgeSearch"
