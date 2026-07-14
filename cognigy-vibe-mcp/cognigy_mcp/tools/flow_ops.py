@@ -376,7 +376,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _ok({
                     "error": "none of the requested fields exist on this resource",
                     "requested_fields": m.fields,
-                    "available_fields": sorted(data.keys()),
+                    "available_fields": sorted(strip_response(data).keys()),
                 })
             data = filtered
         data = strip_response(data)
@@ -422,10 +422,11 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             items = result_data.get("items", [])
             available = {k for item in items for k in item.keys()}
             if items and not (set(m.fields) & available):
+                stripped_available = {k for item in items for k in strip_response(item).keys()}
                 return _ok({
                     "error": "none of the requested fields exist on any item in this list",
                     "requested_fields": m.fields,
-                    "available_fields": sorted(available),
+                    "available_fields": sorted(stripped_available),
                 })
             filtered = [{k: item[k] for k in m.fields if k in item} for item in items]
             result_data = {"items": filtered, "count": len(filtered)}

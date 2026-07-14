@@ -908,6 +908,21 @@ def test_cognigy_get_fields_all_missing_returns_error(mock_client, state, cache)
     assert "name" in data["available_fields"]
 
 
+def test_cognigy_get_fields_all_missing_excludes_blocked_fields_from_available(mock_client, state, cache):
+    """available_fields must reflect the stripped response, not raw internal fields —
+    __v shouldn't be advertised as a valid field to request."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "__v": 3}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"]
+    assert "__v" not in data["available_fields"]
+
+
 def test_cognigy_get_fields_partial_match_still_filters(mock_client, state, cache):
     """At least one valid field must still filter normally, no error."""
     mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "description": "x"}
@@ -971,6 +986,23 @@ def test_cognigy_list_full_objects_fields_all_missing_returns_error(mock_client,
     assert data["error"]
     assert "_id" in data["available_fields"]
     assert "createdAt" in data["available_fields"]
+
+
+def test_cognigy_list_full_objects_fields_all_missing_excludes_blocked_fields(mock_client, state, cache):
+    """available_fields for the full_objects list path must also reflect stripped
+    items — __v shouldn't be advertised as a valid field to request."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "__v": 2},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"]
+    assert "__v" not in data["available_fields"]
 
 
 def test_cognigy_list_full_objects_fields_partial_match_still_filters(mock_client, state, cache):
