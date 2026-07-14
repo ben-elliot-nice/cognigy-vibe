@@ -15,7 +15,7 @@ from cognigy_mcp.validation import _ok, validate, make_schema
 _KNOWLEDGE_SOURCE_CONTENT_TYPES = {
     "pdf": "application/pdf",
     "txt": "text/plain",
-    "ctxt": "text/plain",
+    "ctxt": "text/plain",  # Cognigy's chunked-text source format; also plain text on the wire
 }
 
 
@@ -372,10 +372,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         ext = path.suffix.lstrip(".").lower()
         content_type = _KNOWLEDGE_SOURCE_CONTENT_TYPES.get(ext)
         if content_type is None:
-            return _ok({
-                "error": f"Unsupported file type: .{ext}. "
-                         f"Supported formats: {', '.join('.' + e for e in _KNOWLEDGE_SOURCE_CONTENT_TYPES)}",
-            })
+            supported = ', '.join('.' + e for e in _KNOWLEDGE_SOURCE_CONTENT_TYPES)
+            found = f".{ext}" if ext else "no file extension"
+            return _ok({"error": f"Unsupported file type: {found}. Supported formats: {supported}"})
 
         if m.tags and any("," in tag for tag in m.tags):
             return _ok({"error": "Tags must not contain commas (the API joins tags with a comma delimiter)"})
@@ -396,6 +395,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             )
         except Exception as e:
             return _ok({"error": f"Failed to upload knowledge source file: {e}"})
+
+        if not isinstance(result, dict):
+            return _ok({"error": f"Unexpected response from upload endpoint: {result!r}"})
+
+        if result.get("status") == "error":
+            return _ok({
+                "error": f"Upload task failed: {result.get('failReason', 'unknown error')}",
+                "task_id": result.get("_id"),
+            })
 
         return _ok({
             "success": True,

@@ -53,13 +53,14 @@ prerequisite is met before creating a store.
   This is a dedicated tool, not cognigy_invoke — cognigy_invoke only accepts JSON bodies and
   cannot perform the real multipart/form-data upload the API requires
   (POST /v2.0/knowledgestores/{ksId}/sources/upload). Guessing an operation name like
-  "sources/upload" through cognigy_invoke returns an opaque 500, not a clear "unsupported" error.
+  "sources/upload" through cognigy_invoke returned an opaque 500 in practice (issue #239),
+  not a clear "unsupported" error.
 
   Supported formats: .pdf, .txt, .ctxt (anything else is rejected client-side before the API call).
   The response is a Task ({_id, status: queued|active|done|error, ...}) — ingestion runs
   asynchronously, so a "success" result means the upload started, not that chunking finished.
   Poll GET /v2.0/tasks/{taskId} (see the pattern in export_package's task polling,
-  or cognigy_invoke) if you need to confirm ingestion completed before querying chunks.
+  or cognigy_get) if you need to confirm ingestion completed before querying chunks.
 
 ### Trigger ingestion via connector
   cognigy_invoke(resource_type="knowledgestore", resource_id=<ksId>,

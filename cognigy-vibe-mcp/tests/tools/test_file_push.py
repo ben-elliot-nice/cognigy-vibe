@@ -863,6 +863,20 @@ def test_push_knowledge_source_file_unsupported_extension(mock_client, state, ca
     mock_client.post_multipart.assert_not_called()
 
 
+def test_push_knowledge_source_file_no_extension(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policyfile"
+    doc.write_text("no extension here")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "no file extension" in data["error"]
+    mock_client.post_multipart.assert_not_called()
+
+
 def test_push_knowledge_source_file_uppercase_extension(mock_client, state, cache, tmp_path):
     doc = tmp_path / "policy.PDF"
     doc.write_bytes(b"%PDF-1.4 fake pdf bytes")
@@ -951,6 +965,40 @@ def test_push_knowledge_source_file_api_failure(mock_client, state, cache, tmp_p
     data = json.loads(result[0].text)
     assert "error" in data
     assert "network error" in data["error"]
+
+
+def test_push_knowledge_source_file_task_immediate_error_status(mock_client, state, cache, tmp_path):
+    """The API can 2xx the multipart POST but return a Task whose status is
+    already 'error' — this must be treated as a failure, not success."""
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    mock_client.post_multipart.return_value = {
+        "_id": "task-bad", "status": "error", "failReason": "unsupported content",
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "unsupported content" in data["error"]
+    assert data["task_id"] == "task-bad"
+    assert "success" not in data
+
+
+def test_push_knowledge_source_file_non_dict_response_returns_error(mock_client, state, cache, tmp_path):
+    """A non-dict JSON body on a 2xx response must not crash with AttributeError."""
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    mock_client.post_multipart.return_value = ["unexpected", "list", "response"]
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
 
 
 def test_push_knowledge_source_file_missing_knowledge_store_id_returns_validation_error(mock_client, state, cache, tmp_path):

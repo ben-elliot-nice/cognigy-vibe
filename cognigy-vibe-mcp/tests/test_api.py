@@ -425,6 +425,22 @@ def test_post_multipart_retries_when_explicitly_enabled(mock_sleep, client):
     assert mock_sleep.call_count == 1
 
 
+@patch("time.sleep")
+def test_post_multipart_5xx_raises_after_exhausting_retries(mock_sleep, client):
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(
+            return_value=httpx.Response(503, json={"error": "unavailable"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.post_multipart(
+                "/v2.0/knowledgestores/ks-1/sources/upload",
+                files={"file": ("doc.txt", b"hello", "text/plain")},
+                retry=True,
+            )
+    assert exc.value.status_code == 503
+    assert route.call_count == 3
+
+
 def test_post_json_still_sends_content_type_after_default_removed(client):
     """Regression guard: removing the static Content-Type default must not break
     existing JSON post/patch calls, which rely on httpx auto-setting it from json=."""
