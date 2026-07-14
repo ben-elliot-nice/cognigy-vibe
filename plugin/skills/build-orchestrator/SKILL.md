@@ -982,7 +982,8 @@ provision_webrtc_endpoint {
   flow_reference_id: <flowReferenceId>
   endpoint_name:     buildConfig.channel.voiceGateway.endpointName   // "Click-to-Call"
   connection_name:   buildConfig.voicePreview.connectionName          // "Test"
-  region:            buildConfig.voicePreview.region                  // e.g. "australiaeast"
+  connection_type:   buildConfig.voicePreview.connectionType          // "MicrosoftSpeechProvider"
+  connection_fields: buildConfig.voicePreview.connectionFields        // {"region": "australiaeast"}
 }
 ```
 
