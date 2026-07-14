@@ -71,7 +71,7 @@ In the recap that follows S0.6, show a compact table:
 
 Ask: *"Proceed with these defaults, switch LLM to a listed alternate, or override a field for this build only?"*
 
-Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 2 reads; it is always set before S1 runs.
+Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 3 reads; it is always set before S1 runs.
 
 Per-build overrides update `buildConfig` in memory for this run only — they do not rewrite the config file. To permanently change defaults, the user re-runs `cognigy-vibe:init-cognigy-vibe`.
 
@@ -307,7 +307,7 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 
 All build defaults come from `buildConfig` (loaded via `get_build_state`). `buildConfig` is populated from live tenant discovery by `cognigy-vibe:init-cognigy-vibe` — there are no hardcoded defaults in this skill. Read `cognigy-vibe:build-config` for the full schema reference.
 
-> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 3 / S1.2 `cognigy_update`.
+> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 4 / S1.2 `cognigy_update`.
 
 ---
 
@@ -445,7 +445,7 @@ Use `buildConfig.llm.temperatureChat` instead of `temperatureVoice` for primaril
 
 ### 1.1.5 — Bind cognigy-vibe to the new project (in-session, no restart)
 
-All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 3:
+All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 4:
 
 1. Confirm `cognigy-vibe` is live: `cognigy_list { resource_type: "projects" }` should succeed.
 2. Bind the new project: `sync_remote_state({ project_id: "<projectId from S1.1 Step 1>" })`.
@@ -784,7 +784,7 @@ cognigy_create {
   body: { type: "once", mode: "append", target: "<startNodeId>", label: "Once", config: {} }
 }
 ```
-> `<startNodeId>` is NOT returned by S1.1 Steps 1–3. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
+> `<startNodeId>` is NOT returned by S1.1 Steps 1–4. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
 
 Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_flow_chart` after this call.
 
