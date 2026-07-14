@@ -225,6 +225,19 @@ def test_cognigy_invoke_move_node_plural_resource_type(mock_client, state, cache
     )
 
 
+def test_cognigy_invoke_move_node_missing_flow_id_error_uses_normalised_rtype(mock_client, state, cache):
+    """Error message should say 'node/move', not 'nodes/move', when resource_type='nodes'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "operation": "move",
+        "body": {"mode": "append", "target": "node-0"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "flow_id required for node/move"
+
+
 def test_cognigy_invoke_knowledgestore_run_hits_connector_path(mock_client, state, cache):
     """resource_type='knowledgestore' + operation='run' must keep the /connectors/{id}/run
     special-case path — normalising to the plural 'knowledgestores' must not break it."""
