@@ -42,13 +42,12 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `llm.maxTokens` | integer | optional | Max tokens for generation | `400` |
 | `llm.toolChoice` | string | optional | Tool selection mode | `"auto"` |
 | `locale` | string | required | BCP-47 locale for the agent and endpoint | `"en-AU"` |
-| `tts.vendor` | string | required | TTS provider name | `"ElevenLabs"` |
+| `tts.vendor` | string | required | TTS provider — **lowercase API slug, not the Cognigy UI display name** (`aws`, `deepgram`, `elevenlabs`, `google`, `microsoft`, `nuance` — see `explain("voice-gateway")` for the full enum and why case matters) | `"elevenlabs"` |
 | `tts.model` | string | required | TTS model identifier | enter from Cognigy UI → Connections |
 | `tts.language` | string | required | TTS language code | `"en"` |
-| `tts.voiceType` | string | required | TTS voice type | `"Custom"` |
 | `tts.voiceId` | string | required | Provider-specific voice ID | enter from Cognigy UI → Connections |
 | `tts.label` | string | required | Cognigy synthesizer connection label | enter from Cognigy UI → Connections |
-| `stt.vendor` | string | required | STT provider name | `"Microsoft"` |
+| `stt.vendor` | string | required | STT provider — **lowercase API slug, not the Cognigy UI display name** (same enum as `tts.vendor`, plus STT-only `deepgramflux`, `speechmatics` — see `explain("voice-gateway")`) | `"microsoft"` |
 | `stt.model` | string | required | STT model identifier | enter from Cognigy UI → Connections |
 | `stt.language` | string | required | STT language/locale code | `"en-AU"` |
 | `stt.label` | string | required | Cognigy recognizer connection label | enter from Cognigy UI → Connections |
@@ -87,7 +86,7 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 | `llm.maxTokens` | S1.1 Step 4 | `aiAgentJob` node `config.maxTokens` |
 | `llm.toolChoice` | S1.1 Step 4 | `aiAgentJob` node `config.toolChoice` — set at creation; re-verified in S1.2 |
 | `locale` | S1.5(c) | Set Session Config `locale`; also endpoint locale binding |
-| `tts.*` | S1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
+| `tts.*` | S1.5(c) | Set Session Config TTS fields (vendor, model, language, voiceId, connection label) — see `explain("voice-gateway")` for the real flat shape |
 | `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, model, language, connection label, hints, dynamicHints) |
 | `channel.voiceGateway.endpointName` | S1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
 | `channel.voiceGateway.mode` | S1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
