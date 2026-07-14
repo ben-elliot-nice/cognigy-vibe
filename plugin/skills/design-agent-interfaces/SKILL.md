@@ -111,6 +111,6 @@ One subsection per event: event name, trigger, payload schema, flow handling, se
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes its resolved `$DEMO_DIR` — an absolute path, e.g. `"/Users/.../Demo Builds/acme-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - For job definitions and routing → `cognigy-vibe:design-agent-jobs`
 - For contract enforcement → `cognigy-vibe:design-agent-contracts`
