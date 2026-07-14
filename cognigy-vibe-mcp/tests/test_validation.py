@@ -72,8 +72,8 @@ def test_make_schema_normalises_optional_str_field():
     tag_schema = schema["properties"]["tag"]
     assert tag_schema["type"] == "string"
     assert "anyOf" not in tag_schema
-    # Title may be preserved during normalization (acceptable)
-    assert "title" in tag_schema or "title" not in tag_schema  # Title presence is OK either way
+    # Title is preserved during normalization
+    assert "title" in tag_schema
 
 
 def test_make_schema_normalises_optional_list_field():
