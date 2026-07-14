@@ -94,7 +94,7 @@ TOOLS: list[Tool] = [
         description=(
             "Append a project to an organisation-level LLM's assignedToProjects list. "
             "Safe and idempotent — if the project is already assigned, no write is made. "
-            "Use after create_ai_agent to ensure the new project can use an org-level LLM. "
+            "Use after creating the agent resource (cognigy_create(resource_type=\"aiagents\", ...)) to ensure the new project can use an org-level LLM. "
             "Errors if the LLM is project-scoped (use manage_packages instead) or not found."
         ),
         inputSchema=make_schema(AssignOrgLlmArgs),

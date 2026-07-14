@@ -363,7 +363,7 @@ Do not proceed on stale in-memory facts from a prior session. The design docs on
 
 **Extraction rule (per S2 — each block to its OWN field, NOT concatenated):**
 - agent `description` = `## Persona` block (1A) — **≤ 1000 chars**
-- agent `instructions` = `## Special Instructions` block (1B) — **≤ 1000 chars**; set via `cognigy_update(resource_type="aiagents", ...)` in Step 3
+- agent `instructions` = `## Special Instructions` block (1B) — **≤ 1000 chars**; set via `cognigy_update(resource_type="aiagents", ...)` in Step 4
 - `jobDescription` = `## Job Description` block (2A, H2 stripped) — set on the `aiAgentJob` node in Step 4
 - `jobInstructions` = `## Job Instructions` block (2B, H2 stripped, S2.5 empathy library verbatim) — set on the `aiAgentJob` node in Step 4
 
