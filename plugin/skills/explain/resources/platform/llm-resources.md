@@ -63,6 +63,33 @@ Returns:
 
 > **Concurrency note.** `assign_org_llm` prevents duplicate entries (if the project is already in the array, it skips the PATCH) but does not protect against two simultaneous *first*-assignment calls targeting the same LLM. In that race, both calls read the same pre-write array, and each writes a version without the other's entry — one assignment is lost. In practice this is harmless for demo builds (sequential per-build usage), but do not rely on it for concurrent automated provisioning.
 
+### Activating an LLM for Generative AI use-cases at the project level
+
+`assign_org_llm` only appends a project to an LLM's `assignedToProjects` array — it does **not**
+make the project actually use that model for Cognigy's Generative AI features (agent generation,
+prompt nodes, sentiment analysis, knowledge search, etc.). That requires a separate project-level
+settings PATCH:
+
+```
+set_project_generative_ai_settings {
+  project_id: "<projectId>",
+  use_case_settings: {
+    "aiAgent": "<llm _id>",
+    "knowledgeSearch": "<embedding llm _id>"
+    // ... any of: gptPromptNode, aiEnhancedOutputs, sentimentAnalysis,
+    //     designTimeGeneration, answerExtraction, conversationAnalyzer
+  }
+}
+```
+
+This PATCHes `generativeAISettings.useCasesSettings` on the project resource. It merges by
+use-case key — a partial call only touches the keys you pass, leaving other use-cases untouched.
+Call this **in addition to** `assign_org_llm`, not instead of it: the project needs both the LLM
+assigned to it (`assign_org_llm`) and told which use-cases should use it (`set_project_generative_ai_settings`).
+
+For Knowledge AI specifically, the `knowledgeSearch` use-case must be set to an **embedding**
+model's `_id` (not a generation model's) — see `explain("knowledge-store")`.
+
 ### When `manage_packages` is still appropriate
 
 If the user's chosen LLM is `resourceLevel: "project"` (e.g. a custom connection not promoted to org level), `assign_org_llm` will refuse. Export the LLM from its source project and import it into the new project:
