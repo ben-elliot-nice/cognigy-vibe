@@ -477,7 +477,7 @@ def _run_uninstall(args) -> None:
                 verbose=args.verbose,
             )
             summary_rows.append(("Plugin", f"uninstalled (scope: {scope})"))
-        except StepFailure as exc:
+        except (StepFailure, OSError) as exc:
             _warn(f"uninstalling plugin (scope: {scope})", exc)
             summary_rows.append(("Plugin", f"failed to uninstall (scope: {scope})"))
 
@@ -525,7 +525,7 @@ def _run_uninstall(args) -> None:
                 verbose=args.verbose,
             )
             summary_rows.append(("Marketplace entry", "removed"))
-        except StepFailure as exc:
+        except (StepFailure, OSError) as exc:
             _warn("removing marketplace entry", exc)
             summary_rows.append(("Marketplace entry", "failed to remove"))
     else:

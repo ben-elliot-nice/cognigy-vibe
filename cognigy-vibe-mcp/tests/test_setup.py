@@ -1019,6 +1019,43 @@ def test_run_uninstall_double_failure_reports_both_and_raises_the_first(tmp_path
     assert "Desktop config" in out and "failed to remove entry" in out
 
 
+def test_run_uninstall_plugin_uninstall_missing_claude_cli_does_not_block_cleanup(tmp_path, monkeypatch, capsys):
+    """A forced --scope makes has_plugin True even when claude plugin list
+    never ran successfully (state.plugin_scope=None) — so the plugin-uninstall
+    step can now be reached on a machine where the claude CLI isn't on PATH.
+    subprocess.run raises a raw FileNotFoundError in that case (run_subprocess
+    only converts a nonzero exit into StepFailure), which the plugin-uninstall
+    and marketplace-removal try blocks must also catch — not just StepFailure —
+    so a missing CLI defers like any other step failure instead of aborting
+    Desktop/credential cleanup outright.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "uninstall"]:
+            raise FileNotFoundError(2, "No such file or directory", "claude")
+        return None
+
+    args = type("Args", (), {"verbose": False, "scope": "local"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+        with pytest.raises(FileNotFoundError):
+            _run_uninstall(args)
+
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})  # cleanup still ran
+    out = capsys.readouterr().out
+    assert "uninstalling plugin" in out.lower()
+    assert "no such file or directory" in out.lower()
+
+
 def test_run_uninstall_removes_marketplace_with_run_subprocess(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
     args = type("Args", (), {"verbose": False, "scope": None})()
