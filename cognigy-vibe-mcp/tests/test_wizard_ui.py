@@ -142,9 +142,10 @@ def test_print_error_panel_title_defaults_to_setup_failed():
         try:
             raise RuntimeError("boom")
         except RuntimeError as exc:
-            wizard_ui.print_error_panel("Setup failed.", exc, debug=False)
+            wizard_ui.print_error_panel("Something else broke.", exc, debug=False)
     output = test_console.export_text()
     assert "Setup failed" in output
+    assert "Something else broke." in output
 
 
 def test_print_error_panel_title_can_be_overridden():

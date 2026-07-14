@@ -221,19 +221,19 @@ def _parse_args() -> "argparse.Namespace":
 
 def main() -> None:
     args = _parse_args()
-    # One entry per command: (runner, failure message) travel together so a new
-    # subcommand can't add a runner while forgetting its error message (or vice versa).
+    # One entry per command: (runner, failure message, panel title) travel together so a new
+    # subcommand can't add a runner while forgetting its error message/title (or vice versa).
     commands = {
-        "install": (_run_install, "Setup failed."),
-        "status": (_run_status, "Status failed."),
-        "update": (_run_update, "Update failed."),
-        "uninstall": (_run_uninstall, "Uninstall failed."),
+        "install": (_run_install, "Setup failed.", "Setup failed"),
+        "status": (_run_status, "Status failed.", "Status failed"),
+        "update": (_run_update, "Update failed.", "Update failed"),
+        "uninstall": (_run_uninstall, "Uninstall failed.", "Uninstall failed"),
     }
-    runner, failure_message = commands[args.command]
+    runner, failure_message, title = commands[args.command]
     try:
         runner(args)
     except Exception as exc:
-        print_error_panel(failure_message, exc, debug=args.verbose, title=failure_message.rstrip("."))
+        print_error_panel(failure_message, exc, debug=args.verbose, title=title)
         sys.exit(1)
 
 
