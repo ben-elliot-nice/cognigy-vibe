@@ -28,6 +28,8 @@ The session workspace is the directory Claude Code is open in (cwd). It is **sha
 
 Claude's cwd does **not** change when a build starts. The `Demo Builds/<brand>-demo/` path is a subdirectory — file paths written by sub-skills are relative to the workspace root, not cwd-relative to the demo dir.
 
+**Invoking build-orchestrator from inside an existing build directory.** If Claude's cwd is already inside a `Demo Builds/<brand>-demo/` directory when `cognigy-vibe:build-orchestrator` is invoked (e.g. the user `cd`'d into it to continue a build, or resumed a session there), the skill does **not** blindly create another `Demo Builds/` folder relative to that cwd — it would nest one build's folder inside another's. `build-orchestrator` S0.0 Step 0 detects this case (walking up from cwd looking for a `Demo Builds/` parent) and either reuses the existing directory as the anchor (same customer) or stops and asks before proceeding (different customer). See `build-orchestrator/SKILL.md` S0.0 Step 0 for the detection logic.
+
 ## `.env` scope
 
 `.env` lives at the workspace root (cwd) and is workspace-level — it is shared across all builds in the session.

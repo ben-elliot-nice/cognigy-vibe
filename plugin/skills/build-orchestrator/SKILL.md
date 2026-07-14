@@ -38,6 +38,37 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
 ## S0.0 — Load build config (BLOCKING preflight — runs before the interview)
 
+**Step 0 — Workspace anchor detection.** Before anything else, determine whether cwd is already inside an existing `Demo Builds/<brand>-demo/` directory. Every later phase that writes build artifacts — including SA, SB, S0.6 brand research, S1.3 tools, S1.4 xApp, S1.5 code-nodes, S1.8 knowledge, S2.5 empathy export, S3 Initialize Session Code, S6 tool recipes, and package export — writes relative to a single resolved anchor, `$DEMO_DIR` — this step computes it once so nothing downstream nests a second `Demo Builds/` folder inside an existing one.
+
+Run:
+
+```bash
+ANCHOR=""
+IN_CONTAINER=""
+if [ "$(basename "$PWD")" = "Demo Builds" ]; then
+  IN_CONTAINER="$PWD"
+fi
+CHECK="$PWD"
+while [ "$CHECK" != "/" ] && [ "$CHECK" != "$HOME" ]; do
+  PARENT="$(dirname "$CHECK")"
+  if [ "$(basename "$PARENT")" = "Demo Builds" ]; then
+    ANCHOR="$CHECK"
+    break
+  fi
+  CHECK="$PARENT"
+done
+echo "ANCHOR=$ANCHOR"
+echo "IN_CONTAINER=$IN_CONTAINER"
+```
+
+- **`ANCHOR` is non-empty** → cwd (or an ancestor) is already an existing build directory. Hold `ANCHOR` (already absolute, since it was derived from `$PWD` in the walk-up above). Once S0 Q1 (customer name) is collected, apply the S11 "Folder name" rule (`[customer]-demo`, lowercase) to get the expected slug, and compare it against `basename "$ANCHOR"`:
+  - **Match** → this is a continuation of the same build. Set `$DEMO_DIR="$ANCHOR"`. It already exists — do not create or nest a new `Demo Builds/` folder inside it; skip the `mkdir -p` in SA.
+  - **Mismatch** → cwd is inside a *different* customer's build directory. STOP before SA and ask the user directly: *"You're currently inside `<ANCHOR>`, which looks like an existing build for `<basename slug>`, but this build is for `<new customer>`. I don't want to nest a new build folder inside another customer's directory. Do you want to `cd` back to the session workspace root first, or is `<ANCHOR>` actually intended for this build?"* Do not silently proceed either way — this is a BLOCKING confirmation, not a warning.
+- **`ANCHOR` is empty and `IN_CONTAINER` is non-empty** → cwd is the `Demo Builds` container itself (not a specific `<brand>-demo` subdirectory) — e.g. the user `cd`'d in to look around and never `cd`'d back out. Do **not** fall through to the workspace-root branch below — that would compute `$DEMO_DIR` as `$PWD/Demo Builds/<customer-slug>-demo`, i.e. `.../Demo Builds/Demo Builds/<customer-slug>-demo`, the exact nesting bug this step exists to prevent, one level shallower. Instead set `$DEMO_DIR="$IN_CONTAINER/<customer-slug>-demo"` (no extra `Demo Builds/` segment, since `$PWD` already IS that folder) once the customer name is known from S0 Q1, and create it fresh in SA.
+- **`ANCHOR` is empty and `IN_CONTAINER` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `$PWD/Demo Builds/<customer-slug>-demo` (absolute — `$PWD` is cwd at this point, captured before any directory changes) once the customer name is known from S0 Q1, and created fresh in SA.
+
+Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`. `$DEMO_DIR` is **always an absolute path** in all three branches above — never combine it with a separate `<ABS PATH>/` prefix elsewhere in this document; `$DEMO_DIR` alone is already the full absolute path.
+
 **Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
 **Step 2 — Interview.** Run the S0 interview (below) to collect customer and build details.
@@ -166,7 +197,7 @@ The persona must reflect the customer's actual brand, not a generic Australian-f
 
    **Run these 3–5 WebFetch calls in parallel** — issue them in a single message with multiple tool calls. Sequential fetches add ~30–60s per URL and burn cache cycles unnecessarily.
 
-2. **Extract into a structured brand-research snapshot.** Write to `Demo Builds/<customer>-demo/brand-research.md`:
+2. **Extract into a structured brand-research snapshot.** Write to `$DEMO_DIR/brand-research.md`:
 
 ```markdown
 # <Customer> — Brand Research Snapshot
@@ -217,15 +248,17 @@ e.g. "AMP sounds warmer and more human than Colonial First State (institutional)
 
 The build skill keeps the interview UX. Scoping the demo — the 12 facts + design conversation — is delegated to the purpose-built sub-skill.
 
-**Output directory:** create the demo folder before invoking `cognigy-vibe:scope-demo`, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default, which is always the session workspace root):
+**Output directory:** Use `$DEMO_DIR` resolved in S0.0 Step 0, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default):
 
 ```bash
-mkdir -p "Demo Builds/<customer>-demo"
+# Only create it if ANCHOR was empty (i.e. it doesn't already exist).
+# If ANCHOR matched in S0.0 Step 0, $DEMO_DIR already exists — skip this.
+mkdir -p "$DEMO_DIR"
 ```
 
-Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
+Pass `output_dir: "$DEMO_DIR"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
 
-> **Note:** Claude's cwd remains the session workspace root throughout — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
+> **Note:** When `ANCHOR` was empty (the common case), Claude's cwd is the session workspace root and does not change when the demo folder is created — `$DEMO_DIR` is a fresh subdirectory of cwd. When `ANCHOR` matched, cwd is already inside `$DEMO_DIR` — subsequent relative paths below still resolve correctly either way because every phase reads from `$DEMO_DIR`, not from a re-derived literal path. See `explain("session-workspace")` for the directory model and S0.0 Step 0 for anchor detection.
 
 **Invoke in context-provided mode.** Pass the interview answers verbatim so Phase 1 has nothing to ask about. Mapping (interview Q → scope-demo Fact):
 
@@ -251,7 +284,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 **Phase 3 design conversation:** This is where genuine value-add happens — narrative arc, scenario design, out-of-chat moments, irreversible actions, auth architecture. Run this collaboratively with the user. Do NOT default-fill these from the interview; the conversation is the point.
 
-**Phase 4 output:** `{Customer}-{DemoType}-demo-plan.md` lands in `Demo Builds/<customer>-demo/`. Capture the exact filename — `SB` and later phases will read it.
+**Phase 4 output:** `{Customer}-{DemoType}-demo-plan.md` lands in `$DEMO_DIR/`. Capture the exact filename — `SB` and later phases will read it.
 
 **Hard rule:** Do not proceed to SB until the demo plan file exists on disk. If `scope-demo` fails to write the file, STOP and surface the error.
 
@@ -261,7 +294,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo folder, invoke the design orchestrator.
 
-**Output directory:** `Demo Builds/<customer>-demo/`. Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. Claude's cwd remains the session workspace root throughout. See `explain("session-workspace")` for the directory model.
+**Output directory:** `$DEMO_DIR` (resolved in S0.0 Step 0). Pass `output_dir: "$DEMO_DIR"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. See `explain("session-workspace")` for the directory model and S0.0 Step 0 for anchor detection.
 
 **Invoke in Mode A (full workflow).** Persona → Jobs → Interfaces → Contracts. The orchestrator runs each in sequence; each reads the prior outputs from disk.
 
@@ -333,7 +366,7 @@ All build defaults come from `buildConfig` (loaded via `get_build_state`). `buil
 
 ## S1 — Build sequence
 
-**Inputs (all must exist in `Demo Builds/<customer>-demo/` before S1 starts):**
+**Inputs (all must exist in `$DEMO_DIR/` before S1 starts):**
 - `brand-research.md` (from S0.6)
 - `{Customer}-{DemoType}-demo-plan.md` (from SA)
 - `{Customer}-agent-persona.md` (from SB) — **four H2 sections** per S2 ladder: `## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`. S2.5 empathy library verbatim inside `## Job Instructions`.
@@ -345,7 +378,7 @@ S1 reads these artifacts as the spec. The S0 interview answers are no longer the
 
 ### S1 entry gate — mandatory design-doc read (BLOCKING)
 
-Before any MCP call in S1, read all four design docs from `Demo Builds/<customer>-demo/` and assert:
+Before any MCP call in S1, read all four design docs from `$DEMO_DIR/` and assert:
 
 - `{Customer}-agent-persona.md` exists AND has four H2 sections (`## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`). Assert `## Job Instructions` contains the S2.5 empathy library (check for "transfer_to_care" or "Lifeline").
 - `{Customer}-context-schema.md` exists AND contains `{{context.customer.` placeholders (the `memoryContextInjection` template).
@@ -507,7 +540,7 @@ the delete and proceed to S1.3. If more than one is present, delete all of them.
 
 ### 1.3 Author tools as `.tool.json` files, then push (cognigy-vibe `push_agent_tool`)
 
-**Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `Demo Builds/<customer>-demo/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). The benefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (S6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)
+**Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `$DEMO_DIR/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). The benefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (S6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)
 
 **Sources for tool list:**
 - Use-case tools — from `{Customer}-agent-architecture.md` (the Specialist table — each tool listed under each specialist)
@@ -515,7 +548,7 @@ the delete and proceed to S1.3. If more than one is present, delete all of them.
 - Transfer tools — **derived in this skill (see "Transfer-tool derivation" below)** from use cases. `transfer_to_care` + `transfer_to_general` always present.
 - End-call pair — always built (see S5).
 
-**`.tool.json` file shape** — `Demo Builds/<customer>-demo/tools/<tool_id>.tool.json` (per plugin `explain("agent-tool-json")`):
+**`.tool.json` file shape** — `$DEMO_DIR/tools/<tool_id>.tool.json` (per plugin `explain("agent-tool-json")`):
 
 ```json
 {
@@ -539,7 +572,7 @@ Top-level object — do NOT wrap in `config`, do NOT set `name`/`toolType`/`useP
 **Push each tool** (use ABSOLUTE paths — `tool_file` is resolved as given):
 ```
 push_agent_tool {
-  tool_file: "<ABS PATH>/Demo Builds/<customer>-demo/tools/<tool_id>.tool.json",
+  tool_file: "$DEMO_DIR/tools/<tool_id>.tool.json",
   flow_id:   "<flowId>",
   job_node_id: "<aiAgentJobNodeId>"      // CREATE; to UPDATE an existing tool node pass node_id: "<toolNodeId>" instead
 }
@@ -680,7 +713,7 @@ This only ever mutates state on its first execution (turn 2, before any tool has
 
 **Per scene, build steps:**
 
-1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
+1. **Write the HTML body to disk** — `$DEMO_DIR/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
 2. **Create the Reset Code node, then the `if` + `setHTMLAppState` scaffold, once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per `explain("node-positioning")`, use `mode: "append"` targeting the branch marker to insert inside a branch. If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — four calls (2a create Reset Code node targeting the Once node's `_id`, 2b create IF node, 2c read its childIds, 2d create setHTMLAppState):
    ```
@@ -732,7 +765,7 @@ This only ever mutates state on its first execution (turn 2, before any tool has
    push_html_node {
      flow_id:   "<flowId>",
      node_id:   "<setHTMLAppStateNodeId>",
-     html_file: "Demo Builds/<customer>-demo/xapp/<scene_name>.html"
+     html_file: "$DEMO_DIR/xapp/<scene_name>.html"
    }
    ```
 
@@ -837,7 +870,7 @@ Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_
 **(b) Initialize Session — Code node** inside On First Time. As of cognigy-vibe **v1.4.0**, `push_code_node` **creates and positions the Code node in one call** — omit `node_id` and pass `mode` + `target` + `label`. The old two-step (empty `cognigy_create` → `push_code_node`) is no longer needed:
 ```
 push_code_node {
-  script_file: "Demo Builds/<customer>-demo/code-nodes/<customer>_initialize_session.js",   // canonical CRM template, industry-shaped — S3
+  script_file: "$DEMO_DIR/code-nodes/<customer>_initialize_session.js",   // canonical CRM template, industry-shaped — S3
   flow_id: "<flowId>",
   mode: "append",
   target: "<onFirstExecutionId>",
@@ -984,7 +1017,7 @@ After all build steps land:
    ```
    export_package {
      project_id: "<projectId>",
-     output_path: "Demo Builds/<customer>-demo/<customer>-package.zip"
+     output_path: "$DEMO_DIR/<customer>-package.zip"
    }
    ```
    The tool posts an async export job, polls until complete, and writes the zip locally. The as-built doc and baseline snapshot (steps 3–4) are the primary build record; the zip is the offline backup / handoff artifact.
@@ -1011,7 +1044,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 - **S2.5 empathy library** verbatim in the patched Job Node's `instructions` field (sourced from `## Job Instructions` H2 in persona.md — layer d per S2 ladder) — all 7 trigger categories with templates, hard rules, and Lifeline 13 11 14 for suicide/self-harm
 - **Agent free-text fields ≤ 1000 chars** — agent `description` (Persona/1A) and agent `instructions` (Special Instructions/1B) are EACH ≤ 1000 chars (verify via `cognigy_get`; this is S1.7 Phase A assert #12). Over-length silently errors on save and injects mid-build rework — this is the hard cap, not a guideline.
 
-*Artifacts on disk in `Demo Builds/<customer>-demo/`:*
+*Artifacts on disk in `$DEMO_DIR/`:*
 - All SB design docs: demo plan, persona, architecture, context-schema, interfaces, contracts
 - All `tools/*.json` for every tool wired into the agent (file-first authoring per S1.3)
 - `brand-research.md` and `<customer>-empathy-library.md`
@@ -1164,9 +1197,9 @@ if (knowledgeRequested !== true) { skip S1.8 entirely; proceed to S1.9 }
 
 If S0.5 returned YES, the user gave a list of FAQ topic specs. **This section wires Cognigy's built-in Knowledge AI only** — author the FAQ bodies locally, then ingest them into a Cognigy knowledge store. There is no CXone Expert publishing step here: Expert publishing belongs in a future `knowledge@nice` skill and is out of scope for this orchestrator. Do not add an Expert escape hatch until that skill ships.
 
-**Output directory:** `Demo Builds/<customer>-demo/knowledge/`. Claude's cwd remains the session workspace root — paths below are relative to the workspace root. See `explain("session-workspace")`.
+**Output directory:** `$DEMO_DIR/knowledge/` (resolved in S0.0 Step 0). See `explain("session-workspace")` for the directory model.
 
-**Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `Demo Builds/<customer>-demo/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 2, and they stay version-controlled in the demo folder.
+**Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `$DEMO_DIR/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 2, and they stay version-controlled in the demo folder.
 
 **Step 2 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
 
@@ -1416,7 +1449,7 @@ This library is the single source of truth for how the AI Agent handles sensitiv
 **For the user at build time:**
 
 - The skill emits this library verbatim into the persona's `## Job Instructions` H2 section (layer d — see S2 template). S1.2 patches that section into the Job Node's `instructions` field, so the runtime LLM has the library in context every turn.
-- The skill also writes `<customer>-empathy-library.md` to `Demo Builds/<customer>-demo/` as a **read-only reference export** of exactly what was baked in (handy for review / QA). **It is NOT wired to the live agent — editing it changes nothing at runtime.** To change runtime empathy behaviour, edit the `## Job Instructions` block of `{Customer}-agent-persona.md` (the per-build editable home) and re-run S1.2 to re-patch the Job Node. **SSOT chain:** S2.5 template → `{Customer}-agent-persona.md` `## Job Instructions` → S1.2 → live Job Node. The exported `.md` sits outside that chain.
+- The skill also writes `<customer>-empathy-library.md` to `$DEMO_DIR/` as a **read-only reference export** of exactly what was baked in (handy for review / QA). **It is NOT wired to the live agent — editing it changes nothing at runtime.** To change runtime empathy behaviour, edit the `## Job Instructions` block of `{Customer}-agent-persona.md` (the per-build editable home) and re-run S1.2 to re-patch the Job Node. **SSOT chain:** S2.5 template → `{Customer}-agent-persona.md` `## Job Instructions` → S1.2 → live Job Node. The exported `.md` sits outside that chain.
 - The recap shows the 7 trigger categories so the user can confirm coverage or add custom ones (e.g. "natural disaster — bushfire, flood — for an Aussie insurer in catastrophe season").
 
 ---
@@ -1440,7 +1473,7 @@ The Initialize Session Code is the **single source of truth** for the caller-pro
 | Health | `memberId` | `planLevel, lastClaim, providerNetwork, dependents` |
 | Other | `customerId` | Ask the user for 3–5 domain-appropriate fields |
 
-**Initialize Session Code** (write to `Demo Builds/<customer>-demo/code-nodes/<customer>_initialize_session.js`):
+**Initialize Session Code** (write to `$DEMO_DIR/code-nodes/<customer>_initialize_session.js`):
 
 ```javascript
 // Canonical CRM template — single source of truth for caller profile.
@@ -1580,7 +1613,7 @@ Repeat for every tool in S1.3. The tool node comes from `push_agent_tool` (S1.3)
 Author the `.tool.json` file in `tools/<tool_id>.tool.json` (see S1.3 for shape) and push:
 ```
 push_agent_tool {
-  tool_file: "<ABS PATH>/Demo Builds/<customer>-demo/tools/<tool_id>.tool.json",
+  tool_file: "$DEMO_DIR/tools/<tool_id>.tool.json",
   flow_id: "<flowId>",
   job_node_id: "<aiAgentJobNodeId>"
 }
@@ -1604,7 +1637,7 @@ cognigy_create {
 Transfer tool → `code` first (mark the transfer in context before the spoken hand-off). One `push_code_node` CREATE call (omit `node_id`) creates, positions, and pushes the body:
 ```
 push_code_node {
-  script_file: "Demo Builds/<customer>-demo/code-nodes/<tool_id>_mark_transfer.js",
+  script_file: "$DEMO_DIR/code-nodes/<tool_id>_mark_transfer.js",
   flow_id: "<flowId>",
   mode: "append",
   target: "<aiAgentJobToolNodeId>",
@@ -1621,7 +1654,7 @@ context.toolResponse = { transferred: true, team: "<team>", teamLabel: "<Custome
 Transactional → `code` mock (per SC.2 shapes). One `push_code_node` CREATE call (omit `node_id`):
 ```
 push_code_node {
-  script_file: "Demo Builds/<customer>-demo/code-nodes/<tool_id>_mock.js",
+  script_file: "$DEMO_DIR/code-nodes/<tool_id>_mock.js",
   flow_id: "<flowId>",
   mode: "append",
   target: "<fillerSayNodeId>",
@@ -1727,7 +1760,7 @@ Agent ID:     <id>  ([Persona] — referenceId <ref>)
 Flow ID:      <mongo id> (referenceId <ref>)
 Endpoint URL: https://cognigy-endpoint-au1.nicecxone.com/<token>
 
-Demo folder: Demo Builds/[customer]-demo/
+Demo folder: $DEMO_DIR/
   Scope + design artifacts:
     - [Customer]-[DemoType]-demo-plan.md          ← SA (scope-demo)
     - [Customer]-agent-persona.md                 ← SB (with S2.5 empathy library verbatim)
