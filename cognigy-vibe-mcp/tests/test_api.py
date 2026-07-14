@@ -452,6 +452,17 @@ def test_post_json_still_sends_content_type_after_default_removed(client):
     assert route.calls[0].request.headers["content-type"] == "application/json"
 
 
+def test_patch_json_still_sends_content_type_after_default_removed(client):
+    """Same regression guard as the post() test above, for patch() — the workhorse
+    for push_html_node/push_code_node/push_agent_tool's update path/push_agent_avatar."""
+    with respx.mock:
+        route = respx.patch(f"{BASE}/v2.0/flows/flow-123").mock(
+            return_value=httpx.Response(200, json={"_id": "flow-123"})
+        )
+        client.patch("/v2.0/flows/flow-123", {"name": "Updated"})
+    assert route.calls[0].request.headers["content-type"] == "application/json"
+
+
 def test_delete_404_treated_as_success(client):
     with respx.mock:
         respx.delete(f"{BASE}/v2.0/flows/flow-123").mock(

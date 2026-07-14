@@ -135,6 +135,8 @@ TOOLS: list[Tool] = [
             "Knowledge Source. Performs the real multipart/form-data upload — cognigy_invoke "
             "cannot do this (it only accepts JSON bodies). Ingestion runs asynchronously; the "
             "response is a Task (queued/active/done/error), not the finished Knowledge Source. "
+            "The whole file is buffered into memory — fine for typical demo-build documents, "
+            "avoid for very large files. "
             "See explain('knowledge-store') for the full ingestion workflow."
         ),
         inputSchema=make_schema(PushKnowledgeSourceFileArgs),
@@ -376,8 +378,11 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             found = f".{ext}" if ext else "no file extension"
             return _ok({"error": f"Unsupported file type: {found}. Supported formats: {supported}"})
 
-        if m.tags and any("," in tag for tag in m.tags):
-            return _ok({"error": "Tags must not contain commas (the API joins tags with a comma delimiter)"})
+        if m.tags:
+            if any("," in tag for tag in m.tags):
+                return _ok({"error": "Tags must not contain commas (the API joins tags with a comma delimiter)"})
+            if any(not tag for tag in m.tags):
+                return _ok({"error": "Tags must not be empty strings"})
 
         try:
             data = path.read_bytes()
@@ -405,9 +410,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "task_id": result.get("_id"),
             })
 
+        task_id = result.get("_id")
+        if not task_id:
+            return _ok({"error": f"Upload response missing _id: {result}"})
+
         return _ok({
             "success": True,
-            "task_id": result.get("_id"),
+            "task_id": task_id,
             "status": result.get("status"),
             "bytes": len(data),
         })
