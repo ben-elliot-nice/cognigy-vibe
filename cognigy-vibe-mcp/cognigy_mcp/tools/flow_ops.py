@@ -547,7 +547,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         m, err = validate(GetFlowChartArgs, args)
         if err:
             return err
-        chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
+        try:
+            chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
+        except ApiError as exc:
+            return _api_error_response(exc)
         stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if m.format == "hierarchy":
             stripped_chart = {**chart, "nodes": stripped_nodes}

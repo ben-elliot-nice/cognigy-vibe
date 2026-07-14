@@ -931,7 +931,7 @@ def test_cognigy_update_patch_propagates_api_error(mock_client, state, cache):
     assert data["status"] == 500
 
 
-def test_cognigy_delete_propagates_non_404_api_error(mock_client, state, cache):
+def test_cognigy_delete_propagates_api_error(mock_client, state, cache):
     from cognigy_mcp.api import ApiError
     mock_client.delete.side_effect = ApiError(400, "Cannot delete: in use")
     handlers = make_handlers(mock_client, state, cache)
@@ -957,3 +957,13 @@ def test_cognigy_invoke_propagates_api_error_as_structured_response(mock_client,
     assert data["error"] == "api_error"
     assert data["status"] == 400
     assert "sourceType" in data["detail"]
+
+
+def test_get_flow_chart_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(404, "Flow not found")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 404

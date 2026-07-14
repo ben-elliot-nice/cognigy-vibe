@@ -53,7 +53,9 @@ then reference it from the httpRequest via the context variable.
 When a CognigyScript expression inside an object-typed config field (e.g. a
 `sendMetadata` node's key/value map) resolves to `undefined`, Cognigy's
 interpolation engine OMITS that key from the serialized object entirely —
-it does not send the key with an empty string value.
+it does not send the key with an empty string value. (Verified: observed
+via live SIP INFO payload inspection in a Netwealth demo build session,
+2026-07-13 — see issue #216.)
 
   // config: { "sendMetadata": { "account_type": "{{context.onboarding.accountType}}" } }
   // If context.onboarding.accountType is undefined at send time:
@@ -64,10 +66,13 @@ This breaks any downstream consumer that pattern-matches on key presence
 (e.g. frontend field-matching expecting `account_type` to always exist).
 
 **Fix:** guard every value in an object-typed config field so it can never
-resolve to `undefined` — use `|| ''` or a ternary in the source context
-value, not in the interpolation expression itself:
+resolve to `undefined` — check for `undefined` explicitly in the source
+context value, not in the interpolation expression itself. Do NOT use
+`someValue || ''` — that also coerces legitimate falsy values (`0`, `false`)
+to `''`, reintroducing a different flavor of this same bug for any field
+that can legitimately hold `0`/`false`:
   // In the code node that sets context.onboarding.accountType:
-  context.onboarding.accountType = someValue || '';
+  context.onboarding.accountType = someValue === undefined ? '' : someValue;
 
 This is a general constraint on ALL object-typed config fields (not just
 `sendMetadata`) — see explain("node-config-update") for the related PATCH
