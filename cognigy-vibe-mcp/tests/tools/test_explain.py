@@ -651,3 +651,23 @@ def test_function_execution_admits_create_body_gap(mock_client, state, cache):
     assert "Creating a Function" in text
     assert "full_objects=true" in text, "Must give the cognigy_list discovery recipe"
     assert "openapi.json" in text, "Must point to openapi.json as the manual fallback"
+
+
+# ── Issue #207: sendMetadata documentation ───────────────────────────────────
+
+def test_voice_gateway_documents_sendmetadata(mock_client, state, cache):
+    """voice-gateway must document the sendMetadata node: purpose, flat-only constraint, xApp alternative."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "voice-gateway"})
+    text = result[0].text
+    assert "sendMetadata" in text
+    assert "setHTMLAppState" in text, "Must cross-reference the xApp alternative it replaces for voice"
+    assert "flat" in text.lower(), "Must document the flat-object-only constraint"
+
+
+def test_xapp_delivery_cross_references_sendmetadata(mock_client, state, cache):
+    """xapp-delivery must point to sendMetadata as the VG-native alternative to setHTMLAppState."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-delivery"})
+    text = result[0].text
+    assert "sendMetadata" in text

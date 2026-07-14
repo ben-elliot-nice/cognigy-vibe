@@ -86,3 +86,29 @@ REST endpoint with outputImmediately:true:
 Voice pipeline:
   - Synchronous — all tool handling completes before response delivered to caller
   - Two-pass confirmation pattern works correctly on voice
+
+### sendMetadata — pushing structured data to a WebRTC client
+`sendMetadata` (extension `@cognigy/voicegateway2`, see `explain("extension-map")`)
+sends a JSON payload to the voice channel — the native VG alternative to
+xApp's `setHTMLAppState` (see `explain("xapp-delivery")`) when the client is a
+WebRTC voice session rather than an xApp iframe session.
+
+**Constraint: flat object only, no nesting.** The payload must be a single-level
+object — e.g. `{"event": "call_transferred", "step": "confirm"}` is valid;
+`{"event": {"type": "call_transferred"}}` (a nested value) is not. This was
+discovered empirically against a real build, not documented anywhere in the
+Cognigy platform docs — flatten any structured state before sending it.
+
+  cognigy_create(body={
+    "type": "sendMetadata",
+    "mode": "append",
+    "target": "<previousNodeId>",
+    "flowId": "<flowId>",
+    "config": {"metadata": {"event": "call_transferred", "step": "confirm"}}
+  })
+
+The exact `config` key holding the payload (`metadata` above) has not been
+verified against a live Cognigy environment in this codebase — cross-check
+against an existing working `sendMetadata` node via
+`cognigy_get(resource_type="node", resource_id=..., flow_id=...)` if you have
+one, before relying on this key name.

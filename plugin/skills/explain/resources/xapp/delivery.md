@@ -45,6 +45,9 @@ xApp session URL must be persisted in context — input.apps.url is ephemeral.
 ### api.setAppState() limitation + conditional push pattern
 api.setAppState() in code nodes CANNOT push HTML content or external URLs.
 Use the setHTMLAppState node instead (type: "setHTMLAppState", extension: "@cognigy/basic-nodes").
+For a voice (non-xApp) WebRTC session, see `explain("voice-gateway")`'s
+`sendMetadata` section — the VG-native equivalent for pushing structured data
+without an xApp iframe.
 Pattern for conditional xApp push from code:
   1. Code node: context.xappTrigger = true;
   2. ifThenElse: condition = context.xappTrigger === true
