@@ -433,3 +433,15 @@ def test_generation_use_cases_constant():
         "designTimeGeneration", "answerExtraction", "conversationAnalyzer",
     ]
     assert KNOWLEDGE_USE_CASE == "knowledgeSearch"
+
+
+def test_set_project_generative_ai_settings_unknown_use_case_key(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"aiAgent": "llm-1", "knowledgesearch": "llm-embed-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "unknown_use_case"
+    assert data["unknown_keys"] == ["knowledgesearch"]
+    mock_client.patch.assert_not_called()

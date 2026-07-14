@@ -87,6 +87,11 @@ use-case key — a partial call only touches the keys you pass, leaving other us
 Call this **in addition to** `assign_org_llm`, not instead of it: the project needs both the LLM
 assigned to it (`assign_org_llm`) and told which use-cases should use it (`set_project_generative_ai_settings`).
 
+`use_case_settings` keys are validated against the known use-case set (the seven generation
+use-cases plus `knowledgeSearch`) before the PATCH is sent — an unrecognised key (e.g. a typo like
+`knowledgesearch`) returns `{"error": "unknown_use_case", "unknown_keys": [...], "allowed_keys": [...]}`
+instead of being forwarded to the API.
+
 For Knowledge AI specifically, the `knowledgeSearch` use-case must be set to an **embedding**
 model's `_id` (not a generation model's) — see `explain("knowledge-store")`.
 

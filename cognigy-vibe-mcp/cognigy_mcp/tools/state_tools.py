@@ -65,6 +65,7 @@ GENERATION_USE_CASES: list[str] = [
     "designTimeGeneration", "answerExtraction", "conversationAnalyzer",
 ]
 KNOWLEDGE_USE_CASE = "knowledgeSearch"
+_KNOWN_USE_CASES = frozenset(GENERATION_USE_CASES) | {KNOWLEDGE_USE_CASE}
 
 
 def _normalise_rtype(rtype: str) -> str:
@@ -120,7 +121,10 @@ TOOLS: list[Tool] = [
             "(aiAgent, gptPromptNode, knowledgeSearch, etc.) via a project-level settings PATCH. "
             "This is what actually activates a model for these platform features — assigning an "
             "LLM to a project via assign_org_llm alone does not. Partial PATCH is safe: only the "
-            "use-cases passed in use_case_settings are touched, others are left untouched."
+            "use-cases passed in use_case_settings are touched, others are left untouched. "
+            "Keys are validated against the known use-case set (see GENERATION_USE_CASES / "
+            "KNOWLEDGE_USE_CASE) — an unrecognised key returns an unknown_use_case error instead "
+            "of being sent to the API."
         ),
         inputSchema=make_schema(SetProjectGenerativeAISettingsArgs),
     ),
@@ -310,6 +314,13 @@ def make_handlers(
         m, err = validate(SetProjectGenerativeAISettingsArgs, args)
         if err:
             return err
+        unknown_keys = [k for k in m.use_case_settings if k not in _KNOWN_USE_CASES]
+        if unknown_keys:
+            return _ok({
+                "error": "unknown_use_case",
+                "unknown_keys": unknown_keys,
+                "allowed_keys": sorted(_KNOWN_USE_CASES),
+            })
         body = {
             "generativeAISettings": {
                 "useCasesSettings": {
