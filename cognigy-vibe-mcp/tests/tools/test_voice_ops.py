@@ -162,10 +162,7 @@ def test_audio_preview_settings_patch_uses_connection_reference_id(mock_client, 
 def test_audio_preview_settings_provider_derived_from_non_azure_connection_type(mock_client, state, cache, monkeypatch):
     """audioPreviewSettings.provider/connections key must derive from connection_type, not hardcode microsoft.
 
-    Verified against live Cognigy API behavior for AWSSpeechProvider -> "aws",
-    DeepgramSpeechProvider -> "deepgram", SpeechmaticsSpeechProvider -> "speechmatics",
-    ElevenLabsSpeechProvider -> "elevenlabs": provider is connection_type with the
-    "SpeechProvider" suffix stripped and lowercased.
+    See the derivation comment in _provision_webrtc_endpoint for the verified vendor mapping.
     """
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
     _args(mock_client, connection_result={"_id": "conn-1", "referenceId": "conn-ref-dg"})
@@ -321,6 +318,24 @@ def test_locale_fetch_failure_cleans_up_connection(mock_client, state, cache, mo
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
 
 
+def test_audio_preview_settings_patch_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
+    """If the audioPreviewSettings PATCH raises, the speech connection is deleted before re-raising."""
+    monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
+    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
+    mock_client.patch.side_effect = ApiError(400, "unsupported provider slug")
+
+    handlers = make_handlers(mock_client, state, cache)
+    with pytest.raises(ApiError):
+        handlers["provision_webrtc_endpoint"]({
+            "project_id": "proj-1", "flow_reference_id": "fref",
+            "endpoint_name": "Click-to-Call", "connection_name": "Test",
+        })
+
+    mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
+    mock_client.get.assert_not_called()
+
+
 def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
     """If the endpoint creation POST raises, the speech connection is deleted before re-raising."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
@@ -447,6 +462,25 @@ def test_default_connection_type_and_fields_are_azure(mock_client, state, cache,
     assert conn_body["fields"] == {"apiKey": "dummy", "region": "australiaeast"}
 
 
+def test_non_azure_connection_type_without_connection_fields_omits_azure_region(mock_client, state, cache, monkeypatch):
+    """A non-Azure connection_type without explicit connection_fields must not silently inherit Azure's region default."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "DeepgramSpeechProvider",
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["type"] == "DeepgramSpeechProvider"
+    assert conn_body["fields"] == {"apiKey": "dummy"}
+
+
 def test_generic_connection_type_and_fields_pass_through(mock_client, state, cache, monkeypatch):
     """A caller-supplied connection_type/connection_fields flows through untouched, proving genericity."""
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
@@ -466,6 +500,14 @@ def test_generic_connection_type_and_fields_pass_through(mock_client, state, cac
     assert conn_body["type"] == "SomeOtherProvider"
     assert conn_body["fields"] == {"apiKey": "dummy", "foo": "bar", "baz": "qux"}
 
+    settings_body = mock_client.patch.call_args_list[0][0][1]
+    assert settings_body == {
+        "audioPreviewSettings": {
+            "provider": "someotherprovider",
+            "connections": {"someotherprovider": {"connectionId": "conn-ref-1"}},
+        }
+    }
+
 
 def test_connection_fields_cannot_override_api_key(mock_client, state, cache, monkeypatch):
     """A caller-supplied connection_fields={'apiKey': ...} must never override the real API key."""
@@ -483,6 +525,25 @@ def test_connection_fields_cannot_override_api_key(mock_client, state, cache, mo
 
     conn_body = mock_client.post.call_args_list[0][0][1]
     assert conn_body["fields"]["apiKey"] == "real-secret-key"
+    assert conn_body["fields"]["region"] == "eastus"
+
+
+def test_connection_fields_cannot_override_api_key_on_dummy_path(mock_client, state, cache, monkeypatch):
+    """The same apiKey-override protection must hold on the dummy-key path, not just the real-key path."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": {"apiKey": "attacker-supplied", "region": "eastus"},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["fields"]["apiKey"] == "dummy"
     assert conn_body["fields"]["region"] == "eastus"
 
 

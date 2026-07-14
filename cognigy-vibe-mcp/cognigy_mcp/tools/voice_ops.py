@@ -18,15 +18,19 @@ class ProvisionWebrtcEndpointArgs(BaseModel):
         "MicrosoftSpeechProvider",
         description=(
             "Cognigy connection type for the preview speech provider, e.g. "
-            "'MicrosoftSpeechProvider', 'DeepgramSpeechProvider', 'AWSSpeechProvider', "
-            "'SpeechmaticsSpeechProvider', 'ElevenLabsSpeechProvider'. The project's "
-            "audioPreviewSettings provider slug is derived from this by stripping the "
-            "'SpeechProvider' suffix and lowercasing (verified against the live API)."
+            "'MicrosoftSpeechProvider', 'DeepgramSpeechProvider'. Drives the "
+            "audioPreviewSettings provider slug too — see the derivation comment "
+            "in _provision_webrtc_endpoint."
         ),
     )
-    connection_fields: dict[str, Any] = Field(
-        default_factory=lambda: {"region": "australiaeast"},
-        description="Non-credential connection fields for the preview speech provider (vendor-specific shape)",
+    connection_fields: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Non-credential connection fields for the preview speech provider "
+            "(vendor-specific shape). Defaults to {'region': 'australiaeast'} only "
+            "when connection_type is also left at its Azure default — a non-Azure "
+            "connection_type with this omitted gets no fields, never Azure's region."
+        ),
     )
 
 TOOLS: list[Tool] = [
@@ -70,13 +74,20 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         is_dummy = not bool(api_key)
         effective_key = api_key if api_key else "dummy"
 
+        if m.connection_fields is not None:
+            connection_fields = m.connection_fields
+        elif m.connection_type == "MicrosoftSpeechProvider":
+            connection_fields = {"region": "australiaeast"}
+        else:
+            connection_fields = {}
+
         conn_result = client.post("/v2.0/connections", {
             "name": m.connection_name,
             "extension": "@cognigy/audio-preview-provider",
             "type": m.connection_type,
             "resourceLevel": "project",
             "projectId": m.project_id,
-            "fields": {**m.connection_fields, "apiKey": effective_key},
+            "fields": {**connection_fields, "apiKey": effective_key},
         }, retry=False)
         connection_id = conn_result["_id"]
 
