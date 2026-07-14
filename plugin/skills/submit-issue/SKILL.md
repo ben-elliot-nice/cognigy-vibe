@@ -64,7 +64,7 @@ which gh
 
 ## Step 3a: Submit via gh (if available)
 
-If `which gh` succeeded, first ensure the `claude-submission` label exists (creating it is a no-op if it's already there):
+If `which gh` succeeded, first ensure the `claude-submission` label exists (`--force` upserts — it also resets the color/description on an already-existing label, so if a maintainer has customized it, this will silently revert those customizations to the values below):
 
 ```bash
 gh label create "claude-submission" \
@@ -73,6 +73,8 @@ gh label create "claude-submission" \
   --color "5319e7" \
   --force
 ```
+
+If this command fails, report the error to the user and stop — do not proceed to `gh issue create` with a label that may not exist, since that would surface as a confusing failure at issue-creation time instead of here.
 
 Then run:
 
