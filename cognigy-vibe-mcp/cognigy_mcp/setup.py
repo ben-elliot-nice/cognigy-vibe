@@ -468,9 +468,13 @@ def _run_uninstall(args) -> None:
             )
             summary_rows.append(("Plugin", f"uninstalled (scope: {scope})"))
         except StepFailure as exc:
-            # Don't let a forced --scope guess (nothing installed there) abort
-            # Desktop/credential cleanup — defer the failure until after those
-            # steps have run, then surface it.
+            # Best-effort cleanup: a plugin-uninstall failure (whether from a
+            # forced --scope guess with nothing installed there, or a genuine
+            # CLI error on the auto-detected scope) shouldn't stop Desktop
+            # config removal or the credential prompt from running. Print
+            # immediately so the failure isn't lost if a later step also
+            # raises; re-raise once cleanup has run to preserve the exit code.
+            print(f"  Warning: failed to uninstall plugin (scope: {scope}): {exc}")
             deferred_plugin_failure = exc
             summary_rows.append(("Plugin", f"failed to uninstall (scope: {scope})"))
 

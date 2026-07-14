@@ -901,6 +901,43 @@ def test_run_uninstall_plugin_failure_does_not_block_desktop_and_credential_clea
     assert "cognigy-vibe" not in data.get("mcpServers", {})
 
 
+def test_run_uninstall_plugin_failure_on_auto_detected_scope_does_not_block_cleanup(tmp_path, monkeypatch, capsys):
+    """The failure-deferral behavior is intentionally broad: it also covers a
+    genuine plugin-uninstall failure on the auto-detected scope (no --scope
+    override at all), not just a forced-scope guess. Locks in that broader,
+    intentional behavior per the follow-up review on issue #199, and asserts
+    the failure is printed immediately (not only queued for the final summary)
+    so it isn't lost if a later step also raises.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    failure = StepFailure("Uninstalling plugin", SubprocessResult(returncode=1, stdout="", stderr="permission denied"))
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "uninstall"]:
+            raise failure
+        return None
+
+    args = type("Args", (), {"verbose": False, "scope": None})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+        with pytest.raises(StepFailure):
+            _run_uninstall(args)
+
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+    out = capsys.readouterr().out
+    assert "failed to uninstall plugin" in out.lower()
+
+
 def test_run_uninstall_removes_marketplace_with_run_subprocess(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
     args = type("Args", (), {"verbose": False, "scope": None})()
