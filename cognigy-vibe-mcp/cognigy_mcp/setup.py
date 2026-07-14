@@ -233,7 +233,7 @@ def main() -> None:
     try:
         runner(args)
     except Exception as exc:
-        print_error_panel(failure_message, exc, debug=args.verbose)
+        print_error_panel(failure_message, exc, debug=args.verbose, title=failure_message.rstrip("."))
         sys.exit(1)
 
 

@@ -132,6 +132,33 @@ def test_print_error_panel_plain_exception_unaffected():
             wizard_ui.print_error_panel("Setup failed.", exc, debug=False)
     output = test_console.export_text()
     assert "Setup failed." in output
+
+
+def test_print_error_panel_title_defaults_to_setup_failed():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError as exc:
+            wizard_ui.print_error_panel("Setup failed.", exc, debug=False)
+    output = test_console.export_text()
+    assert "Setup failed" in output
+
+
+def test_print_error_panel_title_can_be_overridden():
+    from rich.console import Console
+    from cognigy_mcp import wizard_ui
+    test_console = Console(record=True)
+    with patch.object(wizard_ui, "console", test_console):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError as exc:
+            wizard_ui.print_error_panel("Update failed.", exc, debug=False, title="Update failed")
+    output = test_console.export_text()
+    assert "Update failed" in output
+    assert "Setup failed" not in output
     assert "Traceback" not in output
 
 

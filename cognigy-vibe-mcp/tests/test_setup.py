@@ -1132,6 +1132,7 @@ def test_main_renders_error_panel_for_status_command():
     mock_panel.assert_called_once()
     assert mock_panel.call_args.args[0] == "Status failed."
     assert isinstance(mock_panel.call_args.args[1], RuntimeError)
+    assert mock_panel.call_args.kwargs["title"] == "Status failed"
 
 
 def test_main_renders_error_panel_for_update_command():
@@ -1144,6 +1145,7 @@ def test_main_renders_error_panel_for_update_command():
         main()
     assert exc_info.value.code == 1
     assert mock_panel.call_args.args[0] == "Update failed."
+    assert mock_panel.call_args.kwargs["title"] == "Update failed"
 
 
 def test_main_renders_error_panel_for_uninstall_command():
@@ -1156,6 +1158,7 @@ def test_main_renders_error_panel_for_uninstall_command():
         main()
     assert exc_info.value.code == 1
     assert mock_panel.call_args.args[0] == "Uninstall failed."
+    assert mock_panel.call_args.kwargs["title"] == "Uninstall failed"
 
 
 def test_main_status_command_propagates_system_exit_unchanged():
