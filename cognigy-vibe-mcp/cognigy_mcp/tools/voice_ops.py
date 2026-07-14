@@ -27,8 +27,10 @@ TOOLS: list[Tool] = [
         name="provision_webrtc_endpoint",
         description=(
             "Create a VoiceGateway webRTC (Click-to-Call) endpoint bound to a flow. "
-            "Handles the Microsoft Azure Speech Services connection prerequisite "
-            "automatically: uses COGNIGY_VOICE_PREVIEW_API_KEY from environment for "
+            "Handles the preview speech connection prerequisite automatically — "
+            "defaults to Microsoft Azure Speech Services, or pass connection_type/"
+            "connection_fields for a different vendor. "
+            "Uses COGNIGY_VOICE_PREVIEW_API_KEY from environment for "
             "a real connection, or creates and deletes a throwaway dummy connection "
             "when the key is absent. Also wires the connection into the project's "
             "audioPreviewSettings and fetches the project's primary locale — both "
