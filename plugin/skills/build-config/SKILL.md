@@ -32,7 +32,7 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `llm.options[].label` | string | required | Human-readable LLM name | `"Azure GPT-4o"` |
 | `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | populated by `cognigy-vibe:init-cognigy-vibe` from live discovery — do not hand-edit |
 | `llm.options[].id` | string | required | MongoDB `_id` of the LLM — used by `assign_org_llm` without re-lookup | `"699ed916..."` |
-| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives §1.1 Step 2 assignment branch | `"organisation"` |
+| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives S1.1 Step 2 assignment branch | `"organisation"` |
 | `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (S0.5 / S1.8) | `{ "label": "...", "referenceId": "", "id": "" }` |
 | `llm.embedding.label` | string | optional | Human-readable embedding model name | `"text-embedding-3-large"` |
 | `llm.embedding.referenceId` | string (uuid) | optional | Cognigy referenceId for the embedding model | `"..."` |
