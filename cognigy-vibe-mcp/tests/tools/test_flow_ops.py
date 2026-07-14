@@ -129,6 +129,31 @@ def test_cognigy_get_plural_nodes_uses_chart_path(mock_client, state, cache):
     assert data["_id"] == "node-1"
 
 
+def test_cognigy_get_cache_key_parity_singular_plural(mock_client, state, cache):
+    """A cache entry written under the normalised 'node' key must be readable back
+    via resource_type='nodes' — same regression class as #22 (cache-key mismatch)."""
+    cache.set("node", "n1", {"_id": "n1", "type": "say"})
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "nodes",
+        "resource_id": "n1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["_source"] == "cache"
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_get_plural_nodes_missing_flow_id_returns_error(mock_client, state, cache):
+    """resource_type='nodes' without flow_id must return the same guidance error as
+    singular 'node', not build a malformed path."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "nodes", "resource_id": "n1"})
+    data = json.loads(result[0].text)
+    assert "flow_id required" in data["error"]
+    mock_client.get.assert_not_called()
+
+
 def test_cognigy_update_plural_nodes_uses_chart_path(mock_client, state, cache):
     mock_client.get.return_value = {"_id": "node-1", "type": "say"}
     mock_client.patch.return_value = {"_id": "node-1", "type": "say"}
