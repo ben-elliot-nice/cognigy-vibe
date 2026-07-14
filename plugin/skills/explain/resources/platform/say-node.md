@@ -66,3 +66,18 @@ With "linear": true — cycles through in order instead of random selection.
 Passing a string directly instead of an array:
   WRONG: "text": "Hello"
   CORRECT: "text": ["Hello"]
+
+### Updating an existing say node
+Say nodes have no dedicated update tool — edit them directly with the generic
+`cognigy_update(resource_type="node", ...)` primitive, same as any other node type.
+Always use `merge_config=True` so unrelated fields (e.g. `linear`, `_cognigy`) aren't
+silently dropped by Cognigy's full-replace PATCH semantics — see explain("node-config-update").
+
+  cognigy_update(resource_type="node", resource_id=<nodeId>, flow_id=<flowId>,
+    merge_config=True, body={
+      "config": {
+        "say": {
+          "text": ["Updated greeting text"]
+        }
+      }
+    })
