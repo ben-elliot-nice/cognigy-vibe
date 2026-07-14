@@ -1,6 +1,6 @@
 ---
 name: work-on-issue-custom
-description: Use when asked to work an issue by number in ben-elliot-nice/cognigy-vibe (cognigy-claude-plugin) - drives setup (worktree from origin/dev), research (tests, root cause, dedup search), an approval-gated approach, implementation, PR creation, and a review-fix polling loop.
+description: Use when asked to work an issue by number in ben-elliot-nice/cognigy-vibe (cognigy-claude-plugin) - drives setup (worktree from origin/dev), research (tests, root cause, dedup search), an approval-gated approach, implementation, PR creation, a review-fix polling loop, and post-merge cleanup.
 ---
 
 # Work on Issue (Custom)
@@ -67,3 +67,14 @@ Ask the user for permission before entering this loop. If approved:
   - A PR comment containing LGTM-style approval language (e.g. "looks good", "LGTM") — covers a human reviewer approving via comment instead of a formal review.
 - **If a review arrives with findings (not an approval)**: read the findings, implement fixes, commit, push. Then start a **new** 5-min/1-hour waiting window for the follow-up review — don't carry over the old clock.
 - **If no review arrives within an hour of waiting**: exit the loop and report to the user that no review was received, rather than waiting indefinitely.
+
+## 7. Post-merge cleanup
+
+**Trigger**: the user tells you the PR was merged and asks for cleanup (e.g. "pr was merged, clean up").
+
+1. Confirm the merge: `gh pr view <PR#> --json state,mergedAt` should show `MERGED`.
+2. On the issue: add the `pending release` label (`gh issue edit <ID> --add-label "pending release"`); remove the `wip` label if present (`gh issue edit <ID> --remove-label wip`) — check current labels first (`gh issue view <ID> --json labels`) since `wip` may not always be set.
+3. Exit the worktree: `ExitWorktree` with `action: "keep"` if this session entered an existing worktree (not one it created via `EnterWorktree`) — it will refuse to remove one it didn't create. Otherwise `action: "remove"` works directly.
+4. Remove the worktree directory: `git worktree remove .claude/worktrees/feat/<ID>-<slug>`.
+5. Delete the local branch: `git branch -d feat/<ID>-<slug>` (expect a "not yet merged to HEAD" warning if local `dev` hasn't been fast-forwarded — this is expected since the merge happened on the remote, not local `dev`; the PR's `MERGED` state from step 1 is the source of truth).
+6. Delete the remote branch: `git push origin --delete feat/<ID>-<slug>`.
