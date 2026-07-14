@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
-from cognigy_mcp.api import CognigyClient
+from cognigy_mcp.api import CognigyClient, ApiError
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState, _deep_merge
 from cognigy_mcp.filters import strip_response, BLOCKED_IN_CONFIG
@@ -322,6 +322,14 @@ def _resource_path(resource_type: str, resource_id: str, flow_id: str | None = N
     return f"/v2.0/{resource_type}/{resource_id}"
 
 
+def _api_error_response(exc: ApiError) -> list[TextContent]:
+    return _ok({"error": "api_error", "status": exc.status_code, "detail": str(exc)})
+
+
+def _unexpected_error_response(exc: Exception) -> list[TextContent]:
+    return _ok({"error": "unexpected_error", "detail": str(exc)})
+
+
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _cognigy_get(args: dict) -> list[TextContent]:
@@ -338,7 +346,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             path = _resource_path(rtype, rid, m.flow_id)
             if path is None:
                 return _ok({"error": "flow_id required when resource_type is 'node'"})
-            data = client.get(path)
+            try:
+                data = client.get(path)
+            except ApiError as exc:
+                return _api_error_response(exc)
+            except Exception as exc:
+                return _unexpected_error_response(exc)
             cache.set(rtype, rid, data)
             source = "api"
         if m.fields:
@@ -358,12 +371,17 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                     "Use get_flow_chart(flow_id=<flowId>) to list all nodes in a flow."
                 )
             })
-        if m.agent_id:
-            data = client.get(f"/v2.0/aiagents/{m.agent_id}/{rtype}", limit=m.limit)
-        elif m.project_id:
-            data = client.get(f"/v2.0/{rtype}", projectId=m.project_id, limit=m.limit)
-        else:
-            data = client.get(f"/v2.0/{rtype}", limit=m.limit)
+        try:
+            if m.agent_id:
+                data = client.get(f"/v2.0/aiagents/{m.agent_id}/{rtype}", limit=m.limit)
+            elif m.project_id:
+                data = client.get(f"/v2.0/{rtype}", projectId=m.project_id, limit=m.limit)
+            else:
+                data = client.get(f"/v2.0/{rtype}", limit=m.limit)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         raw_items = data if isinstance(data, list) else data.get("items", [])
         if not m.full_objects:
             simplified = []
@@ -428,7 +446,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             path = f"/v2.0/flows/{m.flow_id}/chart/nodes"
         else:
             path = f"/v2.0/{rtype}"
-        result = client.post(path, body)
+        try:
+            result = client.post(path, body)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         resource_id = result.get("_id") or result.get("id")
         name = result.get("name") or result.get("label")
         if name and resource_id:
@@ -469,7 +492,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                         f'insertBefore (may return 500 on AU1 — prefer append).'
                     )
                 })
-        current = client.get(path)
+        try:
+            current = client.get(path)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         if rtype == "node" and current.get("type") == "code":
             return _ok({"error": (
                 "Code nodes must be updated via push_code_node "
@@ -484,7 +512,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             current_config = {k: v for k, v in current["config"].items() if k not in BLOCKED_IN_CONFIG}
             merged = _deep_merge(current_config, body["config"])
             body = {**body, "config": merged}
-        result = client.patch(path, body)
+        try:
+            result = client.patch(path, body)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         cache.set(rtype, m.resource_id, result)
         if m.return_full_object:
             return _ok(strip_response(result))
@@ -503,7 +536,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         path = _resource_path(rtype, m.resource_id, m.flow_id)
         if path is None:
             return _ok({"error": "flow_id required when resource_type is 'node'"})
-        result = client.delete(path)
+        try:
+            result = client.delete(path)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         cache.invalidate(rtype, m.resource_id)
         return _ok({"deleted": True, "resource_id": m.resource_id, **result})
 
@@ -515,14 +553,24 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         path = _invoke_path(rtype, m.resource_id, m.operation, m.body, m.flow_id)
         if path is None:
             return _ok({"error": f"flow_id required for {rtype}/{m.operation}"})
-        result = client.post(path, m.body)
+        try:
+            result = client.post(path, m.body)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         return _ok(strip_response(result))
 
     def _get_flow_chart(args: dict) -> list[TextContent]:
         m, err = validate(GetFlowChartArgs, args)
         if err:
             return err
-        chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
+        try:
+            chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if m.format == "hierarchy":
             stripped_chart = {**chart, "nodes": stripped_nodes}
