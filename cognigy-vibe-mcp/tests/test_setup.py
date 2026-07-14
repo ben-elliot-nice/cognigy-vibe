@@ -765,14 +765,15 @@ def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys
     assert "not installed" in capsys.readouterr().out.lower()
 
 
-def test_run_uninstall_scope_flag_overrides_detected_scope(tmp_path):
+def test_run_uninstall_scope_flag_overrides_detected_scope(tmp_path, monkeypatch):
     """--scope must override the auto-detected scope, not just be ignored.
     Regression guard for issue #199 (no way to override uninstall scope).
     """
     from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
     args = type("Args", (), {"verbose": False, "scope": "project"})()
     desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
-    env_path = tmp_path / ".env"  # does not exist -> no credential prompt
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
 
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
          patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
@@ -786,6 +787,58 @@ def test_run_uninstall_scope_flag_overrides_detected_scope(tmp_path):
         "Uninstalling plugin",
         verbose=False,
     )
+
+
+def test_run_uninstall_scope_flag_overrides_when_nothing_auto_detected(tmp_path, monkeypatch):
+    """--scope must force an uninstall attempt even when auto-detection found no
+    plugin at all (state.plugin_scope=None) — the exact case issue #199 needs
+    covered: detection finds nothing, user forces an attempt via the flag.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    args = type("Args", (), {"verbose": False, "scope": "local"})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "local"],
+        "Uninstalling plugin",
+        verbose=False,
+    )
+
+
+def test_run_uninstall_scope_flag_governs_credential_path_selection(tmp_path, monkeypatch):
+    """The project/local credential-path check must key off the effective
+    (possibly overridden) scope, not the auto-detected one. A regression that
+    left this keyed on state.plugin_scope would pass silently otherwise.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    project_env_path = tmp_path / ".env"
+    project_env_path.write_text("COGNIGY_API_KEY=secret\n")
+    user_env_path = tmp_path / "user-home" / ".env"  # does not exist
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    # Auto-detected scope is "project" (would prompt for cwd/.env), but the
+    # user overrides to "user" — the cwd/.env credential prompt must NOT fire.
+    args = type("Args", (), {"verbose": False, "scope": "user"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="project")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", user_env_path), \
+         patch("builtins.input", return_value="n") as mock_input, \
+         patch("cognigy_mcp.setup.run_subprocess"):
+        _run_uninstall(args)
+
+    prompted_paths = [str(call.args[0]) for call in mock_input.call_args_list]
+    assert not any(str(project_env_path) in p for p in prompted_paths)
+    assert project_env_path.exists()  # untouched, never prompted
 
 
 def test_run_uninstall_removes_marketplace_with_run_subprocess(tmp_path):
