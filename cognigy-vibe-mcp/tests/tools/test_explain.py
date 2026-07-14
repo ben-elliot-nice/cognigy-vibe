@@ -613,3 +613,16 @@ def test_node_positioning_documents_mode_target_semantics_for_code_nodes(mock_cl
     assert '"append"' in text
     assert '"appendChild"' in text
     assert "Target = node you want to insert AFTER" in text or "target" in text.lower()
+
+
+# ── Issue #207: connections resource_type topic ─────────────────────────────
+
+def test_connections_topic_documents_create_body(mock_client, state, cache):
+    """connections topic must document a real, verified create body shape."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "connections"})
+    text = result[0].text
+    assert "Unknown topic" not in text, "connections must be a known topic"
+    assert '"extension"' in text, "Must document the extension field"
+    assert '"resourceLevel"' in text, "Must document the resourceLevel field"
+    assert "MicrosoftSpeechProvider" in text, "Must show a real, verified connection type example"

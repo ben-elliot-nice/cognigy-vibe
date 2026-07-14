@@ -46,6 +46,7 @@ nodes:
   node-wiring                chart structure, relations array, sequential vs child chains
 
 platform:
+  connections                create/update body shape for the connections resource_type, verified via provision_webrtc_endpoint
   endpoint-config            referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint, per-channel field differences
   extension-map              complete type → extension lookup table
   knowledge-store            chunking, connector run, source management
