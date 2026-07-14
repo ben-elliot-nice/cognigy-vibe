@@ -60,3 +60,12 @@ get_flow_chart returns "hierarchy": a tree string like:
       [aiAgentToolAnswer] Tool Answer (pqr)
 
 See explain("agent-job-node") for how an aiAgentJob node and its tool children are created.
+
+### Finding a node's ID: resolve_resource vs get_flow_chart
+`resolve_resource(name=..., resource_type="nodes")` only finds nodes created via
+`cognigy_create` earlier in the *current* session — it's a local session-state lookup,
+not an API call. It returns nothing for nodes that already existed in the flow before
+this session started (built via the Cognigy UI, a prior session, etc.).
+
+For any node not created in the current session, use `get_flow_chart(flow_id=...)` and
+scan the returned nodes/hierarchy by label or type instead.
