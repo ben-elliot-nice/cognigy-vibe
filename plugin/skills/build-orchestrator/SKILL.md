@@ -44,6 +44,10 @@ Run:
 
 ```bash
 ANCHOR=""
+IN_CONTAINER=""
+if [ "$(basename "$PWD")" = "Demo Builds" ]; then
+  IN_CONTAINER="$PWD"
+fi
 CHECK="$PWD"
 while [ "$CHECK" != "/" ] && [ "$CHECK" != "$HOME" ]; do
   PARENT="$(dirname "$CHECK")"
@@ -54,14 +58,16 @@ while [ "$CHECK" != "/" ] && [ "$CHECK" != "$HOME" ]; do
   CHECK="$PARENT"
 done
 echo "ANCHOR=$ANCHOR"
+echo "IN_CONTAINER=$IN_CONTAINER"
 ```
 
-- **`ANCHOR` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `$PWD/Demo Builds/<customer-slug>-demo` (absolute — `$PWD` is cwd at this point, captured before any directory changes) once the customer name is known from S0 Q1, and created fresh in SA.
 - **`ANCHOR` is non-empty** → cwd (or an ancestor) is already an existing build directory. Hold `ANCHOR` (already absolute, since it was derived from `$PWD` in the walk-up above). Once S0 Q1 (customer name) is collected, apply the S11 "Folder name" rule (`[customer]-demo`, lowercase) to get the expected slug, and compare it against `basename "$ANCHOR"`:
   - **Match** → this is a continuation of the same build. Set `$DEMO_DIR="$ANCHOR"`. It already exists — do not create or nest a new `Demo Builds/` folder inside it; skip the `mkdir -p` in SA.
   - **Mismatch** → cwd is inside a *different* customer's build directory. STOP before SA and ask the user directly: *"You're currently inside `<ANCHOR>`, which looks like an existing build for `<basename slug>`, but this build is for `<new customer>`. I don't want to nest a new build folder inside another customer's directory. Do you want to `cd` back to the session workspace root first, or is `<ANCHOR>` actually intended for this build?"* Do not silently proceed either way — this is a BLOCKING confirmation, not a warning.
+- **`ANCHOR` is empty and `IN_CONTAINER` is non-empty** → cwd is the `Demo Builds` container itself (not a specific `<brand>-demo` subdirectory) — e.g. the user `cd`'d in to look around and never `cd`'d back out. Do **not** fall through to the workspace-root branch below — that would compute `$DEMO_DIR` as `$PWD/Demo Builds/<customer-slug>-demo`, i.e. `.../Demo Builds/Demo Builds/<customer-slug>-demo`, the exact nesting bug this step exists to prevent, one level shallower. Instead set `$DEMO_DIR="$IN_CONTAINER/<customer-slug>-demo"` (no extra `Demo Builds/` segment, since `$PWD` already IS that folder) once the customer name is known from S0 Q1, and create it fresh in SA.
+- **`ANCHOR` is empty and `IN_CONTAINER` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `$PWD/Demo Builds/<customer-slug>-demo` (absolute — `$PWD` is cwd at this point, captured before any directory changes) once the customer name is known from S0 Q1, and created fresh in SA.
 
-Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`. `$DEMO_DIR` is **always an absolute path** in both branches above — never combine it with a separate `<ABS PATH>/` prefix elsewhere in this document; `$DEMO_DIR` alone is already the full absolute path.
+Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`. `$DEMO_DIR` is **always an absolute path** in all three branches above — never combine it with a separate `<ABS PATH>/` prefix elsewhere in this document; `$DEMO_DIR` alone is already the full absolute path.
 
 **Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
