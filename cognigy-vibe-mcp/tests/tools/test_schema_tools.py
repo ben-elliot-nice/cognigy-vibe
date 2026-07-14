@@ -224,9 +224,69 @@ def test_describe_resource_schema_operation_not_available(mock_client, state, ca
     assert data["available_methods"] == ["get"]
 
 
+def test_describe_resource_schema_available_methods_excludes_non_http_keys(mock_client, state, cache):
+    """available_methods must only list real HTTP verbs, not path-item siblings
+    like parameters/summary/description that could appear at the path-item level."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/onlygettable"]["summary"] = "Some summary"
+    spec["paths"]["/v2.0/onlygettable"]["parameters"] = []
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "onlygettable", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert data["available_methods"] == ["get"]
+
+
 def test_describe_resource_schema_caches_spec_across_calls(mock_client, state, cache):
     mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
     handlers = make_handlers(mock_client, state, cache)
     handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
     handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "update"})
     mock_client.get_openapi_spec.assert_called_once()
+
+
+def test_describe_resource_schema_cache_persists_across_make_handlers_calls(mock_client, state, cache):
+    """The on-disk spec cache must survive a fresh make_handlers() call using the
+    same cache_dir — this is the actual server-restart scenario the 24h TTL protects."""
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers1 = make_handlers(mock_client, state, cache)
+    handlers1["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
+
+    # Simulate a server restart: brand new make_handlers() call, same cache_dir.
+    handlers2 = make_handlers(mock_client, state, cache)
+    handlers2["describe_resource_schema"]({"resource_type": "lexicons", "operation": "update"})
+
+    mock_client.get_openapi_spec.assert_called_once()
+
+
+def test_describe_resource_schema_malformed_operation_returns_clean_error(mock_client, state, cache):
+    """A structurally surprising spec (e.g. requestBody.content is a string, not a dict)
+    must not raise — it should come back as a clean _ok(...) error envelope."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/lexicons"]["post"]["requestBody"]["content"] = "not-a-dict"
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "schema_parse_error"
+    assert data["resource_type"] == "lexicons"
+    assert data["operation"] == "create"
+
+
+def test_describe_resource_schema_get_composed_schema_notes_no_fields(mock_client, state, cache):
+    """A GET response schema using oneOf/allOf/anyOf/$ref composition (no top-level
+    'properties') must not silently look like zero fields with no explanation."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/lexicons/{lexiconId}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"] = {
+        "oneOf": [
+            {"type": "object", "properties": {"_id": {"type": "string"}}},
+            {"type": "object", "properties": {"name": {"type": "string"}}},
+        ]
+    }
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicon", "operation": "get"})
+    data = json.loads(result[0].text)
+    assert data["fields"] == []
+    assert "note" in data
+    assert "verbose" in data["note"].lower()

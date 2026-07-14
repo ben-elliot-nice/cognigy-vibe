@@ -20,6 +20,9 @@ _OPERATION_METHOD: dict[str, str] = {
 _TOP_LEVEL_PATH_RE = re.compile(r"^/v2\.0/[a-zA-Z]+$")
 
 
+# Intentionally lowercases on an alias-miss (unlike flow_ops._normalise_rtype, which
+# preserves original case on a miss) because OpenAPI path segments are always lowercase
+# — the fallback here feeds directly into path lookups such as f"/v2.0/{rtype}".
 def _normalise_rtype(rtype: str) -> str:
     return _RESOURCE_TYPE_ALIASES.get(rtype.lower(), rtype.lower())
 
@@ -44,6 +47,15 @@ def _find_candidate_path(paths: dict, rtype: str, operation: str) -> tuple[str |
 
 def _known_resource_types(paths: dict) -> list[str]:
     return sorted(p.split("/")[2] for p in paths if _TOP_LEVEL_PATH_RE.match(p))
+
+
+_COMPOSITION_KEYS = ("$ref", "oneOf", "allOf", "anyOf")
+
+
+def _is_composed_schema(schema: dict) -> bool:
+    """True when a schema has no flat 'properties' but uses $ref/oneOf/allOf/anyOf
+    composition instead — extracting fields from these would silently yield []."""
+    return "properties" not in schema and any(key in schema for key in _COMPOSITION_KEYS)
 
 
 def _properties_from_schema(schema: dict) -> tuple[dict, set[str]]:
@@ -169,31 +181,57 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             })
 
         method = _OPERATION_METHOD[m.operation]
-        available_methods = sorted(paths[path].keys())
-        if method not in available_methods:
-            return _ok({
-                "error": (
-                    f"operation={m.operation!r} (HTTP {method.upper()}) not available at {path}"
-                ),
-                "available_methods": available_methods,
-            })
 
-        op = paths[path][method]
-        result = {
-            "resource_type": rtype,
-            "operation": m.operation,
-            "path": path,
-            "method": method,
-        }
-        if not exact:
-            result["warning"] = (
-                f"No exact match for resource_type={m.resource_type!r}; "
-                f"best guess via substring search: {path}"
+        # Everything below reaches into the live, externally-controlled spec content
+        # (path-item keys, operation objects, request/response schema fragments) —
+        # any structural surprise (unexpected types, missing keys) must come back as
+        # a clean error envelope rather than an unhandled exception.
+        try:
+            available_methods = sorted(
+                k for k in paths[path].keys() if k in _OPERATION_METHOD.values()
             )
-        if m.verbose:
-            result["raw_schema"] = _raw_schema_fragment(op, m.operation)
-        else:
-            result["fields"] = _extract_fields(op, m.operation)
+            if method not in available_methods:
+                return _ok({
+                    "error": (
+                        f"operation={m.operation!r} (HTTP {method.upper()}) not available at {path}"
+                    ),
+                    "available_methods": available_methods,
+                })
+
+            op = paths[path][method]
+            result = {
+                "resource_type": rtype,
+                "operation": m.operation,
+                "path": path,
+                "method": method,
+            }
+            if not exact:
+                result["warning"] = (
+                    f"No exact match for resource_type={m.resource_type!r}; "
+                    f"best guess via substring search: {path}"
+                )
+            if m.verbose:
+                result["raw_schema"] = _raw_schema_fragment(op, m.operation)
+            else:
+                result["fields"] = _extract_fields(op, m.operation)
+                if m.operation == "get" and not result["fields"]:
+                    response_schema = _raw_schema_fragment(op, m.operation)
+                    if _is_composed_schema(response_schema):
+                        result["note"] = (
+                            "This resource's response schema uses $ref/oneOf/allOf/anyOf "
+                            "composition rather than a flat 'properties' object, so it "
+                            "could not be flattened into a field list. Call again with "
+                            "verbose=True to see the raw schema fragment."
+                        )
+        except Exception as exc:
+            return _ok({
+                "error": "schema_parse_error",
+                "detail": str(exc),
+                "resource_type": rtype,
+                "operation": m.operation,
+                "path": path,
+                "method": method,
+            })
         return _ok(result)
 
     return {"describe_resource_schema": _describe_resource_schema}
