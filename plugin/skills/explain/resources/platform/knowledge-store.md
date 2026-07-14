@@ -9,6 +9,25 @@ group: platform
 ### Resource hierarchy
 Project → KnowledgeStore → Sources → Chunks
 
+### Prerequisite: project-level Generative AI settings
+
+Before creating a knowledge store, the project must have an embedding model activated for the
+`knowledgeSearch` use-case:
+
+```
+assign_org_llm { project_id: "<projectId>", llm_id: "<embedding llm _id>" }
+set_project_generative_ai_settings {
+  project_id: "<projectId>",
+  use_case_settings: { "knowledgeSearch": "<embedding llm _id>" }
+}
+```
+
+Assigning an embedding LLM to the project via `assign_org_llm` alone is **not** sufficient —
+without the `set_project_generative_ai_settings` call, knowledge-store creation and retrieval
+silently fail to use the intended embedding model. See `explain("llm-resources")` for the full
+mechanism, including how to read back the current `knowledgeSearch` assignment to verify this
+prerequisite is met before creating a store.
+
 ### List knowledge stores
   cognigy_list(resource_type="knowledgestores", project_id=...)
 

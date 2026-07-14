@@ -434,11 +434,30 @@ Capture `agent.id` (mongo `_id`) and `agent.referenceId` (UUID — required by t
 **Step 3 — LLM gate.** Confirm the selected LLM is available in the new project before relying on generation.
 
 1. `cognigy_list { resource_type: "largelanguagemodels", project_id: "<new projectId>" }` — check if `buildConfig.llm.selected.referenceId` appears in the result.
-2. **If present** → proceed to Step 4.
-3. **If absent AND `buildConfig.llm.selected.resourceLevel == "organisation"`** → call `assign_org_llm { project_id: "<new projectId>", llm_id: "<buildConfig.llm.selected.id>" }`. On `already_assigned` or `assigned` → proceed. On any error → surface to user and stop.
+2. **If present** → proceed to Step 3b below.
+3. **If absent AND `buildConfig.llm.selected.resourceLevel == "organisation"`** → call `assign_org_llm { project_id: "<new projectId>", llm_id: "<buildConfig.llm.selected.id>" }`. On `already_assigned` or `assigned` → proceed to Step 3b. On any error → surface to user and stop.
 4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy-vibe:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
 
 > **Note:** Do not use `manage_packages` export/import as the primary LLM wiring path — it is a fallback for project-scoped LLMs only. `assign_org_llm` is the correct path for org-level LLMs (the default for any config populated by `init-cognigy-vibe`).
+
+**Step 3b — Activate the generation model at the project level.** `assign_org_llm` only appends the project to the LLM's `assignedToProjects` array — it does not make the project actually *use* that model for Cognigy's Generative AI features. Call:
+
+```
+set_project_generative_ai_settings {
+  project_id: "<new projectId>",
+  use_case_settings: {
+    "aiAgent": "<buildConfig.llm.selected.id>",
+    "gptPromptNode": "<buildConfig.llm.selected.id>",
+    "aiEnhancedOutputs": "<buildConfig.llm.selected.id>",
+    "sentimentAnalysis": "<buildConfig.llm.selected.id>",
+    "designTimeGeneration": "<buildConfig.llm.selected.id>",
+    "answerExtraction": "<buildConfig.llm.selected.id>",
+    "conversationAnalyzer": "<buildConfig.llm.selected.id>"
+  }
+}
+```
+
+Runs on every build, unconditionally — independent of whether Knowledge AI (S0.5) is used. On `{"error": ...}` → surface to user and stop (same treatment as an `assign_org_llm` failure in Step 3).
 
 **Step 4 — Rename agent + set remaining agent fields, then create the Job node.**
 
@@ -1053,7 +1072,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 **⚪ CONDITIONAL — only check if the precondition holds**
 
 - **`xapp/*.html` files exist** for every xApp scene named in `{Customer}-agent-interfaces.md` — only check if interfaces.md named scenes. Skip if no scenes.
-- **Knowledge wiring** — only if S0.5 returned `knowledgeRequested: true`. Knowledge store ID + topics ingested listed, wiring mechanism documented in S1.8 Step 3. Skip if S0.5 returned NO.
+- **Knowledge wiring** — only if S0.5 returned `knowledgeRequested: true`. Knowledge store ID + topics ingested listed, wiring mechanism documented in S1.8 Step 4. Skip if S0.5 returned NO.
 
 If any BLOCKING item is missing, the build is incomplete — go back and fix the flow before handing back. Do not soften the bar to ship faster; the cross-check exists because shipped-but-broken patterns are harder to debug than rework-before-handover. **S1.7 is the programmatic enforcer of this list — passing S1.6's paper check without S1.7's runtime check is how a prior build shipped missing `Once`, `Initialize Session`, `Set Session Config`, and `Say Welcome` despite S1.5 spelling them out. Do not skip S1.7.**
 
@@ -1200,9 +1219,24 @@ If S0.5 returned YES, the user gave a list of FAQ topic specs. **This section wi
 
 **Output directory:** `$DEMO_DIR/knowledge/` (resolved in S0.0 Step 0). See `explain("session-workspace")` for the directory model.
 
-**Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `$DEMO_DIR/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 2, and they stay version-controlled in the demo folder.
+**Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `$DEMO_DIR/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 3, and they stay version-controlled in the demo folder.
 
-**Step 2 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
+**Step 2 — Activate the embedding model at the project level.** Check `buildConfig.llm.embedding`:
+
+- **Unset** → **hard stop:** *"Knowledge AI was requested, but no embedding model is configured (`llm.embedding` is unset in your build config). Re-run `cognigy-vibe:init-cognigy-vibe` to select one, or ask your Cognigy admin to configure an org-level embedding model."* Do not proceed with knowledge-store creation in this state — the later "verify the wiring landed" check would otherwise surface a confusing runtime failure instead of a clear setup gap.
+- **Set** → assign it to the project, then activate it for the `knowledgeSearch` use-case:
+  ```
+  assign_org_llm { project_id: "<projectId>", llm_id: "<buildConfig.llm.embedding.id>" }
+  // On already_assigned or assigned → proceed. On any error → surface to user and stop.
+
+  set_project_generative_ai_settings {
+    project_id: "<projectId>",
+    use_case_settings: { "knowledgeSearch": "<buildConfig.llm.embedding.id>" }
+  }
+  // On {"error": ...} → surface to user and stop.
+  ```
+
+**Step 3 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
 
 a. **Create the knowledge store and ingest sources** via cognigy-vibe (per plugin `explain("knowledge-store")` — hierarchy Project → KnowledgeStore → Sources → Chunks):
 ```
@@ -1242,13 +1276,13 @@ A silent shape mismatch can return 200 OK without actually wiring anything — v
 
 **Why this approach (vs a separate `search_*_faqs` tool):** built-in Knowledge AI handles retrieval, ranking, and answer-grounding inside the Job Node's response path — no extra tool branch, no Code mock, no `input.result` wiring, no persona routing-tree edit. The LLM gets retrieved context injected automatically alongside its other inputs. Simpler, less to maintain, harder to break.
 
-**Step 3 — Append "Knowledge wired" to as-built.** Add to `[CUSTOMER]_FLOW_INSERTS.md` Section 9:
+**Step 4 — Append "Knowledge wired" to as-built.** Add to `[CUSTOMER]_FLOW_INSERTS.md` Section 9:
 
 ```markdown
 ## 9. Knowledge wiring
 
 - Knowledge AI enabled: <yes / no>
-- Knowledge store ID: <id from Step 2(a)>
+- Knowledge store ID: <id from Step 3(a)>
 - Topics ingested: <count> (sources in the Cognigy knowledge store)
 - Local body files: knowledge/<slug>.md × <count>
 - Wiring mechanism: <cognigy-vibe knowledge-store API | manual UI step>

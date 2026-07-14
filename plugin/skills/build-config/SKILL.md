@@ -32,10 +32,11 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `llm.options[].label` | string | required | Human-readable LLM name | `"Azure GPT-4o"` |
 | `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | populated by `cognigy-vibe:init-cognigy-vibe` from live discovery — do not hand-edit |
 | `llm.options[].id` | string | required | MongoDB `_id` of the LLM — used by `assign_org_llm` without re-lookup | `"699ed916..."` |
-| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives §1.1 Step 2 assignment branch | `"organisation"` |
-| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (§0.5 / §1.8) | `{ "label": "...", "referenceId": "" }` |
+| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives S1.1 Step 2 assignment branch | `"organisation"` |
+| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (S0.5 / S1.8) | `{ "label": "...", "referenceId": "", "id": "" }` |
 | `llm.embedding.label` | string | optional | Human-readable embedding model name | `"text-embedding-3-large"` |
 | `llm.embedding.referenceId` | string (uuid) | optional | Cognigy referenceId for the embedding model | `"..."` |
+| `llm.embedding.id` | string | optional | MongoDB `_id` of the embedding LLM — used by `set_project_generative_ai_settings` and `assign_org_llm` without re-lookup | `"699ed916..."` |
 | `llm.temperatureVoice` | number | optional | Temperature for voice/transactional builds | `0.2` |
 | `llm.temperatureChat` | number | optional | Temperature for chat-primary builds | `0.5` |
 | `llm.maxTokens` | integer | optional | Max tokens for generation | `400` |
@@ -79,7 +80,8 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 |---|---|---|
 | `llm.default` | S0.0 preflight | Shown in config summary; user may switch to another from `llm.options` |
 | `llm.options` | S1.1 Step 4 | `aiAgentJob` node `config.llmProviderReferenceId` — default selected, alternates offered (see `explain("agent-job-node")`) |
-| `llm.embedding` | S0.5 / S1.8 | Knowledge AI connector — gated, only wired if knowledge is enabled |
+| `llm.options[].id` (selected) | S1.1 Step 3b | `set_project_generative_ai_settings` — activates the generation model for `aiAgent`, `gptPromptNode`, and other non-knowledge use-cases at the project level |
+| `llm.embedding` | S1.8 (Step 2) | Activated via `assign_org_llm` + `set_project_generative_ai_settings` (`knowledgeSearch` use-case) — gated, only wired if S0.5 knowledge gate opened |
 | `llm.temperatureVoice` | S1.1 Step 4 | `aiAgentJob` node `config.temperature` — used when channel is voice/transactional |
 | `llm.temperatureChat` | S1.1 Step 4 | `aiAgentJob` node `config.temperature` — used when channel is primarily chat |
 | `llm.maxTokens` | S1.1 Step 4 | `aiAgentJob` node `config.maxTokens` |
