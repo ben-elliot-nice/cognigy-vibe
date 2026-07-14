@@ -784,3 +784,117 @@ def test_export_package_missing_output_path_returns_validation_error(mock_client
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "output_path" for d in data["details"])
 
+
+# ---------------------------------------------------------------------------
+# push_knowledge_source_file tests
+# ---------------------------------------------------------------------------
+
+def test_push_knowledge_source_file_exported():
+    names = [t.name for t in TOOLS]
+    assert "push_knowledge_source_file" in names
+
+
+def test_push_knowledge_source_file_success(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.txt"
+    doc.write_text("The battery trade-in policy allows...")
+    mock_client.post_multipart.return_value = {"_id": "task-1", "status": "queued"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["task_id"] == "task-1"
+    assert data["status"] == "queued"
+    call = mock_client.post_multipart.call_args
+    assert call[0][0] == "/v2.0/knowledgestores/ks-1/sources/upload"
+    files = call[1]["files"]
+    assert files["file"][0] == "policy.txt"
+    assert files["file"][1] == b"The battery trade-in policy allows..."
+    assert files["file"][2] == "text/plain"
+    assert "data" not in call[1] or not call[1]["data"]
+
+
+def test_push_knowledge_source_file_with_tags(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.pdf"
+    doc.write_bytes(b"%PDF-1.4 fake pdf bytes")
+    mock_client.post_multipart.return_value = {"_id": "task-2", "status": "queued"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+        "tags": ["demo", "sales"],
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    call = mock_client.post_multipart.call_args
+    assert call[1]["data"] == {"tags": "demo,sales"}
+    files = call[1]["files"]
+    assert files["file"][2] == "application/pdf"
+
+
+def test_push_knowledge_source_file_ctxt_extension(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "notes.ctxt"
+    doc.write_text("chunked context text")
+    mock_client.post_multipart.return_value = {"_id": "task-3", "status": "queued"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    files = mock_client.post_multipart.call_args[1]["files"]
+    assert files["file"][2] == "text/plain"
+
+
+def test_push_knowledge_source_file_unsupported_extension(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "spreadsheet.csv"
+    doc.write_text("a,b,c")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "csv" in data["error"]
+    mock_client.post_multipart.assert_not_called()
+
+
+def test_push_knowledge_source_file_not_found(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": "/nonexistent/policy.txt",
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    mock_client.post_multipart.assert_not_called()
+
+
+def test_push_knowledge_source_file_api_failure(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    mock_client.post_multipart.side_effect = Exception("network error")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "network error" in data["error"]
+
+
+def test_push_knowledge_source_file_missing_knowledge_store_id_returns_validation_error(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({"file_path": str(doc)})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "knowledge_store_id" for d in data["details"])
+

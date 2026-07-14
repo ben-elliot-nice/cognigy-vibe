@@ -12,6 +12,12 @@ from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 from cognigy_mcp.validation import _ok, validate, make_schema
 
+_KNOWLEDGE_SOURCE_CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "txt": "text/plain",
+    "ctxt": "text/plain",
+}
+
 
 class PushCodeNodeArgs(BaseModel):
     script_file: str = Field(description="Absolute path to .js or .ts file")
@@ -53,6 +59,15 @@ class PushAgentToolArgs(BaseModel):
 class PushAgentAvatarArgs(BaseModel):
     image_file: str = Field(description="Absolute path to a 136×184px PNG file")
     agent_id: str = Field(description="Agent _id or referenceId")
+
+
+class PushKnowledgeSourceFileArgs(BaseModel):
+    file_path: str = Field(description="Absolute path to a .pdf, .txt, or .ctxt file")
+    knowledge_store_id: str = Field(description="ID of the Knowledge Store to upload into")
+    tags: list[str] | None = Field(
+        None,
+        description="Optional tags applied to the created Knowledge Source",
+    )
 
 
 class ExportPackageArgs(BaseModel):
@@ -112,6 +127,17 @@ TOOLS: list[Tool] = [
             "See explain('agent-avatar-image') for the full avatar spec."
         ),
         inputSchema=make_schema(PushAgentAvatarArgs),
+    ),
+    Tool(
+        name="push_knowledge_source_file",
+        description=(
+            "Upload a local .pdf/.txt/.ctxt file into a Cognigy Knowledge Store as a new "
+            "Knowledge Source. Performs the real multipart/form-data upload — cognigy_invoke "
+            "cannot do this (it only accepts JSON bodies). Ingestion runs asynchronously; the "
+            "response is a Task (queued/active/done/error), not the finished Knowledge Source. "
+            "See explain('knowledge-store') for the full ingestion workflow."
+        ),
+        inputSchema=make_schema(PushKnowledgeSourceFileArgs),
     ),
     Tool(
         name="export_package",
@@ -334,6 +360,43 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         return _ok({"success": True, "agent_id": agent_id, "bytes": len(data)})
 
+    def _push_knowledge_source_file(args: dict) -> list[TextContent]:
+        m, err = validate(PushKnowledgeSourceFileArgs, args)
+        if err:
+            return err
+        path = Path(m.file_path)
+
+        if not path.exists():
+            return _ok({"error": f"File not found: {path}"})
+
+        ext = path.suffix.lstrip(".").lower()
+        content_type = _KNOWLEDGE_SOURCE_CONTENT_TYPES.get(ext)
+        if content_type is None:
+            return _ok({
+                "error": f"Unsupported file type: .{ext}. "
+                         f"Supported formats: {', '.join('.' + e for e in _KNOWLEDGE_SOURCE_CONTENT_TYPES)}",
+            })
+
+        data = path.read_bytes()
+        files = {"file": (path.name, data, content_type)}
+        form_data = {"tags": ",".join(m.tags)} if m.tags else None
+
+        try:
+            result = client.post_multipart(
+                f"/v2.0/knowledgestores/{m.knowledge_store_id}/sources/upload",
+                files=files,
+                data=form_data,
+            )
+        except Exception as e:
+            return _ok({"error": f"Failed to upload knowledge source file: {e}"})
+
+        return _ok({
+            "success": True,
+            "task_id": result.get("_id"),
+            "status": result.get("status"),
+            "bytes": len(data),
+        })
+
     def _export_package(args: dict) -> list[TextContent]:
         m, err = validate(ExportPackageArgs, args)
         if err:
@@ -459,5 +522,6 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         "push_html_node": _push_html_node,
         "push_agent_tool": _push_agent_tool,
         "push_agent_avatar": _push_agent_avatar,
+        "push_knowledge_source_file": _push_knowledge_source_file,
         "export_package": _export_package,
     }
