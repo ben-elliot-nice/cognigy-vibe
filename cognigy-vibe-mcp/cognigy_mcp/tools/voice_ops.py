@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from typing import Any
 from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
@@ -15,9 +16,15 @@ class ProvisionWebrtcEndpointArgs(BaseModel):
     connection_name: str = Field(description="Name for the speech connection, e.g. 'Test'")
     connection_type: str = Field(
         "MicrosoftSpeechProvider",
-        description="Cognigy connection type for the preview speech provider",
+        description=(
+            "Cognigy connection type for the preview speech provider, e.g. "
+            "'MicrosoftSpeechProvider', 'DeepgramSpeechProvider', 'AWSSpeechProvider', "
+            "'SpeechmaticsSpeechProvider', 'ElevenLabsSpeechProvider'. The project's "
+            "audioPreviewSettings provider slug is derived from this by stripping the "
+            "'SpeechProvider' suffix and lowercasing (verified against the live API)."
+        ),
     )
-    connection_fields: dict = Field(
+    connection_fields: dict[str, Any] = Field(
         default_factory=lambda: {"region": "australiaeast"},
         description="Non-credential connection fields for the preview speech provider (vendor-specific shape)",
     )
@@ -76,10 +83,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         endpoint_id = None
         try:
             connection_reference_id = conn_result["referenceId"]
+            # audioPreviewSettings provider slug == connection_type with the
+            # "SpeechProvider" suffix stripped and lowercased — verified against
+            # the live API for MicrosoftSpeechProvider/AWSSpeechProvider/
+            # DeepgramSpeechProvider/SpeechmaticsSpeechProvider/ElevenLabsSpeechProvider.
+            provider_slug = m.connection_type.removesuffix("SpeechProvider").lower()
             client.patch(f"/v2.0/projects/{m.project_id}/settings", {
                 "audioPreviewSettings": {
-                    "provider": "microsoft",
-                    "connections": {"microsoft": {"connectionId": connection_reference_id}},
+                    "provider": provider_slug,
+                    "connections": {provider_slug: {"connectionId": connection_reference_id}},
                 }
             })
 

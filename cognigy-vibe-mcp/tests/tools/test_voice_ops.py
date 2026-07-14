@@ -159,6 +159,37 @@ def test_audio_preview_settings_patch_uses_connection_reference_id(mock_client, 
     }
 
 
+def test_audio_preview_settings_provider_derived_from_non_azure_connection_type(mock_client, state, cache, monkeypatch):
+    """audioPreviewSettings.provider/connections key must derive from connection_type, not hardcode microsoft.
+
+    Verified against live Cognigy API behavior for AWSSpeechProvider -> "aws",
+    DeepgramSpeechProvider -> "deepgram", SpeechmaticsSpeechProvider -> "speechmatics",
+    ElevenLabsSpeechProvider -> "elevenlabs": provider is connection_type with the
+    "SpeechProvider" suffix stripped and lowercased.
+    """
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client, connection_result={"_id": "conn-1", "referenceId": "conn-ref-dg"})
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-abc",
+        "flow_reference_id": "flow-uuid",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "DeepgramSpeechProvider",
+        "connection_fields": {"apiKey": "unused-overridden-anyway"},
+    })
+
+    settings_path, settings_body = mock_client.patch.call_args_list[0][0]
+    assert settings_path == "/v2.0/projects/proj-abc/settings"
+    assert settings_body == {
+        "audioPreviewSettings": {
+            "provider": "deepgram",
+            "connections": {"deepgram": {"connectionId": "conn-ref-dg"}},
+        }
+    }
+
+
 def test_locales_fetched_and_primary_locale_used(mock_client, state, cache, monkeypatch):
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
     mock_client.get.return_value = {
@@ -453,3 +484,36 @@ def test_connection_fields_cannot_override_api_key(mock_client, state, cache, mo
     conn_body = mock_client.post.call_args_list[0][0][1]
     assert conn_body["fields"]["apiKey"] == "real-secret-key"
     assert conn_body["fields"]["region"] == "eastus"
+
+
+def test_explicit_empty_connection_fields_sends_only_api_key(mock_client, state, cache, monkeypatch):
+    """An explicit empty connection_fields={} is distinct from omitting the argument."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": {},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["fields"] == {"apiKey": "dummy"}
+
+
+def test_non_dict_connection_fields_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": "not-a-dict",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_fields" for d in data["details"])
