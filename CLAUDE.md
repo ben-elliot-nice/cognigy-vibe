@@ -110,15 +110,19 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 
 ## OpenAPI Spec
 
-A local copy lives at `./openapi.json` in the repo root — check there first before fetching.
+Exposed live to any session via the `describe_resource_schema` MCP tool
+(`cognigy_mcp/tools/schema_tools.py`), which fetches and caches (24h TTL) the spec using the same
+`X-API-Key` auth the MCP server already uses for every other API call — **no session cookie is
+required** (this contradicts an earlier version of this doc; verified directly against a live AU1
+environment, see #240).
 
-The spec is also available per environment. It requires a session cookie (`_0710c`) from a logged-in browser session — a plain unauthenticated GET returns an empty or truncated response:
+To fetch a copy manually for human inspection, the same header works from the shell:
 
 ```bash
-# AU1 — replace the cookie value with one from your browser session
+# AU1 — replace with your COGNIGY_API_KEY / COGNIGY_BASE_URL
 curl 'https://cognigy-api-au1.nicecxone.com/openapi/openapi-viewer.json' \
   -H 'accept: application/json' \
-  -b '_0710c=<your-session-cookie>' \
+  -H 'X-API-Key: <your-api-key>' \
   -o openapi.json
 ```
 

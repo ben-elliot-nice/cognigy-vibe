@@ -82,9 +82,10 @@ class GetFlowChartArgs(BaseModel):
 
 
 _DISCOVERY_POINTER = (
-    " For resource_types without an obvious body shape, call explain() for the "
-    "topic index before guessing — trial-and-error against live API errors is the "
-    "fallback of last resort, not the first move."
+    " For resource_types without an obvious body shape, call describe_resource_schema "
+    "(resource_type, operation) for the live OpenAPI-derived field list, or explain() for "
+    "the topic index — trial-and-error against live API errors is the fallback of last "
+    "resort, not the first move."
 )
 
 TOOLS: list[Tool] = [

@@ -25,6 +25,16 @@ def test_get_success(client):
     assert result["_id"] == "flow-123"
 
 
+def test_get_openapi_spec(client):
+    with respx.mock:
+        respx.get(f"{BASE}/openapi/openapi-viewer.json").mock(
+            return_value=httpx.Response(200, json={"openapi": "3.0.0", "paths": {"/v2.0/flows": {}}})
+        )
+        result = client.get_openapi_spec()
+    assert result["openapi"] == "3.0.0"
+    assert "/v2.0/flows" in result["paths"]
+
+
 def test_get_401_raises_api_error(client):
     with respx.mock:
         respx.get(f"{BASE}/v2.0/flows/bad").mock(

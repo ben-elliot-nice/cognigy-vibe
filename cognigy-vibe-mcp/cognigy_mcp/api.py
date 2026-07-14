@@ -145,3 +145,8 @@ class CognigyClient:
         resp = self._http.get(url, headers={"Accept": "*/*"})
         self._raise_for_status(resp)
         return resp.content
+
+    def get_openapi_spec(self) -> dict:
+        """GET the live OpenAPI spec using the same X-API-Key auth as every other call —
+        no session cookie required."""
+        return self.get("/openapi/openapi-viewer.json")

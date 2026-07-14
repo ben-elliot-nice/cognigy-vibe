@@ -19,7 +19,8 @@ def test_server_creates_without_error(monkeypatch, tmp_path):
     assert "push_agent_avatar" in tool_names
     assert "talk_to_agent" in tool_names
     assert "sync_remote_state" in tool_names
-    assert len(all_tools) == 21
+    assert "describe_resource_schema" in tool_names
+    assert len(all_tools) == 22
 
 
 def test_server_boots_without_project_id(monkeypatch, tmp_path):
@@ -30,7 +31,7 @@ def test_server_boots_without_project_id(monkeypatch, tmp_path):
     monkeypatch.delenv("COGNIGY_VIBE_DEV", raising=False)
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     server, all_tools = create_server()
-    assert len(all_tools) == 21
+    assert len(all_tools) == 22
 
 
 # --- degraded / dev mode tests (append below existing tests) ---
@@ -49,7 +50,8 @@ def test_create_server_degraded_when_no_env(monkeypatch):
     assert "sync_remote_state" in tool_names
     assert "init" not in tool_names
     assert "reload_mcp" not in tool_names
-    assert len(tools) == 21
+    assert "describe_resource_schema" in tool_names
+    assert len(tools) == 22
 
 
 def test_create_server_degraded_when_missing_key(monkeypatch):
@@ -205,3 +207,13 @@ def test_find_config_file_cwd_wins_over_ancestor(tmp_path, monkeypatch):
     (child / "default-demo-config.json").write_text(json.dumps(child_cfg))
     result, source = _find_config_file()
     assert result["connection"]["region"] == "na1"  # child wins
+
+
+def test_describe_resource_schema_tool_registered(monkeypatch, tmp_path):
+    monkeypatch.setenv("COGNIGY_BASE_URL", "https://cognigy-api-au1.nicecxone.com")
+    monkeypatch.setenv("COGNIGY_API_KEY", "test-key")
+    monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
+    from cognigy_mcp.server import create_server
+    _, tools = create_server()
+    names = [t.name for t in tools]
+    assert "describe_resource_schema" in names

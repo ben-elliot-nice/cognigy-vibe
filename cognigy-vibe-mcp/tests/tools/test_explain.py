@@ -651,7 +651,7 @@ def test_function_execution_admits_create_body_gap(mock_client, state, cache):
     text = result[0].text
     assert "Creating a Function" in text
     assert "full_objects=true" in text, "Must give the cognigy_list discovery recipe"
-    assert "openapi.json" in text, "Must point to openapi.json as the manual fallback"
+    assert "describe_resource_schema" in text, "Must point to describe_resource_schema as the fallback"
 
 
 # ── Issue #207: sendMetadata documentation ───────────────────────────────────
@@ -680,7 +680,12 @@ _STUB_TOPICS = ["lexicons", "playbooks", "locales", "extensions-resource", "proj
 
 
 def test_stub_topics_exist_and_admit_no_verified_shape(mock_client, state, cache):
-    """Each zero-coverage resource_type stub must exist, be non-empty, and give the discovery recipe."""
+    """Each zero-coverage resource_type stub must exist, be non-empty, and give the discovery recipe.
+
+    Since describe_resource_schema (added by #240) is now wired into an MCP tool and reads
+    the live OpenAPI spec without needing a session cookie, the discovery recipe's fallback
+    step points callers at that tool directly rather than the (now-stale) manual
+    openapi.json/session-cookie workaround."""
     handlers = make_handlers(mock_client, state, cache)
     for topic in _STUB_TOPICS:
         result = handlers["explain"]({"topic": topic})
@@ -688,5 +693,5 @@ def test_stub_topics_exist_and_admit_no_verified_shape(mock_client, state, cache
         assert "Unknown topic" not in text, f"{topic} must be a known topic"
         assert len(text) > 100, f"{topic} stub must have real recipe content, not a one-liner"
         assert "full_objects=true" in text, f"{topic} must give the cognigy_list discovery recipe"
-        assert "openapi.json" in text, f"{topic} must point to openapi.json as the manual fallback"
+        assert "describe_resource_schema" in text, f"{topic} must point to describe_resource_schema as the fallback"
         assert "no verified" in text.lower(), f"{topic} must honestly admit no verified body shape exists"
