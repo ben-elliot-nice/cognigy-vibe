@@ -936,14 +936,7 @@ cognigy_create {
 
 > **`sttHints` — populate, never ship the placeholder.** This array MUST contain the customer brand name (S0.6 brand research), the persona name (Q4), and **≥3 domain terms** drawn from the derived tool set (S1.3 — the transfer / use-case tool names and their key nouns, e.g. `roadside`, `claim`, `premium`). These bias the recogniser toward the words this agent actually hears. **S1.3 is the single source for the domain terms** — read them from the derived tool list, do not invent a parallel list here. S1.7 Phase A assert #7 verifies exactly this, so an empty or placeholder `sttHints` fails the structural smoke test (this is the loop the old `["", "<Customer>", "<Persona>"]` template used to trip).
 
-JSON form (what the node emits in the flow definition — for reference):
-```json
-{
-  "synthesizer": { "vendor": "<from buildConfig.tts.vendor>", "language": "<from buildConfig.tts.language>", "voice": "<from buildConfig.tts.voice_id>", "label": "<from buildConfig.tts.label>", "options": { "model_id": "<from buildConfig.tts.model>" } },
-  "recognizer": { "language": "<from buildConfig.stt.language>", "label": "<from buildConfig.stt.label>", "vendor": "<from buildConfig.stt.vendor>", "options": { "model": "<from buildConfig.stt.model>" }, "punctuation": true, "profanityOption": "raw", "vad": { "enable": false } },
-  "bargeIn": { "enable": false, "actionHook": "voice", "dtmfBargein": false }
-}
-```
+> **Vendor normalization — read before writing `ttsVendor`/`sttVendor`.** `setSessionConfig.config` is a flat object — there is no nested `synthesizer`/`recognizer`/`bargeIn` shape (see `explain("voice-gateway")` for the confirmed real shape, pulled from 8 live exemplar nodes across every supported vendor). `buildConfig.tts.vendor`/`buildConfig.stt.vendor` must already be the canonical lowercase slug at this point (per `build-config` schema + `init-cognigy-vibe` capture) — write them through as-is into `ttsVendor`/`sttVendor` without any case transformation of your own. If you ever see a vendor value that isn't lowercase or isn't one of `aws`, `deepgram`, `deepgramflux`, `elevenlabs`, `google`, `microsoft`, `nuance`, `speechmatics`, stop and flag it to the user before writing the node — an unrecognized or wrong-case value silently renders as `"custom"` in the Cognigy UI (issue #211), which is exactly the failure mode this note prevents.
 
 > **Voice silence / no-input fields** (`userNoInput*`) — the values above are the chosen demo defaults (10 s timeout, 5 retries, `event` mode). For what each field means and the `event`-mode reprompt-then-escalate pattern (re-enter on the `noUserInput` system intent, discriminate on `input.data.event === "USER_INPUT_TIMEOUT"`), see plugin `explain("voice-silence-timeout")` rather than re-deriving the semantics here.
 
