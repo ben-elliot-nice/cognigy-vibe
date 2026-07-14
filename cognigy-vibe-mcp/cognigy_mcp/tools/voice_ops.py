@@ -36,12 +36,13 @@ class ProvisionWebrtcEndpointArgs(BaseModel):
     @field_validator("connection_type")
     @classmethod
     def _connection_type_must_be_a_speech_provider(cls, value: str) -> str:
-        if not value.endswith("SpeechProvider"):
+        if not value.endswith("SpeechProvider") or value == "SpeechProvider":
             raise ValueError(
-                "must end in 'SpeechProvider' (e.g. 'MicrosoftSpeechProvider', "
-                "'DeepgramSpeechProvider') -- the audioPreviewSettings provider slug "
-                "is derived by stripping this suffix, and a non-conforming value "
-                "would silently PATCH a broken/empty provider slug with no error"
+                "must be a non-empty vendor prefix followed by 'SpeechProvider' "
+                "(e.g. 'MicrosoftSpeechProvider', 'DeepgramSpeechProvider') -- the "
+                "audioPreviewSettings provider slug is derived by stripping this "
+                "suffix, and the bare value 'SpeechProvider' (or anything not ending "
+                "in it) would silently PATCH a broken/empty provider slug with no error"
             )
         return value
 
@@ -99,6 +100,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             "type": m.connection_type,
             "resourceLevel": "project",
             "projectId": m.project_id,
+            # apiKey placed last so it always wins over any caller-supplied
+            # connection_fields["apiKey"] -- do not reorder these keys.
             "fields": {**connection_fields, "apiKey": effective_key},
         }, retry=False)
         connection_id = conn_result["_id"]
@@ -107,11 +110,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         try:
             connection_reference_id = conn_result["referenceId"]
             # audioPreviewSettings provider slug == connection_type with the
-            # "SpeechProvider" suffix stripped and lowercased — verified against
-            # the live API for MicrosoftSpeechProvider/AWSSpeechProvider/
+            # "SpeechProvider" suffix stripped and lowercased — manually verified
+            # once against the live API for MicrosoftSpeechProvider/AWSSpeechProvider/
             # DeepgramSpeechProvider/SpeechmaticsSpeechProvider/ElevenLabsSpeechProvider.
-            # Only the suffix is enforced (see _connection_type_must_be_a_speech_provider
-            # above) -- an unrecognized vendor prefix still produces an unverified slug.
+            # Not covered by continuous automated verification (all tests here mock
+            # the client) -- reverify against the live API if a new vendor's behavior
+            # is ever in doubt. Only the suffix is enforced
+            # (see _connection_type_must_be_a_speech_provider above) -- an
+            # unrecognized vendor prefix still produces an unverified slug.
             provider_slug = m.connection_type.removesuffix("SpeechProvider").lower()
             client.patch(f"/v2.0/projects/{m.project_id}/settings", {
                 "audioPreviewSettings": {

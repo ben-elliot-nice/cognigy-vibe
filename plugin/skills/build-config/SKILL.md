@@ -60,7 +60,7 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `voicePreview.speechProvider` | string | required | In-UI preview speech provider name | `"Microsoft Azure Speech Services"` |
 | `voicePreview.connectionName` | string | required | Cognigy connection label for preview | `"Test"` |
 | `voicePreview.connectionType` | string | required | Cognigy connection `type` for the preview speech provider | `"MicrosoftSpeechProvider"` |
-| `voicePreview.connectionFields` | object | required | Non-credential connection fields, vendor-specific shape | `{"region": "australiaeast"}` |
+| `voicePreview.connectionFields` | object | optional | Non-credential connection fields, vendor-specific shape. Omit to get `{"region": "australiaeast"}` when `connectionType` is also left at its Azure default, or `{}` otherwise | `{"region": "australiaeast"}` |
 | `voiceBehaviour.bargeIn` | boolean | optional | Enable barge-in (caller interrupts agent) | `false` |
 | `voiceBehaviour.vad` | boolean | optional | Enable voice activity detection | `false` |
 

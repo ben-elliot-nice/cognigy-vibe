@@ -611,3 +611,21 @@ def test_empty_connection_type_returns_validation_error(mock_client, state, cach
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "connection_type" for d in data["details"])
+
+
+def test_bare_speech_provider_connection_type_returns_validation_error(mock_client, state, cache):
+    """connection_type="SpeechProvider" passes the suffix check but has an empty vendor prefix,
+    which would derive an empty audioPreviewSettings provider slug -- must be rejected too."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "SpeechProvider",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_type" for d in data["details"])
+    mock_client.post.assert_not_called()
