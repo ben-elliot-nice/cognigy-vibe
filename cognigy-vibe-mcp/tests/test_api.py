@@ -425,7 +425,7 @@ def test_post_multipart_retries_when_explicitly_enabled(mock_sleep, client):
     assert mock_sleep.call_count == 1
 
 
-def test_get_still_sends_no_body_after_content_type_default_removed(client):
+def test_post_json_still_sends_content_type_after_default_removed(client):
     """Regression guard: removing the static Content-Type default must not break
     existing JSON post/patch calls, which rely on httpx auto-setting it from json=."""
     with respx.mock:

@@ -863,6 +863,71 @@ def test_push_knowledge_source_file_unsupported_extension(mock_client, state, ca
     mock_client.post_multipart.assert_not_called()
 
 
+def test_push_knowledge_source_file_uppercase_extension(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.PDF"
+    doc.write_bytes(b"%PDF-1.4 fake pdf bytes")
+    mock_client.post_multipart.return_value = {"_id": "task-upper", "status": "queued"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    files = mock_client.post_multipart.call_args[1]["files"]
+    assert files["file"][2] == "application/pdf"
+
+
+def test_push_knowledge_source_file_zero_byte_file(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "empty.txt"
+    doc.write_bytes(b"")
+    mock_client.post_multipart.return_value = {"_id": "task-empty", "status": "queued"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["success"] is True
+    assert data["bytes"] == 0
+    files = mock_client.post_multipart.call_args[1]["files"]
+    assert files["file"][1] == b""
+
+
+def test_push_knowledge_source_file_tag_with_comma_rejected(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+        "tags": ["a,b", "c"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "comma" in data["error"]
+    mock_client.post_multipart.assert_not_called()
+
+
+def test_push_knowledge_source_file_read_error_returns_error_not_raise(mock_client, state, cache, tmp_path, monkeypatch):
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+
+    def _boom(self):
+        raise OSError("Permission denied")
+
+    monkeypatch.setattr(Path, "read_bytes", _boom)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "Permission denied" in data["error"]
+    mock_client.post_multipart.assert_not_called()
+
+
 def test_push_knowledge_source_file_not_found(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["push_knowledge_source_file"]({

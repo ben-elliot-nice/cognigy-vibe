@@ -377,7 +377,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                          f"Supported formats: {', '.join('.' + e for e in _KNOWLEDGE_SOURCE_CONTENT_TYPES)}",
             })
 
-        data = path.read_bytes()
+        if m.tags and any("," in tag for tag in m.tags):
+            return _ok({"error": "Tags must not contain commas (the API joins tags with a comma delimiter)"})
+
+        try:
+            data = path.read_bytes()
+        except OSError as e:
+            return _ok({"error": f"Failed to read file: {e}"})
+
         files = {"file": (path.name, data, content_type)}
         form_data = {"tags": ",".join(m.tags)} if m.tags else None
 

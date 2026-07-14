@@ -58,7 +58,7 @@ prerequisite is met before creating a store.
   Supported formats: .pdf, .txt, .ctxt (anything else is rejected client-side before the API call).
   The response is a Task ({_id, status: queued|active|done|error, ...}) — ingestion runs
   asynchronously, so a "success" result means the upload started, not that chunking finished.
-  Poll GET /v2.0/tasks/{taskId} (see the pattern in push_code_node/export_package's task polling,
+  Poll GET /v2.0/tasks/{taskId} (see the pattern in export_package's task polling,
   or cognigy_invoke) if you need to confirm ingestion completed before querying chunks.
 
 ### Trigger ingestion via connector
