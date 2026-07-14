@@ -359,6 +359,83 @@ def test_post_retry_false_does_not_retry_on_5xx(client):
     assert route.call_count == 1
 
 
+def test_post_multipart_success(client):
+    with respx.mock:
+        respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(
+            return_value=httpx.Response(202, json={"_id": "task-1", "status": "queued"})
+        )
+        result = client.post_multipart(
+            "/v2.0/knowledgestores/ks-1/sources/upload",
+            files={"file": ("doc.txt", b"hello world", "text/plain")},
+            data={"tags": "demo,sales"},
+        )
+    assert result["_id"] == "task-1"
+    assert result["status"] == "queued"
+
+
+def test_post_multipart_sends_correct_content_type_and_fields(client):
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(
+            return_value=httpx.Response(202, json={"_id": "task-1", "status": "queued"})
+        )
+        client.post_multipart(
+            "/v2.0/knowledgestores/ks-1/sources/upload",
+            files={"file": ("doc.txt", b"hello world", "text/plain")},
+            data={"tags": "demo,sales"},
+        )
+    sent = route.calls[0].request
+    assert sent.headers["content-type"].startswith("multipart/form-data; boundary=")
+    assert sent.headers["x-api-key"] == "test-key"
+    body = sent.content
+    assert b'name="file"; filename="doc.txt"' in body
+    assert b"hello world" in body
+    assert b'name="tags"' in body
+    assert b"demo,sales" in body
+
+
+def test_post_multipart_does_not_retry_on_5xx_by_default(client):
+    """Non-idempotent creates: a retried 5xx after the write actually committed
+    would create a duplicate Knowledge Source, so no retry by default."""
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(
+            return_value=httpx.Response(503, json={"error": "unavailable"})
+        )
+        with pytest.raises(ApiError) as exc:
+            client.post_multipart(
+                "/v2.0/knowledgestores/ks-1/sources/upload",
+                files={"file": ("doc.txt", b"hello", "text/plain")},
+            )
+    assert exc.value.status_code == 503
+    assert route.call_count == 1
+
+
+@patch("time.sleep")
+def test_post_multipart_retries_when_explicitly_enabled(mock_sleep, client):
+    with respx.mock:
+        respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(side_effect=[
+            httpx.Response(503, json={"error": "unavailable"}),
+            httpx.Response(202, json={"_id": "task-2", "status": "queued"}),
+        ])
+        result = client.post_multipart(
+            "/v2.0/knowledgestores/ks-1/sources/upload",
+            files={"file": ("doc.txt", b"hello", "text/plain")},
+            retry=True,
+        )
+    assert result["_id"] == "task-2"
+    assert mock_sleep.call_count == 1
+
+
+def test_get_still_sends_no_body_after_content_type_default_removed(client):
+    """Regression guard: removing the static Content-Type default must not break
+    existing JSON post/patch calls, which rely on httpx auto-setting it from json=."""
+    with respx.mock:
+        route = respx.post(f"{BASE}/v2.0/flows").mock(
+            return_value=httpx.Response(200, json={"_id": "flow-1"})
+        )
+        client.post("/v2.0/flows", {"name": "Test"})
+    assert route.calls[0].request.headers["content-type"] == "application/json"
+
+
 def test_delete_404_treated_as_success(client):
     with respx.mock:
         respx.delete(f"{BASE}/v2.0/flows/flow-123").mock(
