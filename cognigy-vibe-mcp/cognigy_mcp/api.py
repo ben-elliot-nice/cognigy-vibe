@@ -35,7 +35,7 @@ class CognigyClient:
     def __init__(self, base_url: str, api_key: str):
         self._base = base_url.rstrip("/")
         self._http = httpx.Client(
-            headers={"X-API-Key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
+            headers={"X-API-Key": api_key, "Accept": "application/json"},
             timeout=30.0,
         )
 
@@ -101,6 +101,25 @@ class CognigyClient:
         if resp.status_code == 204:
             return {}
         return resp.json()
+
+    def post_multipart(
+        self, path: str, *, files: dict, data: dict | None = None, retry: bool = False,
+    ) -> dict:
+        """retry defaults to False: file uploads are non-idempotent creates with no
+        server-side dedupe, so a 5xx received after the write actually committed
+        would retry into a duplicate Knowledge Source."""
+        if retry:
+            return self._post_multipart_retrying(path, files, data)
+        return self._post_multipart_once(path, files, data)
+
+    def _post_multipart_once(self, path: str, files: dict, data: dict | None) -> dict:
+        resp = self._http.post(self._base + path, files=files, data=data or {})
+        self._raise_for_status(resp)
+        return resp.json()
+
+    @_RETRY
+    def _post_multipart_retrying(self, path: str, files: dict, data: dict | None) -> dict:
+        return self._post_multipart_once(path, files, data)
 
     @_RETRY
     def delete(self, path: str) -> dict:
