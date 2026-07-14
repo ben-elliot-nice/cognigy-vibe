@@ -113,6 +113,85 @@ def test_cognigy_delete_regular_resource(mock_client, state, cache):
     mock_client.delete.assert_called_once_with("/v2.0/flows/flow-1")
 
 
+def test_cognigy_get_plural_nodes_uses_chart_path(mock_client, state, cache):
+    """Regression guard for issue #213: resource_type='nodes' (plural) must route
+    to the chart-nested path, same as singular 'node', instead of falling through
+    to the nonexistent /v2.0/nodes/{id} endpoint."""
+    mock_client.get.return_value = {"_id": "node-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    mock_client.get.assert_called_once_with("/v2.0/flows/flow-1/chart/nodes/node-1")
+    assert data["_id"] == "node-1"
+
+
+def test_cognigy_get_cache_key_parity_singular_plural(mock_client, state, cache):
+    """A cache entry written under the normalised 'node' key must be readable back
+    via resource_type='nodes' — same regression class as #22 (cache-key mismatch)."""
+    cache.set("node", "n1", {"_id": "n1", "type": "say"})
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "nodes",
+        "resource_id": "n1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["_source"] == "cache"
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_get_plural_nodes_missing_flow_id_returns_error(mock_client, state, cache):
+    """resource_type='nodes' without flow_id must return the same guidance error as
+    singular 'node', not build a malformed path."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "nodes", "resource_id": "n1"})
+    data = json.loads(result[0].text)
+    assert "flow_id required" in data["error"]
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_update_plural_nodes_uses_chart_path(mock_client, state, cache):
+    mock_client.get.return_value = {"_id": "node-1", "type": "say"}
+    mock_client.patch.return_value = {"_id": "node-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_update"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+        "body": {"label": "Updated"},
+    })
+    assert mock_client.get.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes/node-1"
+    assert mock_client.patch.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes/node-1"
+
+
+def test_cognigy_delete_plural_nodes_uses_chart_path(mock_client, state, cache):
+    mock_client.delete.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_delete"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+    })
+    mock_client.delete.assert_called_once_with(
+        "/v2.0/flows/flow-1/chart/nodes/node-1"
+    )
+
+
+def test_cognigy_create_plural_nodes_routes_to_chart(mock_client, state, cache):
+    mock_client.post.return_value = {"_id": "node-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "nodes",
+        "flow_id": "flow-1",
+        "body": {"type": "say"},
+    })
+    assert mock_client.post.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes"
+
+
 def test_cognigy_invoke_move_node(mock_client, state, cache):
     mock_client.post.return_value = {}
     handlers = make_handlers(mock_client, state, cache)
@@ -126,6 +205,53 @@ def test_cognigy_invoke_move_node(mock_client, state, cache):
     mock_client.post.assert_called_once_with(
         "/v2.0/flows/flow-1/chart/nodes/node-1/move",
         {"mode": "append", "target": "node-0"},
+    )
+
+
+def test_cognigy_invoke_move_node_plural_resource_type(mock_client, state, cache):
+    """resource_type='nodes' must route the same as 'node' — invoke should normalise like get/list/create/update/delete."""
+    mock_client.post.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_invoke"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "operation": "move",
+        "body": {"mode": "append", "target": "node-0"},
+        "flow_id": "flow-1",
+    })
+    mock_client.post.assert_called_once_with(
+        "/v2.0/flows/flow-1/chart/nodes/node-1/move",
+        {"mode": "append", "target": "node-0"},
+    )
+
+
+def test_cognigy_invoke_move_node_missing_flow_id_error_uses_normalised_rtype(mock_client, state, cache):
+    """Error message should say 'node/move', not 'nodes/move', when resource_type='nodes'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "operation": "move",
+        "body": {"mode": "append", "target": "node-0"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "flow_id required for node/move"
+
+
+def test_cognigy_invoke_knowledgestore_run_hits_connector_path(mock_client, state, cache):
+    """resource_type='knowledgestore' + operation='run' must keep the /connectors/{id}/run
+    special-case path — normalising to the plural 'knowledgestores' must not break it."""
+    mock_client.post.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_invoke"]({
+        "resource_type": "knowledgestore",
+        "resource_id": "ks123",
+        "operation": "run",
+        "body": {"connector_id": "conn-1"},
+    })
+    mock_client.post.assert_called_once_with(
+        "/v2.0/knowledgestores/ks123/connectors/conn-1/run",
+        {"connector_id": "conn-1"},
     )
 
 
