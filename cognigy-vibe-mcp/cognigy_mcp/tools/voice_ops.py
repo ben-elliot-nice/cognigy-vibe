@@ -10,8 +10,7 @@ from cognigy_mcp.validation import _ok, validate, make_schema
 
 class ProvisionWebrtcEndpointArgs(BaseModel):
     project_id: str
-    flow_id: str = Field(description="Hex _id of the flow to bind")
-    flow_reference_id: str = Field(description="UUID referenceId of the flow")
+    flow_reference_id: str = Field(description="UUID referenceId of the flow to bind")
     endpoint_name: str = Field(description="Name for the webRTC endpoint, e.g. 'Click-to-Call'")
     connection_name: str = Field(description="Name for the speech connection, e.g. 'Test'")
     region: str = Field("australiaeast", description="Azure Speech region, e.g. 'australiaeast'")
@@ -24,7 +23,9 @@ TOOLS: list[Tool] = [
             "Handles the Microsoft Azure Speech Services connection prerequisite "
             "automatically: uses COGNIGY_VOICE_PREVIEW_API_KEY from environment for "
             "a real connection, or creates and deletes a throwaway dummy connection "
-            "when the key is absent. "
+            "when the key is absent. Also wires the connection into the project's "
+            "audioPreviewSettings and fetches the project's primary locale — both "
+            "required by the live API for voiceGateway2 endpoints. "
             "Returns endpoint_id, url_token, demo_url, connection_id (null if dummy), "
             "and path ('real' or 'dummy'). "
             "Demo calls work on both paths; the in-browser voice-preview widget only "
@@ -33,6 +34,14 @@ TOOLS: list[Tool] = [
         inputSchema=make_schema(ProvisionWebrtcEndpointArgs),
     )
 ]
+
+_WEBRTC_WIDGET_CONFIG = {
+    "label": "",
+    "active": True,
+    "theme": "DARK_MODE",
+    "transcription": {"enabled": True, "backgroundMode": "transparent"},
+    "demoPage": {"background": {"mode": "color", "color": "#FFFFFF"}, "position": "centered"},
+}
 
 
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
@@ -55,24 +64,57 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         }, retry=False)
         connection_id = conn_result["_id"]
 
+        endpoint_id = None
         try:
+            connection_reference_id = conn_result["referenceId"]
+            client.patch(f"/v2.0/projects/{m.project_id}/settings", {
+                "audioPreviewSettings": {
+                    "provider": "microsoft",
+                    "connections": {"microsoft": {"connectionId": connection_reference_id}},
+                }
+            })
+
+            locales = client.get("/v2.0/locales", projectId=m.project_id)
+            locale_items = locales.get("items", [])
+            if not locale_items:
+                raise ValueError(f"Project {m.project_id} has no locales configured")
+            locale = next((loc for loc in locale_items if loc.get("primary")), locale_items[0])
+            locale_reference_id = locale["referenceId"]
+
             ep_result = client.post("/v2.0/endpoints", {
+                "projectId": m.project_id,
+                "entrypoint": m.project_id,
                 "name": m.endpoint_name,
                 "channel": "voiceGateway2",
-                "flowId": m.flow_id,
-                "flowReferenceId": m.flow_reference_id,
-                "projectId": m.project_id,
-                "webrtcWidgetConfig": {"active": True},
+                "localeId": locale_reference_id,
+                "flowId": m.flow_reference_id,
+                "agentId": "",
+                "targetType": "flow",
+                "customIcon": "",
             }, retry=False)
+            endpoint_id = ep_result["_id"]
+            url_token = ep_result.get("URLToken") or ep_result.get("urlToken", "")
+
+            client.patch(f"/v2.0/endpoints/{endpoint_id}", {
+                "createWebrtcClient": True,
+                "channel": "voiceGateway2",
+                "name": m.endpoint_name,
+                "URLToken": url_token,
+                "localeId": locale_reference_id,
+                "webrtcWidgetConfig": _WEBRTC_WIDGET_CONFIG,
+            })
         except Exception:
+            if endpoint_id:
+                try:
+                    client.delete(f"/v2.0/endpoints/{endpoint_id}")
+                except Exception:
+                    pass
             try:
                 client.delete(f"/v2.0/connections/{connection_id}")
             except Exception:
                 pass
             raise
 
-        endpoint_id = ep_result["_id"]
-        url_token = ep_result.get("URLToken") or ep_result.get("urlToken", "")
         demo_url = f"{endpoint_base}/demo/{url_token}"
 
         state.set("endpoints", m.endpoint_name, value={
