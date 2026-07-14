@@ -240,6 +240,7 @@ _RESOURCE_TYPE_ALIASES: dict[str, str] = {
     "snapshot": "snapshots",
     "playbook": "playbooks",
     "node": "node",  # node stays singular — it routes to chart path
+    "nodes": "node",  # plural also routes to chart path, same as singular
 }
 
 
