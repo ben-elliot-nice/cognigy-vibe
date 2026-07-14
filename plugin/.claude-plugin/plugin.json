@@ -13,7 +13,7 @@
   "mcpServers": {
     "cognigy-vibe": {
       "command": "uvx",
-      "args": ["--from", "cognigy-vibe-mcp==1.7.0", "cognigy-vibe-launch"]
+      "args": ["--from", "cognigy-vibe-mcp==1.7.1", "cognigy-vibe-launch"]
     }
   }
 }
