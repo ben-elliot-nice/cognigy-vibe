@@ -893,6 +893,7 @@ def test_cognigy_list_propagates_api_error_as_structured_response(mock_client, s
     data = json.loads(result[0].text)
     assert data["error"] == "api_error"
     assert data["status"] == 403
+    assert "Forbidden" in data["detail"]
 
 
 def test_cognigy_create_propagates_api_error_as_structured_response(mock_client, state, cache):
@@ -916,6 +917,7 @@ def test_cognigy_update_get_current_propagates_api_error(mock_client, state, cac
     data = json.loads(result[0].text)
     assert data["error"] == "api_error"
     assert data["status"] == 404
+    assert "Not found" in data["detail"]
 
 
 def test_cognigy_update_patch_propagates_api_error(mock_client, state, cache):
@@ -929,6 +931,7 @@ def test_cognigy_update_patch_propagates_api_error(mock_client, state, cache):
     data = json.loads(result[0].text)
     assert data["error"] == "api_error"
     assert data["status"] == 500
+    assert "Encountered an unknown error" in data["detail"]
 
 
 def test_cognigy_delete_propagates_api_error(mock_client, state, cache):
@@ -939,6 +942,7 @@ def test_cognigy_delete_propagates_api_error(mock_client, state, cache):
     data = json.loads(result[0].text)
     assert data["error"] == "api_error"
     assert data["status"] == 400
+    assert "Cannot delete: in use" in data["detail"]
 
 
 def test_cognigy_invoke_propagates_api_error_as_structured_response(mock_client, state, cache):
@@ -967,3 +971,37 @@ def test_get_flow_chart_propagates_api_error_as_structured_response(mock_client,
     data = json.loads(result[0].text)
     assert data["error"] == "api_error"
     assert data["status"] == 404
+    assert "Flow not found" in data["detail"]
+
+
+def test_cognigy_invoke_propagates_retriable_api_error_as_structured_response(mock_client, state, cache):
+    """RetriableApiError is a subclass of ApiError — confirm it's caught by the same
+    except ApiError block rather than falling through to the generic exception handler."""
+    from cognigy_mcp.api import RetriableApiError
+    mock_client.post.side_effect = RetriableApiError(503, "Service Unavailable")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "aiagent",
+        "resource_id": "agent-1",
+        "operation": "train",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 503
+    assert "Service Unavailable" in data["detail"]
+
+
+def test_cognigy_invoke_propagates_unexpected_non_api_error_as_structured_response(mock_client, state, cache):
+    """Network/decode failures (e.g. httpx timeouts, malformed JSON) are not ApiError —
+    they must still be caught and surfaced as structured errors, not left to propagate
+    into the MCP SDK's opaque unstructured error (the original #216 symptom)."""
+    mock_client.post.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "aiagent",
+        "resource_id": "agent-1",
+        "operation": "train",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "unexpected_error"
+    assert "Expecting value" in data["detail"]

@@ -326,6 +326,10 @@ def _api_error_response(exc: ApiError) -> list[TextContent]:
     return _ok({"error": "api_error", "status": exc.status_code, "detail": str(exc)})
 
 
+def _unexpected_error_response(exc: Exception) -> list[TextContent]:
+    return _ok({"error": "unexpected_error", "detail": str(exc)})
+
+
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _cognigy_get(args: dict) -> list[TextContent]:
@@ -346,6 +350,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 data = client.get(path)
             except ApiError as exc:
                 return _api_error_response(exc)
+            except Exception as exc:
+                return _unexpected_error_response(exc)
             cache.set(rtype, rid, data)
             source = "api"
         if m.fields:
@@ -374,6 +380,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 data = client.get(f"/v2.0/{rtype}", limit=m.limit)
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         raw_items = data if isinstance(data, list) else data.get("items", [])
         if not m.full_objects:
             simplified = []
@@ -442,6 +450,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result = client.post(path, body)
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         resource_id = result.get("_id") or result.get("id")
         name = result.get("name") or result.get("label")
         if name and resource_id:
@@ -486,6 +496,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             current = client.get(path)
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         if rtype == "node" and current.get("type") == "code":
             return _ok({"error": (
                 "Code nodes must be updated via push_code_node "
@@ -504,6 +516,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result = client.patch(path, body)
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         cache.set(rtype, m.resource_id, result)
         if m.return_full_object:
             return _ok(strip_response(result))
@@ -526,6 +540,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result = client.delete(path)
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         cache.invalidate(rtype, m.resource_id)
         return _ok({"deleted": True, "resource_id": m.resource_id, **result})
 
@@ -541,6 +557,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result = client.post(path, m.body)
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         return _ok(strip_response(result))
 
     def _get_flow_chart(args: dict) -> list[TextContent]:
@@ -551,6 +569,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
         except ApiError as exc:
             return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if m.format == "hierarchy":
             stripped_chart = {**chart, "nodes": stripped_nodes}
