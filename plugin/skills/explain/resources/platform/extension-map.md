@@ -24,8 +24,8 @@ extension for any node type that extension defines — no manual lookup needed.
 ### AI Agent nodes (extension: "@cognigy/basic-nodes")
   aiAgentJob          The AI Agent job node (persona + instructions)
   aiAgentJobTool      A tool branch under an aiAgentJob
-  See explain("agent-job-node") for the aiAgentJob node's full config schema and creation call.
   aiAgentToolAnswer   Surfaces tool result back to the LLM
+  See explain("agent-job-node") for the aiAgentJob node's full config schema and creation call.
 
 ### xApp nodes (extension: "@cognigy/basic-nodes")
   initAppSession      Generate xApp session URL (stored in input.apps.url)
