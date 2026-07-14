@@ -56,7 +56,9 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
   1. Call `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType"] }`. Filter: `resourceLevel == "organisation"` AND `modelType` does not contain `"embedding"`.
   2. Match `buildConfig.llm.default` against live list by label — confirm the `referenceId` is present.
-  3. If the config default `referenceId` is not found in the live list → warn and require the user to select a valid option from the live list before proceeding.
+  3. If the config default `referenceId` is not found in the live list:
+     - If the filtered live list has exactly 1 item → **auto-select it, no question.** Tell the user: *"Your configured default LLM is no longer available. Only one organisation-level LLM is configured on this tenant — using `<name> (<modelType>)` instead."*
+     - Otherwise (2+ items) → warn and require the user to select a valid option from the live list before proceeding.
 
 In the recap that follows S0.6, show a compact table:
 

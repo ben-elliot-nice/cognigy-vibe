@@ -71,8 +71,9 @@ If the user's region is not one of the above (e.g. a self-hosted or EU tenant), 
 1. `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType", "provider"] }`
 2. Filter: keep `resourceLevel == "organisation"` AND `modelType` does not contain `"embedding"` (case-insensitive).
 3. If the filtered list is empty → **hard stop:** *"No organisation-level LLMs found on this tenant. Ask your Cognigy admin to configure at least one org-level generation LLM, then re-run setup."*
-4. Present as `AskUserQuestion` — one option per model. Label: `"<name> (<modelType>)"`. Description: provider name.
-5. Write the selected model to config as `llm.options[0]`:
+4. If the filtered list has exactly 1 item → **auto-select it, no question.** Tell the user: *"Only one organisation-level LLM is configured on this tenant — using `<name> (<modelType>)`."* Skip straight to step 6.
+5. Otherwise (2+ items) → present as `AskUserQuestion` — one option per model. Label: `"<name> (<modelType>)"`. Description: provider name.
+6. Write the selected model to config as `llm.options[0]`:
    ```json
    {
      "label": "<name>",
