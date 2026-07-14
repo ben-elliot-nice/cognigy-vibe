@@ -492,19 +492,19 @@ def test_generic_connection_type_and_fields_pass_through(mock_client, state, cac
         "flow_reference_id": "fref",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "connection_type": "SomeOtherProvider",
+        "connection_type": "SomeOtherSpeechProvider",
         "connection_fields": {"foo": "bar", "baz": "qux"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
-    assert conn_body["type"] == "SomeOtherProvider"
+    assert conn_body["type"] == "SomeOtherSpeechProvider"
     assert conn_body["fields"] == {"apiKey": "dummy", "foo": "bar", "baz": "qux"}
 
     settings_body = mock_client.patch.call_args_list[0][0][1]
     assert settings_body == {
         "audioPreviewSettings": {
-            "provider": "someotherprovider",
-            "connections": {"someotherprovider": {"connectionId": "conn-ref-1"}},
+            "provider": "someother",
+            "connections": {"someother": {"connectionId": "conn-ref-1"}},
         }
     }
 
@@ -578,3 +578,36 @@ def test_non_dict_connection_fields_returns_validation_error(mock_client, state,
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "connection_fields" for d in data["details"])
+
+
+def test_connection_type_not_ending_in_speech_provider_returns_validation_error(mock_client, state, cache):
+    """A connection_type that doesn't end in "SpeechProvider" would silently derive a bogus/empty
+    audioPreviewSettings provider slug -- reject it at the tool boundary instead."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "Deepgram",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_type" for d in data["details"])
+    mock_client.post.assert_not_called()
+
+
+def test_empty_connection_type_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_type" for d in data["details"])

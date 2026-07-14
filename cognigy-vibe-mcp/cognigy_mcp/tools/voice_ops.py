@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
@@ -32,6 +32,18 @@ class ProvisionWebrtcEndpointArgs(BaseModel):
             "connection_type with this omitted gets no fields, never Azure's region."
         ),
     )
+
+    @field_validator("connection_type")
+    @classmethod
+    def _connection_type_must_be_a_speech_provider(cls, value: str) -> str:
+        if not value.endswith("SpeechProvider"):
+            raise ValueError(
+                "must end in 'SpeechProvider' (e.g. 'MicrosoftSpeechProvider', "
+                "'DeepgramSpeechProvider') -- the audioPreviewSettings provider slug "
+                "is derived by stripping this suffix, and a non-conforming value "
+                "would silently PATCH a broken/empty provider slug with no error"
+            )
+        return value
 
 TOOLS: list[Tool] = [
     Tool(
@@ -98,6 +110,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             # "SpeechProvider" suffix stripped and lowercased — verified against
             # the live API for MicrosoftSpeechProvider/AWSSpeechProvider/
             # DeepgramSpeechProvider/SpeechmaticsSpeechProvider/ElevenLabsSpeechProvider.
+            # Only the suffix is enforced (see _connection_type_must_be_a_speech_provider
+            # above) -- an unrecognized vendor prefix still produces an unverified slug.
             provider_slug = m.connection_type.removesuffix("SpeechProvider").lower()
             client.patch(f"/v2.0/projects/{m.project_id}/settings", {
                 "audioPreviewSettings": {
