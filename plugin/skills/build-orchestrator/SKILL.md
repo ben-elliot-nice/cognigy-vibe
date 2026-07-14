@@ -38,7 +38,7 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
 ## S0.0 — Load build config (BLOCKING preflight — runs before the interview)
 
-**Step 0 — Workspace anchor detection.** Before anything else, determine whether cwd is already inside an existing `Demo Builds/<brand>-demo/` directory. Every later phase (SA, SB, S1.3, S1.4, S1.5, S1.8, package export) writes artifacts relative to a single resolved anchor, `$DEMO_DIR` — this step computes it once so nothing downstream nests a second `Demo Builds/` folder inside an existing one.
+**Step 0 — Workspace anchor detection.** Before anything else, determine whether cwd is already inside an existing `Demo Builds/<brand>-demo/` directory. Every later phase that writes build artifacts — including SA, SB, S0.6 brand research, S1.3 tools, S1.4 xApp, S1.5 code-nodes, S1.8 knowledge, S2.5 empathy export, S3 Initialize Session Code, S6 tool recipes, and package export — writes relative to a single resolved anchor, `$DEMO_DIR` — this step computes it once so nothing downstream nests a second `Demo Builds/` folder inside an existing one.
 
 Run:
 
@@ -56,12 +56,12 @@ done
 echo "ANCHOR=$ANCHOR"
 ```
 
-- **`ANCHOR` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `Demo Builds/<customer-slug>-demo` (relative to cwd) once the customer name is known from S0 Q1, and created fresh in SA.
-- **`ANCHOR` is non-empty** → cwd (or an ancestor) is already an existing build directory. Hold `ANCHOR`. Once S0 Q1 (customer name) is collected, apply the S11 "Folder name" rule (`[customer]-demo`, lowercase) to get the expected slug, and compare it against `basename "$ANCHOR"`:
+- **`ANCHOR` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `$PWD/Demo Builds/<customer-slug>-demo` (absolute — `$PWD` is cwd at this point, captured before any directory changes) once the customer name is known from S0 Q1, and created fresh in SA.
+- **`ANCHOR` is non-empty** → cwd (or an ancestor) is already an existing build directory. Hold `ANCHOR` (already absolute, since it was derived from `$PWD` in the walk-up above). Once S0 Q1 (customer name) is collected, apply the S11 "Folder name" rule (`[customer]-demo`, lowercase) to get the expected slug, and compare it against `basename "$ANCHOR"`:
   - **Match** → this is a continuation of the same build. Set `$DEMO_DIR="$ANCHOR"`. It already exists — do not create or nest a new `Demo Builds/` folder inside it; skip the `mkdir -p` in SA.
   - **Mismatch** → cwd is inside a *different* customer's build directory. STOP before SA and ask the user directly: *"You're currently inside `<ANCHOR>`, which looks like an existing build for `<basename slug>`, but this build is for `<new customer>`. I don't want to nest a new build folder inside another customer's directory. Do you want to `cd` back to the session workspace root first, or is `<ANCHOR>` actually intended for this build?"* Do not silently proceed either way — this is a BLOCKING confirmation, not a warning.
 
-Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`.
+Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`. `$DEMO_DIR` is **always an absolute path** in both branches above — never combine it with a separate `<ABS PATH>/` prefix elsewhere in this document; `$DEMO_DIR` alone is already the full absolute path.
 
 **Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
@@ -566,7 +566,7 @@ Top-level object — do NOT wrap in `config`, do NOT set `name`/`toolType`/`useP
 **Push each tool** (use ABSOLUTE paths — `tool_file` is resolved as given):
 ```
 push_agent_tool {
-  tool_file: "<ABS PATH>/$DEMO_DIR/tools/<tool_id>.tool.json",
+  tool_file: "$DEMO_DIR/tools/<tool_id>.tool.json",
   flow_id:   "<flowId>",
   job_node_id: "<aiAgentJobNodeId>"      // CREATE; to UPDATE an existing tool node pass node_id: "<toolNodeId>" instead
 }
@@ -1607,7 +1607,7 @@ Repeat for every tool in S1.3. The tool node comes from `push_agent_tool` (S1.3)
 Author the `.tool.json` file in `tools/<tool_id>.tool.json` (see S1.3 for shape) and push:
 ```
 push_agent_tool {
-  tool_file: "<ABS PATH>/$DEMO_DIR/tools/<tool_id>.tool.json",
+  tool_file: "$DEMO_DIR/tools/<tool_id>.tool.json",
   flow_id: "<flowId>",
   job_node_id: "<aiAgentJobNodeId>"
 }
