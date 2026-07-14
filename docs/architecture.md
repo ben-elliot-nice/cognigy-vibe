@@ -151,19 +151,6 @@ Call the cognigy-vibe MCP tool cognigy_create with resource_type="node" and body
 
 ---
 
-## Hooks
-
-**Location:** `plugin/hooks/`
-
-| File | Purpose |
-|---|---|
-| `plugin/hooks/hooks.json` | Hook registration — `PreToolUse` on `mcp__cognigy-vibe__.*` |
-| `plugin/hooks/onboarding-gate.sh` | Injects architectural primer on the first Cognigy MCP call per session |
-
-The onboarding gate fires before any `cognigy-vibe` tool call. On the first call in a session it denies the tool call and injects a primer (project/flow/node/agent hierarchy, key tool guidance) as `additionalContext`. On all subsequent calls it exits immediately. `explain` calls bypass the gate unconditionally.
-
----
-
 ## Design docs and specs
 
 **Location:** `docs/`
