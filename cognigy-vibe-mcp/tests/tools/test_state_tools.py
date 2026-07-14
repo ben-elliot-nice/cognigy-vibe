@@ -445,3 +445,14 @@ def test_set_project_generative_ai_settings_unknown_use_case_key(mock_client, st
     assert data["error"] == "unknown_use_case"
     assert data["unknown_keys"] == ["knowledgesearch"]
     mock_client.patch.assert_not_called()
+
+
+def test_set_project_generative_ai_settings_empty_use_case_settings(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "empty_use_case_settings"
+    mock_client.patch.assert_not_called()

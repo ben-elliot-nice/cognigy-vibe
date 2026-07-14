@@ -117,14 +117,14 @@ TOOLS: list[Tool] = [
     Tool(
         name="set_project_generative_ai_settings",
         description=(
-            "Set which LLM a project uses for each Cognigy Generative AI use-case "
-            "(aiAgent, gptPromptNode, knowledgeSearch, etc.) via a project-level settings PATCH. "
-            "This is what actually activates a model for these platform features — assigning an "
-            "LLM to a project via assign_org_llm alone does not. Partial PATCH is safe: only the "
-            "use-cases passed in use_case_settings are touched, others are left untouched. "
-            "Keys are validated against the known use-case set (see GENERATION_USE_CASES / "
-            "KNOWLEDGE_USE_CASE) — an unrecognised key returns an unknown_use_case error instead "
-            "of being sent to the API."
+            "Set which LLM a project uses for each Cognigy Generative AI use-case via a "
+            "project-level settings PATCH. This is what actually activates a model for these "
+            "platform features — assigning an LLM to a project via assign_org_llm alone does not. "
+            "Partial PATCH is safe: only the use-cases passed in use_case_settings are touched, "
+            "others are left untouched. Allowed use_case_settings keys: "
+            f"{', '.join(sorted(_KNOWN_USE_CASES))} — an unrecognised key returns an "
+            "unknown_use_case error instead of being sent to the API. use_case_settings must be "
+            "non-empty."
         ),
         inputSchema=make_schema(SetProjectGenerativeAISettingsArgs),
     ),
@@ -314,6 +314,11 @@ def make_handlers(
         m, err = validate(SetProjectGenerativeAISettingsArgs, args)
         if err:
             return err
+        if not m.use_case_settings:
+            return _ok({
+                "error": "empty_use_case_settings",
+                "hint": "use_case_settings must contain at least one use-case key",
+            })
         unknown_keys = [k for k in m.use_case_settings if k not in _KNOWN_USE_CASES]
         if unknown_keys:
             return _ok({
