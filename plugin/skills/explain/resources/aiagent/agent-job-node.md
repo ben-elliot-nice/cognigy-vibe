@@ -74,6 +74,23 @@ extension for `aiAgentJob` nodes.
 
 Capture: `jobNodeId` (the `_id` from the response)
 
+### Step 5.5: Delete the platform's auto-scaffolded placeholder tool
+
+Creating the `aiAgentJob` node causes Cognigy to auto-scaffold a default placeholder
+`aiAgentJobTool` child node alongside it (observed example: `unlock_account`) — this is
+platform behavior, not something this skill or the MCP server created. See
+`explain("agent-tool-scaffold")` for the full explanation.
+
+1. Call `get_flow_chart` with `flow_id: <flowId>`.
+2. Find the `aiAgentJobTool` child already present under `<jobNodeId>` — at this point
+   it is the only tool child, since Step 6 hasn't created any tools yet.
+3. Delete it: `cognigy_delete { resource_type: "node", resource_id: "<scaffoldToolNodeId>", flow_id: "<flowId>" }`.
+
+Do this BEFORE Step 6 — do not edit the scaffold tool in place, and do not leave it
+alongside the tools you create next. If no `aiAgentJobTool` child is present, the
+platform didn't scaffold one this time — skip the delete and go straight to Step 6. If
+more than one is present, delete all of them.
+
 ### Step 6: Create tool nodes
 For each tool gathered in Step 3, write a `.tool.json` file first (see
 `explain("agent-tool-json")` for the file convention), then call `push_agent_tool` — not
@@ -99,3 +116,5 @@ Summarize created resources in a table: flow (existing), AI Agent (existing), Jo
 - All node operations in this sequence require `flow_id`.
 - The MCP server auto-injects the correct extension for `aiAgentJob` and `aiAgentJobTool`
   nodes — never include an `extension` field in the body yourself.
+- Cognigy auto-scaffolds a default placeholder tool node when the `aiAgentJob` node is
+  created — Step 5.5 deletes it before Step 6 runs. See `explain("agent-tool-scaffold")`.
