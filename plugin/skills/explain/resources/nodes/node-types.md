@@ -26,6 +26,7 @@ This is an alias for flow-chart-reading + extension-map combined.
   setHTMLAppState   xApp HTML push (extension: @cognigy/basic-nodes)
   aiAgentJob        AI Agent job (extension: @cognigy/basic-nodes)
   aiAgentJobTool    AI Agent tool branch (extension: @cognigy/basic-nodes)
+  See explain("agent-job-node") for the aiAgentJob creation sequence and config schema.
   aiAgentToolAnswer Tool result surface (extension: @cognigy/basic-nodes)
 
 For extension details: explain("extension-map")

@@ -13,6 +13,9 @@ Every AI Agent tool is a branch under an aiAgentJob:
        └── Code Node       (implementation — append after tool node)
             └── aiAgentToolAnswer  (surfaces result — append after code node)
 
+This topic assumes the aiAgentJob node already exists. See explain("agent-job-node") for
+how to create it and attach the first tool in one sequence.
+
 ### Step 1: Create the tool definition (push_agent_tool)
 Write a .tool.json file first — see explain("agent-tool-json") for the convention.
 

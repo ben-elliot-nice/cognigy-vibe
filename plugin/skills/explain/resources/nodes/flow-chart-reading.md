@@ -58,3 +58,5 @@ get_flow_chart returns "hierarchy": a tree string like:
     [aiAgentJobTool] authenticate_caller (jkl)
       [code] [TOOL] authenticate_caller (mno)
       [aiAgentToolAnswer] Tool Answer (pqr)
+
+See explain("agent-job-node") for how an aiAgentJob node and its tool children are created.
