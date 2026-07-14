@@ -49,7 +49,6 @@ def test_real_creds_path(mock_client, state, cache, monkeypatch):
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "region": "australiaeast",
     })
     data = json.loads(result[0].text)
 
@@ -91,7 +90,7 @@ def test_dummy_path_sends_dummy_api_key(mock_client, state, cache, monkeypatch):
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "region": "australiaeast",
+        "connection_fields": {"region": "australiaeast"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
@@ -109,7 +108,7 @@ def test_real_creds_path_sends_real_api_key(mock_client, state, cache, monkeypat
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "region": "australiaeast",
+        "connection_fields": {"region": "australiaeast"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
@@ -126,7 +125,7 @@ def test_connection_post_body(mock_client, state, cache, monkeypatch):
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "MyConn",
-        "region": "eastus",
+        "connection_fields": {"region": "eastus"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
@@ -156,6 +155,34 @@ def test_audio_preview_settings_patch_uses_connection_reference_id(mock_client, 
         "audioPreviewSettings": {
             "provider": "microsoft",
             "connections": {"microsoft": {"connectionId": "conn-ref-xyz"}},
+        }
+    }
+
+
+def test_audio_preview_settings_provider_derived_from_non_azure_connection_type(mock_client, state, cache, monkeypatch):
+    """audioPreviewSettings.provider/connections key must derive from connection_type, not hardcode microsoft.
+
+    See the derivation comment in _provision_webrtc_endpoint for the verified vendor mapping.
+    """
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client, connection_result={"_id": "conn-1", "referenceId": "conn-ref-dg"})
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-abc",
+        "flow_reference_id": "flow-uuid",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "DeepgramSpeechProvider",
+        "connection_fields": {"apiKey": "unused-overridden-anyway"},
+    })
+
+    settings_path, settings_body = mock_client.patch.call_args_list[0][0]
+    assert settings_path == "/v2.0/projects/proj-abc/settings"
+    assert settings_body == {
+        "audioPreviewSettings": {
+            "provider": "deepgram",
+            "connections": {"deepgram": {"connectionId": "conn-ref-dg"}},
         }
     }
 
@@ -291,6 +318,24 @@ def test_locale_fetch_failure_cleans_up_connection(mock_client, state, cache, mo
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
 
 
+def test_audio_preview_settings_patch_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
+    """If the audioPreviewSettings PATCH raises, the speech connection is deleted before re-raising."""
+    monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
+    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
+    mock_client.patch.side_effect = ApiError(400, "unsupported provider slug")
+
+    handlers = make_handlers(mock_client, state, cache)
+    with pytest.raises(ApiError):
+        handlers["provision_webrtc_endpoint"]({
+            "project_id": "proj-1", "flow_reference_id": "fref",
+            "endpoint_name": "Click-to-Call", "connection_name": "Test",
+        })
+
+    mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
+    mock_client.get.assert_not_called()
+
+
 def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
     """If the endpoint creation POST raises, the speech connection is deleted before re-raising."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
@@ -397,3 +442,190 @@ def test_provision_webrtc_endpoint_missing_flow_reference_id_returns_validation_
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "flow_reference_id" for d in data["details"])
+
+
+def test_default_connection_type_and_fields_are_azure(mock_client, state, cache, monkeypatch):
+    """Omitting connection_type/connection_fields preserves today's Azure default shape."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["type"] == "MicrosoftSpeechProvider"
+    assert conn_body["fields"] == {"apiKey": "dummy", "region": "australiaeast"}
+
+
+def test_non_azure_connection_type_without_connection_fields_omits_azure_region(mock_client, state, cache, monkeypatch):
+    """A non-Azure connection_type without explicit connection_fields must not silently inherit Azure's region default."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "DeepgramSpeechProvider",
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["type"] == "DeepgramSpeechProvider"
+    assert conn_body["fields"] == {"apiKey": "dummy"}
+
+
+def test_generic_connection_type_and_fields_pass_through(mock_client, state, cache, monkeypatch):
+    """A caller-supplied connection_type/connection_fields flows through untouched, proving genericity."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "SomeOtherSpeechProvider",
+        "connection_fields": {"foo": "bar", "baz": "qux"},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["type"] == "SomeOtherSpeechProvider"
+    assert conn_body["fields"] == {"apiKey": "dummy", "foo": "bar", "baz": "qux"}
+
+    settings_body = mock_client.patch.call_args_list[0][0][1]
+    assert settings_body == {
+        "audioPreviewSettings": {
+            "provider": "someother",
+            "connections": {"someother": {"connectionId": "conn-ref-1"}},
+        }
+    }
+
+
+def test_connection_fields_cannot_override_api_key(mock_client, state, cache, monkeypatch):
+    """A caller-supplied connection_fields={'apiKey': ...} must never override the real API key."""
+    monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-secret-key")
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": {"apiKey": "attacker-supplied", "region": "eastus"},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["fields"]["apiKey"] == "real-secret-key"
+    assert conn_body["fields"]["region"] == "eastus"
+
+
+def test_connection_fields_cannot_override_api_key_on_dummy_path(mock_client, state, cache, monkeypatch):
+    """The same apiKey-override protection must hold on the dummy-key path, not just the real-key path."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": {"apiKey": "attacker-supplied", "region": "eastus"},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["fields"]["apiKey"] == "dummy"
+    assert conn_body["fields"]["region"] == "eastus"
+
+
+def test_explicit_empty_connection_fields_sends_only_api_key(mock_client, state, cache, monkeypatch):
+    """An explicit empty connection_fields={} is distinct from omitting the argument."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": {},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["fields"] == {"apiKey": "dummy"}
+
+
+def test_non_dict_connection_fields_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_fields": "not-a-dict",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_fields" for d in data["details"])
+
+
+def test_connection_type_not_ending_in_speech_provider_returns_validation_error(mock_client, state, cache):
+    """A connection_type that doesn't end in "SpeechProvider" would silently derive a bogus/empty
+    audioPreviewSettings provider slug -- reject it at the tool boundary instead."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "Deepgram",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_type" for d in data["details"])
+    mock_client.post.assert_not_called()
+
+
+def test_empty_connection_type_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_type" for d in data["details"])
+
+
+def test_bare_speech_provider_connection_type_returns_validation_error(mock_client, state, cache):
+    """connection_type="SpeechProvider" passes the suffix check but has an empty vendor prefix,
+    which would derive an empty audioPreviewSettings provider slug -- must be rejected too."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "SpeechProvider",
+    })
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "connection_type" for d in data["details"])
+    mock_client.post.assert_not_called()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
-from pydantic import BaseModel, Field
+from typing import Any
+from pydantic import BaseModel, Field, field_validator
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
@@ -13,15 +14,47 @@ class ProvisionWebrtcEndpointArgs(BaseModel):
     flow_reference_id: str = Field(description="UUID referenceId of the flow to bind")
     endpoint_name: str = Field(description="Name for the webRTC endpoint, e.g. 'Click-to-Call'")
     connection_name: str = Field(description="Name for the speech connection, e.g. 'Test'")
-    region: str = Field("australiaeast", description="Azure Speech region, e.g. 'australiaeast'")
+    connection_type: str = Field(
+        "MicrosoftSpeechProvider",
+        description=(
+            "Cognigy connection type for the preview speech provider, e.g. "
+            "'MicrosoftSpeechProvider', 'DeepgramSpeechProvider'. Drives the "
+            "audioPreviewSettings provider slug too — see the derivation comment "
+            "in _provision_webrtc_endpoint."
+        ),
+    )
+    connection_fields: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Non-credential connection fields for the preview speech provider "
+            "(vendor-specific shape). Defaults to {'region': 'australiaeast'} only "
+            "when connection_type is also left at its Azure default — a non-Azure "
+            "connection_type with this omitted gets no fields, never Azure's region."
+        ),
+    )
+
+    @field_validator("connection_type")
+    @classmethod
+    def _connection_type_must_be_a_speech_provider(cls, value: str) -> str:
+        if not value.endswith("SpeechProvider") or value == "SpeechProvider":
+            raise ValueError(
+                "must be a non-empty vendor prefix followed by 'SpeechProvider' "
+                "(e.g. 'MicrosoftSpeechProvider', 'DeepgramSpeechProvider') -- the "
+                "audioPreviewSettings provider slug is derived by stripping this "
+                "suffix, and the bare value 'SpeechProvider' (or anything not ending "
+                "in it) would silently PATCH a broken/empty provider slug with no error"
+            )
+        return value
 
 TOOLS: list[Tool] = [
     Tool(
         name="provision_webrtc_endpoint",
         description=(
             "Create a VoiceGateway webRTC (Click-to-Call) endpoint bound to a flow. "
-            "Handles the Microsoft Azure Speech Services connection prerequisite "
-            "automatically: uses COGNIGY_VOICE_PREVIEW_API_KEY from environment for "
+            "Handles the preview speech connection prerequisite automatically — "
+            "defaults to Microsoft Azure Speech Services, or pass connection_type/"
+            "connection_fields for a different vendor. "
+            "Uses COGNIGY_VOICE_PREVIEW_API_KEY from environment for "
             "a real connection, or creates and deletes a throwaway dummy connection "
             "when the key is absent. Also wires the connection into the project's "
             "audioPreviewSettings and fetches the project's primary locale — both "
@@ -54,23 +87,42 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         is_dummy = not bool(api_key)
         effective_key = api_key if api_key else "dummy"
 
+        if m.connection_fields is not None:
+            connection_fields = m.connection_fields
+        elif m.connection_type == "MicrosoftSpeechProvider":
+            connection_fields = {"region": "australiaeast"}
+        else:
+            connection_fields = {}
+
         conn_result = client.post("/v2.0/connections", {
             "name": m.connection_name,
             "extension": "@cognigy/audio-preview-provider",
-            "type": "MicrosoftSpeechProvider",
+            "type": m.connection_type,
             "resourceLevel": "project",
             "projectId": m.project_id,
-            "fields": {"apiKey": effective_key, "region": m.region},
+            # apiKey placed last so it always wins over any caller-supplied
+            # connection_fields["apiKey"] -- do not reorder these keys.
+            "fields": {**connection_fields, "apiKey": effective_key},
         }, retry=False)
         connection_id = conn_result["_id"]
 
         endpoint_id = None
         try:
             connection_reference_id = conn_result["referenceId"]
+            # audioPreviewSettings provider slug == connection_type with the
+            # "SpeechProvider" suffix stripped and lowercased — manually verified
+            # once against the live API for MicrosoftSpeechProvider/AWSSpeechProvider/
+            # DeepgramSpeechProvider/SpeechmaticsSpeechProvider/ElevenLabsSpeechProvider.
+            # Not covered by continuous automated verification (all tests here mock
+            # the client) -- reverify against the live API if a new vendor's behavior
+            # is ever in doubt. Only the suffix is enforced
+            # (see _connection_type_must_be_a_speech_provider above) -- an
+            # unrecognized vendor prefix still produces an unverified slug.
+            provider_slug = m.connection_type.removesuffix("SpeechProvider").lower()
             client.patch(f"/v2.0/projects/{m.project_id}/settings", {
                 "audioPreviewSettings": {
-                    "provider": "microsoft",
-                    "connections": {"microsoft": {"connectionId": connection_reference_id}},
+                    "provider": provider_slug,
+                    "connections": {provider_slug: {"connectionId": connection_reference_id}},
                 }
             })
 
