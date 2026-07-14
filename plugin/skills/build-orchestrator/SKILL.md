@@ -288,7 +288,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo folder, invoke the design orchestrator.
 
-**Output directory:** `Demo Builds/<customer>-demo/`. Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. Claude's cwd remains the session workspace root throughout. See `explain("session-workspace")` for the directory model.
+**Output directory:** `$DEMO_DIR` (resolved in S0.0 Step 0). Pass `output_dir: "$DEMO_DIR"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. See `explain("session-workspace")` for the directory model and S0.0 Step 0 for anchor detection.
 
 **Invoke in Mode A (full workflow).** Persona → Jobs → Interfaces → Contracts. The orchestrator runs each in sequence; each reads the prior outputs from disk.
 
