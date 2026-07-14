@@ -16,6 +16,7 @@ from cognigy_mcp.wizard_ui import (
     print_error_panel,
     print_drift_table,
     print_step,
+    StepFailure,
 )
 
 
@@ -455,15 +456,23 @@ def _run_uninstall(args) -> None:
         return
 
     summary_rows: list[tuple[str, str]] = []
+    deferred_plugin_failure: StepFailure | None = None
 
     if has_plugin:
         print_step(f"Uninstalling cognigy-vibe plugin (scope: {scope})")
-        run_subprocess(
-            ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", scope],
-            "Uninstalling plugin",
-            verbose=args.verbose,
-        )
-        summary_rows.append(("Plugin", f"uninstalled (was scope: {scope})"))
+        try:
+            run_subprocess(
+                ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", scope],
+                "Uninstalling plugin",
+                verbose=args.verbose,
+            )
+            summary_rows.append(("Plugin", f"uninstalled (scope: {scope})"))
+        except StepFailure as exc:
+            # Don't let a forced --scope guess (nothing installed there) abort
+            # Desktop/credential cleanup — defer the failure until after those
+            # steps have run, then surface it.
+            deferred_plugin_failure = exc
+            summary_rows.append(("Plugin", f"failed to uninstall (scope: {scope})"))
 
     if has_desktop_entry:
         print_step(f"Removing Desktop config entry at {desktop_path}")
@@ -504,3 +513,6 @@ def _run_uninstall(args) -> None:
         summary_rows.append(("Marketplace entry", "kept"))
 
     print_summary(summary_rows)
+
+    if deferred_plugin_failure is not None:
+        raise deferred_plugin_failure
