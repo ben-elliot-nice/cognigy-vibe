@@ -933,7 +933,6 @@ cognigy_create {
 ```
 provision_webrtc_endpoint {
   project_id:        <projectId>
-  flow_id:           <flowId>
   flow_reference_id: <flowReferenceId>
   endpoint_name:     buildConfig.channel.voiceGateway.endpointName   // "Click-to-Call"
   connection_name:   buildConfig.voicePreview.connectionName          // "Test"
