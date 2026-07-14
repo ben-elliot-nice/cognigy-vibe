@@ -634,23 +634,43 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
 **Layout:**
 
 ```
-(somewhere in the main flow, after init chain, before AI Agent)
-  └─ [Code: "Reset xApp triggers"]   // context.xappTrigger = false at session start
-       └─ [if: context.xappTrigger === true]   // type "if", NOT "ifThenElse"
-            ├─ true branch
-            │    └─ [setHTMLAppState: "xApp — <scene_name>"]
-            │         └─ [Code: "Clear xApp trigger"]  // context.xappTrigger = false
-            └─ false branch (empty — fall through)
-                 └─ [continues to AI Agent]
+Once                                         ← the S1.5(a) Once node, by _id
+└─ [Code: "Reset xApp triggers"]              ← target: <onceNodeId> — NOT a branch marker
+     └─ [if: context.xappTrigger === true]    // type "if", NOT "ifThenElse"
+          ├─ true branch
+          │    └─ [setHTMLAppState: "xApp — <scene_name>"]
+          │         └─ [Code: "Clear xApp trigger"]  // context.xappTrigger = false
+          └─ false branch (empty — fall through)
+               └─ [continues to AI Agent]
 ```
+
+**Concrete append target — the Once node's own `_id`, not a branch marker.** Append the "Reset xApp triggers" Code node with `target: "<onceNodeId>"` (the same `_id` captured in S1.5(a), the Once node itself — never `onFirstExecutionId` or `afterwardsId`). Per `explain("node-positioning")`, `mode: "append"` inserts the new node into the *target's own next-chain*, not as a child of it — so targeting `<onceNodeId>` reroutes `Once.next` from AI Agent to this new node, splicing it in as `Once → Reset → IF → AI Agent`. That makes the Reset+IF chain a top-level sibling of `Once` and `AI Agent` in the main sequence — not nested inside `OnFirstTime` or `Afterwards`.
+
+**Why this target, and not `OnFirstTime` or `Afterwards`:** per S1.5, `OnFirstTime` drains and ends the turn right after "Say Welcome" — it never falls through to `Once.next` (see the S1.5(e) note: "Once routes to `Once.next` (= AI Agent) on subsequent turns automatically"). So `Once.next` — where this chain is spliced in — only ever executes from turn 2 onward, via the empty `Afterwards` branch falling through. That's fine: no tool call (and therefore no `context.xappTrigger = true`) can happen before turn 2 either, since AI Agent itself never runs on turn 1. Appending to the `Afterwards` marker instead (i.e. `target: "<afterwardsId>"`) is the mistake that produced the reported artefact — it works turn-wise but nests the gate one level inside the `Afterwards` branch in the flow chart instead of rendering it as a top-level node.
+
+**The Reset Code node must be idempotent, not an unconditional overwrite.** Because it lives in the every-turn `Once.next` chain (turns 2+) alongside the IF gate that reads the same flag, an unconditional `context.xappTrigger = false;` would always run immediately before the IF check and the gate would never see `true`. Write it as:
+```javascript
+if (context.xappTrigger === undefined) context.xappTrigger = false;
+```
+This only ever mutates state on its first execution (turn 2, before any tool has fired); on every later turn it's a no-op read, leaving whatever a tool branch set in the meantime intact for the IF gate to observe.
 
 **Per scene, build steps:**
 
 1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
-2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per `explain("node-positioning")`, use `mode: "append"` targeting the branch marker to insert inside a branch. If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
+2. **Create the Reset Code node, then the `if` + `setHTMLAppState` scaffold, once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per `explain("node-positioning")`, use `mode: "append"` targeting the branch marker to insert inside a branch. If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — four calls (2a create Reset Code node targeting the Once node's `_id`, 2b create IF node, 2c read its childIds, 2d create setHTMLAppState):
    ```
-   // Step 2a — create the IF gate node
+   // Step 2a — create the Reset Code node, spliced into Once.next
+   push_code_node {
+     flow_id: "<flowId>",
+     mode: "append",
+     target: "<onceNodeId>",   // the Once node's own _id — NOT onFirstExecutionId or afterwardsId
+     label: "Reset xApp triggers"
+     // body: if (context.xappTrigger === undefined) context.xappTrigger = false;
+   }
+   → returns { _id: "<resetXappTriggersCodeNodeId>" }
+
+   // Step 2b — create the IF gate node
    cognigy_create {
      resource_type: "node",
      flow_id: "<flowId>",
@@ -664,11 +684,11 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
    }
    → returns { _id: "<ifNodeId>" }
 
-   // Step 2b — read the branch-marker IDs the IF node auto-created
+   // Step 2c — read the branch-marker IDs the IF node auto-created
    get_flow_chart { flow_id: "<flowId>", format: "raw" }
    // Find the node with _id === "<ifNodeId>"; read childIds[0] (Then branch marker)
 
-   // Step 2c — create the setHTMLAppState node inside the Then branch
+   // Step 2d — create the setHTMLAppState node inside the Then branch
    cognigy_create {
      resource_type: "node",
      flow_id: "<flowId>",
