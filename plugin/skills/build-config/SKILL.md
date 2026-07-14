@@ -46,11 +46,11 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `tts.model` | string | required | TTS model identifier | enter from Cognigy UI → Connections |
 | `tts.language` | string | required | TTS language code | `"en"` |
 | `tts.voiceId` | string | required | Provider-specific voice ID | enter from Cognigy UI → Connections |
-| `tts.label` | string | required | Cognigy synthesizer connection label | enter from Cognigy UI → Connections |
+| `tts.label` | string | required | Cognigy TTS connection label | enter from Cognigy UI → Connections |
 | `stt.vendor` | string | required | STT provider — **lowercase API slug, not the Cognigy UI display name** (same enum as `tts.vendor`, plus STT-only `deepgramflux`, `speechmatics` — see `explain("voice-gateway")`) | `"microsoft"` |
 | `stt.model` | string | required | STT model identifier | enter from Cognigy UI → Connections |
 | `stt.language` | string | required | STT language/locale code | `"en-AU"` |
-| `stt.label` | string | required | Cognigy recognizer connection label | enter from Cognigy UI → Connections |
+| `stt.label` | string | required | Cognigy STT connection label | enter from Cognigy UI → Connections |
 | `stt.hints` | array | optional | Static STT hint phrases | `[]` |
 | `stt.dynamicHints.enabled` | boolean | optional | Enable dynamic STT hints | `true` |
 | `channel.type` | string | required | Channel type identifier | `"voice-webrtc"` |
@@ -87,7 +87,7 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 | `llm.toolChoice` | S1.1 Step 4 | `aiAgentJob` node `config.toolChoice` — set at creation; re-verified in S1.2 |
 | `locale` | S1.5(c) | Set Session Config `locale`; also endpoint locale binding |
 | `tts.*` | S1.5(c) | Set Session Config TTS fields (vendor, model, language, voiceId, connection label) — see `explain("voice-gateway")` for the real flat shape |
-| `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, model, language, connection label, hints, dynamicHints) |
+| `stt.*` | S1.5(c) | Set Session Config STT fields (vendor, model, language, connection label, hints, dynamicHints) — see `explain("voice-gateway")` for the real flat shape |
 | `channel.voiceGateway.endpointName` | S1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
 | `channel.voiceGateway.mode` | S1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
 | `channel.voiceGateway.bindFlow` | S1.5(d) | Whether to bind this endpoint to the demo flow |

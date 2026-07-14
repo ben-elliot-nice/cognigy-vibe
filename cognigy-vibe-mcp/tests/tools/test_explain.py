@@ -595,6 +595,7 @@ def test_voice_gateway_documents_vendor_enum_and_real_flat_shape(mock_client, st
     # Must NOT present the old fictional nested synthesizer/recognizer/bargeIn shape
     assert '"synthesizer"' not in text, "Must not document the fictional nested synthesizer shape"
     assert '"recognizer"' not in text, "Must not document the fictional nested recognizer shape"
+    assert '"bargeIn"' not in text, "Must not document the fictional nested bargeIn shape"
 
     # Must document the real flat shape's vendor fields
     assert "ttsVendor" in text and "sttVendor" in text, "Must document the real flat ttsVendor/sttVendor keys"
