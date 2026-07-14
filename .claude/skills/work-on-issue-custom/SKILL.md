@@ -62,8 +62,8 @@ Ask the user for permission before entering this loop. If approved:
 
 - **Trigger**: this skill does **not** auto-comment `@claude-review` — wait for a human (the user, or someone else) to comment it manually on the PR to kick off the automated CI reviewer set up in `.github/workflows/claude-code-review.yml`.
 - **Poll** every 5 minutes for up to 1 hour (12 checks) for a new review signal. Use an until-loop (e.g. via the `Monitor` tool, or a bash loop respecting this session's sleep constraints) rather than a raw long sleep.
-- **Exit condition** — ambiguous by design until we've seen the CI reviewer's real output once; check both, and revise this section after the first live run:
+- **Exit condition** — the CI reviewer posts findings as a plain PR comment via `gh pr comment`, and additionally leaves a formal `gh pr review --approve` when it found no critical/important issues. Check both, since either can be the terminal signal:
   - A formal GitHub review with state `APPROVED` (`gh pr view --json reviews`), **or**
-  - A PR comment containing LGTM-style approval language (e.g. "looks good", "LGTM").
+  - A PR comment containing LGTM-style approval language (e.g. "looks good", "LGTM") — covers a human reviewer approving via comment instead of a formal review.
 - **If a review arrives with findings (not an approval)**: read the findings, implement fixes, commit, push. Then start a **new** 5-min/1-hour waiting window for the follow-up review — don't carry over the old clock.
 - **If no review arrives within an hour of waiting**: exit the loop and report to the user that no review was received, rather than waiting indefinitely.

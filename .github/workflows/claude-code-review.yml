@@ -11,9 +11,9 @@ on:
 jobs:
   claude-review:
     if: |
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude-review') && github.event.comment.user.type != 'Bot') ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude-review') && github.event.comment.user.type != 'Bot') ||
-      github.event_name == 'pull_request'
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude-review') && github.event.comment.user.type != 'Bot' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude-review') && github.event.comment.user.type != 'Bot' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'claude-review-requested'))
 
     runs-on: ubuntu-latest
     permissions:
@@ -23,31 +23,30 @@ jobs:
       id-token: write
 
     steps:
-      # Pushes only auto-trigger a re-review once a human has opted the PR in
-      # via an initial @claude-review comment. Skip silently otherwise so
-      # every push doesn't run a review nobody asked for.
-      - name: Check for prior review request
-        if: github.event_name == 'pull_request'
-        id: check-requested
+      # Marks the PR as opted-in so future pushes auto re-trigger a review
+      # without re-scanning comment history. The label is the durable signal;
+      # only a maintainer's own @claude-review comment (gated above) can set it.
+      - name: Mark PR as opted into auto re-review
+        if: github.event_name != 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const comments = await github.paginate(github.rest.issues.listComments, {
+            const issueNumber = context.payload.issue
+              ? context.payload.issue.number
+              : context.payload.pull_request.number;
+            await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
+              issue_number: issueNumber,
+              labels: ['claude-review-requested'],
             });
-            const requested = comments.some(c => c.body.includes('@claude-review'));
-            core.setOutput('requested', requested);
 
       - name: Checkout repository
-        if: github.event_name != 'pull_request' || steps.check-requested.outputs.requested == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: Run Claude PR Review
-        if: github.event_name != 'pull_request' || steps.check-requested.outputs.requested == 'true'
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
@@ -59,5 +58,10 @@ jobs:
 
             Post the review findings as a PR comment via `gh pr comment`, signed
             with the byline `*— Claude Reviewer*` at the bottom of the comment body.
+
+            If there are no critical or important issues, also approve the PR:
+            `gh pr review --approve -b "LGTM — no blocking issues found.\n\n*— Claude Reviewer*"`.
+            If there are critical or important issues, do not approve — the comment
+            alone is enough for this pass.
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
