@@ -46,7 +46,7 @@ nodes:
   node-wiring                chart structure, relations array, sequential vs child chains
 
 platform:
-  endpoint-config            referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint
+  endpoint-config            referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint, per-channel field differences
   extension-map              complete type → extension lookup table
   knowledge-store            chunking, connector run, source management
   llm-resources              org-level vs project-level LLMs, assign_org_llm tool, discovery pattern, referenceId resolution, manage_packages fallback
