@@ -61,7 +61,7 @@ echo "ANCHOR=$ANCHOR"
   - **Match** → this is a continuation of the same build. Set `$DEMO_DIR="$ANCHOR"`. It already exists — do not create or nest a new `Demo Builds/` folder inside it; skip the `mkdir -p` in SA.
   - **Mismatch** → cwd is inside a *different* customer's build directory. STOP before SA and ask the user directly: *"You're currently inside `<ANCHOR>`, which looks like an existing build for `<basename slug>`, but this build is for `<new customer>`. I don't want to nest a new build folder inside another customer's directory. Do you want to `cd` back to the session workspace root first, or is `<ANCHOR>` actually intended for this build?"* Do not silently proceed either way — this is a BLOCKING confirmation, not a warning.
 
-Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document says `$DEMO_DIR` (or, in the S10 hand-back template, `$DEMO_DIR`).
+Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`.
 
 **Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
