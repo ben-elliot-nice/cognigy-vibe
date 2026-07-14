@@ -49,10 +49,16 @@ platform:
   connections                create/update body shape for the connections resource_type, verified via provision_webrtc_endpoint
   endpoint-config            referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint, per-channel field differences
   extension-map              complete type → extension lookup table
+  extensions-resource        no verified create/update body shape yet — discovery recipe for resource_type=extensions (installed extension config, distinct from explain("extension-map")'s node-type lookup table)
+  flow-resource              no verified create/update body shape yet — discovery recipe for resource_type=flows (raw flow creation, distinct from flow/clone via cognigy_invoke)
   knowledge-store            chunking, connector run, source management
+  lexicons                   no verified create/update body shape yet — discovery recipe for resource_type=lexicons
   llm-resources              org-level vs project-level LLMs, assign_org_llm tool, discovery pattern, referenceId resolution, manage_packages fallback
+  locales                    no verified create/update body shape yet — discovery recipe for resource_type=locales
   mcp-comparison             when to use cognigy-vibe vs NiCE official MCP
   outbound-trigger           6-step CXone trigger, Accept-Encoding: identity requirement
+  playbooks                  no verified create/update body shape yet — discovery recipe for resource_type=playbooks
+  project-resource           no verified create/update body shape yet — discovery recipe for resource_type=project
   project-snapshots          create project snapshots for versioning (flow-level versioning does not exist in the API)
   say-node                   say node config schema: correct text field, required _cognigy/_data fields, generativeAI_customInputs
   session-workspace          session workspace directory model — cwd vs Demo Builds/, .env scope, sync_remote_state project binding

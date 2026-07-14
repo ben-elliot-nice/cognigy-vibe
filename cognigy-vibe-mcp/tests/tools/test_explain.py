@@ -671,3 +671,21 @@ def test_xapp_delivery_cross_references_sendmetadata(mock_client, state, cache):
     result = handlers["explain"]({"topic": "xapp-delivery"})
     text = result[0].text
     assert "sendMetadata" in text
+
+
+# ── Issue #207: stub topics for zero-coverage resource_types ────────────────
+
+_STUB_TOPICS = ["lexicons", "playbooks", "locales", "extensions-resource", "project-resource", "flow-resource"]
+
+
+def test_stub_topics_exist_and_admit_no_verified_shape(mock_client, state, cache):
+    """Each zero-coverage resource_type stub must exist, be non-empty, and give the discovery recipe."""
+    handlers = make_handlers(mock_client, state, cache)
+    for topic in _STUB_TOPICS:
+        result = handlers["explain"]({"topic": topic})
+        text = result[0].text
+        assert "Unknown topic" not in text, f"{topic} must be a known topic"
+        assert len(text) > 100, f"{topic} stub must have real recipe content, not a one-liner"
+        assert "full_objects=true" in text, f"{topic} must give the cognigy_list discovery recipe"
+        assert "openapi.json" in text, f"{topic} must point to openapi.json as the manual fallback"
+        assert "no verified" in text.lower(), f"{topic} must honestly admit no verified body shape exists"
