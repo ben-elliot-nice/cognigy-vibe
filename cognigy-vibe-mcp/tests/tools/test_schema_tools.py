@@ -1,11 +1,13 @@
 import copy
 import json
+from cognigy_mcp.api import ApiError
 from cognigy_mcp.tools.schema_tools import (
     _normalise_rtype,
     _find_candidate_path,
     _known_resource_types,
     _extract_fields,
     _raw_schema_fragment,
+    _merge_path_item_parameters,
     TOOLS,
     make_handlers,
 )
@@ -91,6 +93,41 @@ FIXTURE_SPEC = {
         },
         "/v2.0/onlygettable": {"get": {"parameters": []}},
         "/v2.0/knowledgestores/{knowledgeStoreId}/connectors": {"get": {"parameters": []}},
+        "/v2.0/widgets": {
+            "parameters": [
+                {
+                    "in": "query",
+                    "name": "projectId",
+                    "required": True,
+                    "description": "Shared project id (path-item level)",
+                    "schema": {"type": "string"},
+                },
+                {
+                    "in": "query",
+                    "name": "sharedParam",
+                    "required": False,
+                    "description": "A path-item-level-only shared param",
+                    "schema": {"type": "string"},
+                },
+            ],
+            "get": {
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "projectId",
+                        "required": False,
+                        "description": "Operation-level override, wins on conflict",
+                        "schema": {"type": "string"},
+                    },
+                    {
+                        "in": "query",
+                        "name": "limit",
+                        "required": False,
+                        "schema": {"type": "integer"},
+                    },
+                ]
+            },
+        },
     },
 }
 
@@ -271,6 +308,79 @@ def test_describe_resource_schema_malformed_operation_returns_clean_error(mock_c
     assert data["error"] == "schema_parse_error"
     assert data["resource_type"] == "lexicons"
     assert data["operation"] == "create"
+
+
+def test_describe_resource_schema_handler_returns_api_error_response(mock_client, state, cache):
+    """The handler's own except ApiError branch (schema_tools.py) must be exercised
+    directly, not just CognigyClient.get_openapi_spec raising in isolation."""
+    mock_client.get_openapi_spec.side_effect = ApiError(status_code=500, message="boom")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 500
+    assert "boom" in data["detail"]
+
+
+def test_describe_resource_schema_handler_returns_unexpected_error_response(mock_client, state, cache):
+    """The handler's own except Exception branch must be exercised directly with a
+    generic, non-ApiError exception."""
+    mock_client.get_openapi_spec.side_effect = RuntimeError("unexpected")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "unexpected_error"
+    assert "unexpected" in data["detail"]
+
+
+def test_extract_fields_list_merges_path_item_level_parameters():
+    """OpenAPI allows 'parameters' as a sibling of 'get'/'post'/etc at the path-item
+    level, applying to all methods on that path. _extract_fields's 'list' branch must
+    pick these up too, not just operation-level parameters nested under 'get'."""
+    path_item = FIXTURE_SPEC["paths"]["/v2.0/widgets"]
+    op = path_item["get"]
+    merged_params = _merge_path_item_parameters(path_item, op)
+    fields = _extract_fields({**op, "parameters": merged_params}, "list")
+    names = {f["field"] for f in fields}
+    assert names == {"projectId", "sharedParam", "limit"}
+
+
+def test_extract_fields_list_operation_level_wins_on_name_collision():
+    """projectId is defined at both path-item level (required=True) and operation
+    level (required=False) — operation-level must win per the OpenAPI spec."""
+    path_item = FIXTURE_SPEC["paths"]["/v2.0/widgets"]
+    op = path_item["get"]
+    merged_params = _merge_path_item_parameters(path_item, op)
+    fields = _extract_fields({**op, "parameters": merged_params}, "list")
+    by_name = {f["field"]: f for f in fields}
+    assert by_name["projectId"]["required"] is False
+    assert by_name["projectId"]["description"] == "Operation-level override, wins on conflict"
+
+
+def test_describe_resource_schema_list_handler_merges_path_item_parameters(mock_client, state, cache):
+    """End-to-end: the handler's 'list' operation for resource_type=widgets must
+    surface both the path-item-level shared param and the operation-level params,
+    with operation-level winning the projectId name collision."""
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "widgets", "operation": "list"})
+    data = json.loads(result[0].text)
+    by_name = {f["field"]: f for f in data["fields"]}
+    assert set(by_name) == {"projectId", "sharedParam", "limit"}
+    assert by_name["projectId"]["required"] is False
+
+
+def test_describe_resource_schema_list_verbose_reflects_merged_parameters(mock_client, state, cache):
+    """verbose=True's raw_schema fragment for 'list' must reflect the same merged
+    parameter set as the simplified field list."""
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "widgets", "operation": "list", "verbose": True}
+    )
+    data = json.loads(result[0].text)
+    names = {p["name"] for p in data["raw_schema"]["parameters"]}
+    assert names == {"projectId", "sharedParam", "limit"}
 
 
 def test_describe_resource_schema_get_composed_schema_notes_no_fields(mock_client, state, cache):

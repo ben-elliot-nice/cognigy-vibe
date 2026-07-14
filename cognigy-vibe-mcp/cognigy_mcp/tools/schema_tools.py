@@ -107,6 +107,18 @@ def _extract_fields(op: dict, operation: str) -> list[dict]:
     return []  # delete takes no body
 
 
+def _merge_path_item_parameters(path_item: dict, op: dict) -> list[dict]:
+    """Merge path-item-level 'parameters' (a sibling of get/post/etc, applying to all
+    methods on that path) with operation-level 'parameters'. Operation-level wins on
+    a name+location collision, per the OpenAPI spec (more specific overrides shared)."""
+    merged: dict[tuple[str, str], dict] = {}
+    for param in path_item.get("parameters", []):
+        merged[(param.get("name"), param.get("in"))] = param
+    for param in op.get("parameters", []):
+        merged[(param.get("name"), param.get("in"))] = param
+    return list(merged.values())
+
+
 def _raw_schema_fragment(op: dict, operation: str) -> dict:
     if operation in ("create", "update"):
         return op.get("requestBody", {}).get("content", {}).get("application/json", {}).get("schema", {})
@@ -199,6 +211,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 })
 
             op = paths[path][method]
+            if m.operation == "list":
+                op = {**op, "parameters": _merge_path_item_parameters(paths[path], op)}
             result = {
                 "resource_type": rtype,
                 "operation": m.operation,
