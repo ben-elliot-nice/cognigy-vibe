@@ -67,7 +67,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             "type": m.connection_type,
             "resourceLevel": "project",
             "projectId": m.project_id,
-            "fields": {"apiKey": effective_key, **m.connection_fields},
+            "fields": {**m.connection_fields, "apiKey": effective_key},
         }, retry=False)
         connection_id = conn_result["_id"]
 
