@@ -549,6 +549,185 @@ def test_describe_resource_schema_verbose_get_returns_raw_schema(mock_client, st
     assert data["raw_schema"]["properties"]["name"]["description"] == "The name"
 
 
+def test_describe_resource_schema_ref_request_body_resolves_to_real_fields(mock_client, state, cache):
+    """A bare {"$ref": "#/components/schemas/X"} request-body schema must be resolved
+    against spec['components']['schemas']['X'] so the simplified 'fields' list reflects
+    the target schema's real properties, not an empty list."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/lexicons"]["post"]["requestBody"]["content"]["application/json"]["schema"] = {
+        "$ref": "#/components/schemas/LexiconCreate"
+    }
+    spec["components"] = {
+        "schemas": {
+            "LexiconCreate": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string", "description": "The name of the lexicon"},
+                    "projectId": {"type": "string"},
+                },
+            }
+        }
+    }
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicon", "operation": "create"})
+    data = json.loads(result[0].text)
+    by_name = {f["field"]: f for f in data["fields"]}
+    assert by_name["name"]["required"] is True
+    assert by_name["projectId"]["required"] is False
+    assert "note" not in data
+
+
+def test_describe_resource_schema_ref_target_missing_falls_back_gracefully(mock_client, state, cache):
+    """If a $ref doesn't resolve to anything in components.schemas, resolution must
+    fail gracefully (no crash) and the existing composed-schema note behavior kicks in."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/lexicons"]["post"]["requestBody"]["content"]["application/json"]["schema"] = {
+        "$ref": "#/components/schemas/DoesNotExist"
+    }
+    # No 'components' key at all in spec, to exercise the missing-lookup path.
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicon", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert data["fields"] == []
+    assert "note" in data
+    assert "verbose" in data["note"].lower()
+
+
+def test_describe_resource_schema_verbose_ref_returns_resolved_schema(mock_client, state, cache):
+    """verbose=True for a $ref-based schema must return the resolved target schema
+    (with real properties), not the bare unresolved {"$ref": ...} pointer."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/lexicons"]["post"]["requestBody"]["content"]["application/json"]["schema"] = {
+        "$ref": "#/components/schemas/LexiconCreate"
+    }
+    spec["components"] = {
+        "schemas": {
+            "LexiconCreate": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {"name": {"type": "string"}},
+            }
+        }
+    }
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "lexicons", "operation": "create", "verbose": True}
+    )
+    data = json.loads(result[0].text)
+    assert "properties" in data["raw_schema"]
+    assert data["raw_schema"]["properties"]["name"]["type"] == "string"
+
+
+def test_describe_resource_schema_allof_ref_merges_inline_properties(mock_client, state, cache):
+    """A single-level allOf: [{"$ref": ...}, {inline properties}] must merge the
+    resolved $ref's properties with the inline properties in the simplified fields list."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    spec["paths"]["/v2.0/lexicons/{lexiconId}"]["patch"]["requestBody"]["content"]["application/json"]["schema"] = {
+        "allOf": [
+            {"$ref": "#/components/schemas/LexiconBase"},
+            {"type": "object", "properties": {"extra": {"type": "boolean"}}},
+        ]
+    }
+    spec["components"] = {
+        "schemas": {
+            "LexiconBase": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {"name": {"type": "string"}},
+            }
+        }
+    }
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicon", "operation": "update"})
+    data = json.loads(result[0].text)
+    names = {f["field"] for f in data["fields"]}
+    assert names == {"name", "extra"}
+
+
+def test_describe_resource_schema_narrowed_exception_does_not_swallow_internal_bug(mock_client, state, cache):
+    """The except clause must be narrowed to data-shape exceptions (AttributeError,
+    TypeError, KeyError, IndexError) — a genuinely new bug class like ZeroDivisionError
+    raised from within the try block must propagate, not be silently swallowed as
+    schema_parse_error."""
+    import cognigy_mcp.tools.schema_tools as schema_tools_module
+
+    def _boom(*args, **kwargs):
+        raise ZeroDivisionError("simulated internal bug")
+
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    original = schema_tools_module._find_candidate_path
+    schema_tools_module._find_candidate_path = _boom
+    try:
+        try:
+            handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
+            raised = False
+        except ZeroDivisionError:
+            raised = True
+    finally:
+        schema_tools_module._find_candidate_path = original
+    assert raised is True
+
+
+def test_describe_resource_schema_fallback_operation_not_available_has_warning(mock_client, state, cache):
+    """When a fallback (substring) match's path lacks the requested HTTP method, the
+    'operation not available' error must still carry the 'this was only a guess'
+    warning — otherwise a caller could act on available_methods for an unrelated
+    resource without knowing the match was non-exact."""
+    spec = copy.deepcopy(FIXTURE_SPEC)
+    # 'onlygettable' only has 'get' and will be found via fallback substring search
+    # when the requested rtype doesn't exactly match any top-level path.
+    spec["paths"]["/v2.0/somethingonlygettablewrapper"] = spec["paths"].pop("/v2.0/onlygettable")
+    mock_client.get_openapi_spec.return_value = spec
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "onlygettable", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "warning" in data
+
+
+def test_describe_resource_schema_update_simplified_fields_lexicon(mock_client, state, cache):
+    """Direct happy-path test for operation='update' in simplified (non-verbose) mode
+    against the /v2.0/lexicons/{lexiconId} fixture path — asserts the 'fields' list
+    directly rather than only incidentally via cache/composed-schema tests."""
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicon", "operation": "update"})
+    data = json.loads(result[0].text)
+    assert data["path"] == "/v2.0/lexicons/{lexiconId}"
+    assert data["method"] == "patch"
+    by_name = {f["field"]: f for f in data["fields"]}
+    assert set(by_name) == {"name"}
+
+
+def test_describe_resource_schema_invalid_operation_returns_validation_error(mock_client, state, cache):
+    """An operation value outside the Literal[...] must produce the shared Pydantic
+    validate() error path's response, mirroring test_flow_ops.py's validation-error
+    tests for other tools."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "nonexistent"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "operation" for d in data["details"])
+
+
+def test_describe_resource_schema_missing_resource_type_returns_validation_error(mock_client, state, cache):
+    """A missing required resource_type must produce the shared Pydantic validate()
+    error path's response."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"operation": "create"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "resource_type" for d in data["details"])
+
+
 def test_describe_resource_schema_verbose_delete_returns_empty_raw_schema(mock_client, state, cache):
     """verbose=True for 'delete' must not fabricate content — delete has no body, and
     _raw_schema_fragment's current behavior for operation='delete' is to return {} (its

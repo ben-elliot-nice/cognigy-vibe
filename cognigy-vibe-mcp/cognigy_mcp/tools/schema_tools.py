@@ -3,7 +3,11 @@ import re
 from typing import Literal
 from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
-from cognigy_mcp.tools.flow_ops import _RESOURCE_TYPE_ALIASES
+from cognigy_mcp.tools.flow_ops import (
+    _RESOURCE_TYPE_ALIASES,
+    _api_error_response,
+    _unexpected_error_response,
+)
 from cognigy_mcp.api import CognigyClient, ApiError
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
@@ -58,6 +62,57 @@ def _is_composed_schema(schema: dict) -> bool:
     return "properties" not in schema and any(key in schema for key in _COMPOSITION_KEYS)
 
 
+_COMPONENTS_SCHEMA_REF_RE = re.compile(r"^#/components/schemas/([^/]+)$")
+
+
+def _resolve_component_ref(ref: str, spec: dict) -> dict | None:
+    """Resolve a '#/components/schemas/X' JSON Pointer against spec['components']['schemas'].
+    Returns None if the ref isn't of that shape or doesn't resolve to anything — this is
+    intentionally NOT a general recursive JSON-Pointer resolver, just the one shape OpenAPI
+    specs actually use for named schema components."""
+    match = _COMPONENTS_SCHEMA_REF_RE.match(ref)
+    if not match:
+        return None
+    name = match.group(1)
+    return spec.get("components", {}).get("schemas", {}).get(name)
+
+
+def _resolve_schema_ref(schema: dict, spec: dict) -> dict:
+    """Resolve a bare {"$ref": "#/components/schemas/X"} schema fragment (or a
+    single-level allOf wrapping one) against the full spec's components.schemas.
+    Falls back to returning the schema unchanged if it isn't a $ref/allOf-$ref shape,
+    or if the ref doesn't resolve to anything in components.schemas."""
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        resolved = _resolve_component_ref(ref, spec)
+        return resolved if resolved is not None else schema
+
+    all_of = schema.get("allOf")
+    if isinstance(all_of, list) and all_of:
+        merged_properties: dict = {}
+        merged_required: set[str] = set()
+        resolved_any = False
+        for entry in all_of:
+            if not isinstance(entry, dict):
+                continue
+            entry_ref = entry.get("$ref")
+            if isinstance(entry_ref, str):
+                resolved = _resolve_component_ref(entry_ref, spec)
+                if resolved is None:
+                    continue
+                resolved_any = True
+                merged_properties.update(resolved.get("properties", {}))
+                merged_required.update(resolved.get("required", []))
+            else:
+                merged_properties.update(entry.get("properties", {}))
+                merged_required.update(entry.get("required", []))
+        if resolved_any:
+            return {"type": "object", "properties": merged_properties, "required": sorted(merged_required)}
+        return schema
+
+    return schema
+
+
 def _properties_from_schema(schema: dict) -> tuple[dict, set[str]]:
     return schema.get("properties", {}), set(schema.get("required", []))
 
@@ -105,6 +160,50 @@ def _extract_fields(op: dict, operation: str) -> list[dict]:
             fields.append(entry)
         return fields
     return []  # delete takes no body
+
+
+def _with_resolved_schema(op: dict, operation: str, spec: dict) -> dict:
+    """Return a copy of `op` with its request-body ('create'/'update') or 200-response
+    ('get') schema replaced by its $ref/allOf-$ref resolved form (see _resolve_schema_ref),
+    so downstream _extract_fields/_is_composed_schema/_raw_schema_fragment all see the
+    resolved schema uniformly, whether verbose or simplified mode is requested."""
+    raw = _raw_schema_fragment(op, operation)
+    if not isinstance(raw, dict):
+        return op
+    resolved = _resolve_schema_ref(raw, spec)
+    if resolved is raw:
+        return op
+    if operation in ("create", "update"):
+        return {
+            **op,
+            "requestBody": {
+                **op.get("requestBody", {}),
+                "content": {
+                    **op.get("requestBody", {}).get("content", {}),
+                    "application/json": {
+                        **op.get("requestBody", {}).get("content", {}).get("application/json", {}),
+                        "schema": resolved,
+                    },
+                },
+            },
+        }
+    # operation == "get"
+    return {
+        **op,
+        "responses": {
+            **op.get("responses", {}),
+            "200": {
+                **op.get("responses", {}).get("200", {}),
+                "content": {
+                    **op.get("responses", {}).get("200", {}).get("content", {}),
+                    "application/json": {
+                        **op.get("responses", {}).get("200", {}).get("content", {}).get("application/json", {}),
+                        "schema": resolved,
+                    },
+                },
+            },
+        },
+    }
 
 
 def _merge_path_item_parameters(path_item: dict, op: dict) -> list[dict]:
@@ -155,14 +254,6 @@ TOOLS: list[Tool] = [
 ]
 
 
-def _api_error_response(exc: ApiError) -> list[TextContent]:
-    return _ok({"error": "api_error", "status": exc.status_code, "detail": str(exc)})
-
-
-def _unexpected_error_response(exc: Exception) -> list[TextContent]:
-    return _ok({"error": "unexpected_error", "detail": str(exc)})
-
-
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
     spec_cache = Cache(cache_dir=cache.cache_dir, ttl=86400)
 
@@ -189,6 +280,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         # a clean error envelope rather than an unhandled exception. This is why the
         # try block starts here, before paths/rtype/path are even derived, rather than
         # only around the later per-operation lookups.
+        rtype = path = method = None
         try:
             paths = spec.get("paths", {})
             rtype = _normalise_rtype(m.resource_type)
@@ -205,16 +297,24 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 k for k in paths[path].keys() if k in _OPERATION_METHOD.values()
             )
             if method not in available_methods:
-                return _ok({
+                error_response = {
                     "error": (
                         f"operation={m.operation!r} (HTTP {method.upper()}) not available at {path}"
                     ),
                     "available_methods": available_methods,
-                })
+                }
+                if not exact:
+                    error_response["warning"] = (
+                        f"No exact match for resource_type={m.resource_type!r}; "
+                        f"best guess via substring search: {path}"
+                    )
+                return _ok(error_response)
 
             op = paths[path][method]
             if m.operation == "list":
                 op = {**op, "parameters": _merge_path_item_parameters(paths[path], op)}
+            elif m.operation in ("create", "update", "get"):
+                op = _with_resolved_schema(op, m.operation, spec)
             result = {
                 "resource_type": rtype,
                 "operation": m.operation,
@@ -240,17 +340,17 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                             "could not be flattened into a field list. Call again with "
                             "verbose=True to see the raw schema fragment."
                         )
-        except Exception as exc:
-            # rtype/path/method may not have been assigned yet if the exception was
-            # raised while deriving them (e.g. a malformed spec['paths']) — fall back
-            # to None rather than risk a NameError inside the error handler itself.
+        except (AttributeError, TypeError, KeyError, IndexError) as exc:
+            # rtype/path/method are initialized to None before this try block, so they
+            # are always defined here even if the exception was raised while deriving
+            # them (e.g. a malformed spec['paths']).
             return _ok({
                 "error": "schema_parse_error",
                 "detail": str(exc),
-                "resource_type": locals().get("rtype"),
+                "resource_type": rtype,
                 "operation": m.operation,
-                "path": locals().get("path"),
-                "method": locals().get("method"),
+                "path": path,
+                "method": method,
             })
         return _ok(result)
 

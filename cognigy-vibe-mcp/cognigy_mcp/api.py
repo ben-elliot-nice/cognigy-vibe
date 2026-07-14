@@ -147,6 +147,6 @@ class CognigyClient:
         return resp.content
 
     def get_openapi_spec(self) -> dict:
-        """GET the live OpenAPI spec. Same X-API-Key auth as every other call — no session
-        cookie required despite CLAUDE.md's prior (incorrect) claim otherwise."""
+        """GET the live OpenAPI spec using the same X-API-Key auth as every other call —
+        no session cookie required."""
         return self.get("/openapi/openapi-viewer.json")

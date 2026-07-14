@@ -13,10 +13,9 @@ working code reference to draw from. Do not guess field names.
 ### Discovery recipe
 1. If a playbook already exists in the target project, read its real shape:
    `cognigy_list(resource_type="playbooks", project_id="<projectId>", full_objects=true)`
-2. Fall back to the OpenAPI spec (per this repo's CLAUDE.md, `./openapi.json`
-   or fetched per-environment with a session cookie) as the authoritative
-   schema reference — it is not wired into any MCP tool, so this is a manual
-   step outside the current session.
+2. Fall back to describe_resource_schema(resource_type="playbooks", operation="create") —
+   it looks up the field-level shape directly from the live OpenAPI spec (no session
+   cookie needed, just the same API key already configured).
 
 ### Once you confirm a working shape
 File it back as an amendment to this topic (or a dedicated one) so the next
