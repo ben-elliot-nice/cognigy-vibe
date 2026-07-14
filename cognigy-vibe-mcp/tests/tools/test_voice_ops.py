@@ -49,7 +49,6 @@ def test_real_creds_path(mock_client, state, cache, monkeypatch):
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "region": "australiaeast",
     })
     data = json.loads(result[0].text)
 
@@ -91,7 +90,7 @@ def test_dummy_path_sends_dummy_api_key(mock_client, state, cache, monkeypatch):
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "region": "australiaeast",
+        "connection_fields": {"region": "australiaeast"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
@@ -109,7 +108,7 @@ def test_real_creds_path_sends_real_api_key(mock_client, state, cache, monkeypat
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "Test",
-        "region": "australiaeast",
+        "connection_fields": {"region": "australiaeast"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
@@ -126,7 +125,7 @@ def test_connection_post_body(mock_client, state, cache, monkeypatch):
         "flow_reference_id": "flow-uuid",
         "endpoint_name": "Click-to-Call",
         "connection_name": "MyConn",
-        "region": "eastus",
+        "connection_fields": {"region": "eastus"},
     })
 
     conn_body = mock_client.post.call_args_list[0][0][1]
@@ -397,3 +396,51 @@ def test_provision_webrtc_endpoint_missing_flow_reference_id_returns_validation_
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "flow_reference_id" for d in data["details"])
+
+
+def test_default_connection_type_and_fields_are_azure(mock_client, state, cache, monkeypatch):
+    """Omitting connection_type/connection_fields preserves today's Azure default shape."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    mock_client.post.side_effect = [
+        {"_id": "conn-1"},
+        {"_id": "ep-1", "URLToken": "tok"},
+    ]
+    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_id": "fid",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["type"] == "MicrosoftSpeechProvider"
+    assert conn_body["fields"] == {"apiKey": "dummy", "region": "australiaeast"}
+
+
+def test_generic_connection_type_and_fields_pass_through(mock_client, state, cache, monkeypatch):
+    """A caller-supplied connection_type/connection_fields flows through untouched, proving genericity."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    mock_client.post.side_effect = [
+        {"_id": "conn-1"},
+        {"_id": "ep-1", "URLToken": "tok"},
+    ]
+    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_id": "fid",
+        "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+        "connection_type": "SomeOtherProvider",
+        "connection_fields": {"foo": "bar", "baz": "qux"},
+    })
+
+    conn_body = mock_client.post.call_args_list[0][0][1]
+    assert conn_body["type"] == "SomeOtherProvider"
+    assert conn_body["fields"] == {"apiKey": "dummy", "foo": "bar", "baz": "qux"}

@@ -13,7 +13,14 @@ class ProvisionWebrtcEndpointArgs(BaseModel):
     flow_reference_id: str = Field(description="UUID referenceId of the flow to bind")
     endpoint_name: str = Field(description="Name for the webRTC endpoint, e.g. 'Click-to-Call'")
     connection_name: str = Field(description="Name for the speech connection, e.g. 'Test'")
-    region: str = Field("australiaeast", description="Azure Speech region, e.g. 'australiaeast'")
+    connection_type: str = Field(
+        "MicrosoftSpeechProvider",
+        description="Cognigy connection type for the preview speech provider",
+    )
+    connection_fields: dict = Field(
+        default_factory=lambda: {"region": "australiaeast"},
+        description="Non-credential connection fields for the preview speech provider (vendor-specific shape)",
+    )
 
 TOOLS: list[Tool] = [
     Tool(
@@ -57,10 +64,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         conn_result = client.post("/v2.0/connections", {
             "name": m.connection_name,
             "extension": "@cognigy/audio-preview-provider",
-            "type": "MicrosoftSpeechProvider",
+            "type": m.connection_type,
             "resourceLevel": "project",
             "projectId": m.project_id,
-            "fields": {"apiKey": effective_key, "region": m.region},
+            "fields": {"apiKey": effective_key, **m.connection_fields},
         }, retry=False)
         connection_id = conn_result["_id"]
 
