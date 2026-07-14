@@ -58,6 +58,13 @@ jobs:
           prompt: |
             /pr-review-toolkit:review-pr ${{ github.repository }}/pull/${{ github.event.issue.number || github.event.pull_request.number }}
 
+            This is a single, non-interactive run — there is no later turn to receive
+            background-task notifications, and ScheduleWakeup or any other async-wait
+            will not work. If you dispatch any subagents via the Agent tool, you MUST
+            pass run_in_background: false so each call blocks and returns its result
+            before you continue. Never end your turn assuming a background task will
+            finish afterward — it will not.
+
             Post the review findings as a PR comment via `gh pr comment`, signed
             with the byline `*— Claude Reviewer*` at the bottom of the comment body.
 
