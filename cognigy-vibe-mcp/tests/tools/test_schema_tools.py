@@ -1,9 +1,13 @@
+import copy
+import json
 from cognigy_mcp.tools.schema_tools import (
     _normalise_rtype,
     _find_candidate_path,
     _known_resource_types,
     _extract_fields,
     _raw_schema_fragment,
+    TOOLS,
+    make_handlers,
 )
 
 FIXTURE_SPEC = {
@@ -163,3 +167,66 @@ def test_raw_schema_fragment_create_returns_full_schema():
     op = FIXTURE_SPEC["paths"]["/v2.0/lexicons"]["post"]
     raw = _raw_schema_fragment(op, "create")
     assert raw["properties"]["name"]["example"] == "EU countries"
+
+
+def test_all_tools_exported():
+    names = [t.name for t in TOOLS]
+    assert "describe_resource_schema" in names
+
+
+def test_describe_resource_schema_create_simplified(mock_client, state, cache):
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "lexicon", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert data["path"] == "/v2.0/lexicons"
+    assert data["method"] == "post"
+    assert "warning" not in data
+    by_name = {f["field"]: f for f in data["fields"]}
+    assert by_name["name"]["required"] is True
+
+
+def test_describe_resource_schema_verbose_returns_raw_schema(mock_client, state, cache):
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "lexicons", "operation": "create", "verbose": True}
+    )
+    data = json.loads(result[0].text)
+    assert "fields" not in data
+    assert data["raw_schema"]["properties"]["name"]["example"] == "EU countries"
+
+
+def test_describe_resource_schema_fallback_match_has_warning(mock_client, state, cache):
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "connectors", "operation": "list"})
+    data = json.loads(result[0].text)
+    assert data["path"] == "/v2.0/knowledgestores/{knowledgeStoreId}/connectors"
+    assert "warning" in data
+
+
+def test_describe_resource_schema_no_match_lists_known_types(mock_client, state, cache):
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "nonexistent", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "lexicons" in data["known_resource_types"]
+
+
+def test_describe_resource_schema_operation_not_available(mock_client, state, cache):
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "onlygettable", "operation": "create"})
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert data["available_methods"] == ["get"]
+
+
+def test_describe_resource_schema_caches_spec_across_calls(mock_client, state, cache):
+    mock_client.get_openapi_spec.return_value = copy.deepcopy(FIXTURE_SPEC)
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "create"})
+    handlers["describe_resource_schema"]({"resource_type": "lexicons", "operation": "update"})
+    mock_client.get_openapi_spec.assert_called_once()
