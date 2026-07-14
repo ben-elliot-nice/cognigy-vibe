@@ -95,6 +95,30 @@ instead of being forwarded to the API.
 For Knowledge AI specifically, the `knowledgeSearch` use-case must be set to an **embedding**
 model's `_id` (not a generation model's) — see `explain("knowledge-store")`.
 
+### Reading a project's current Generative AI settings
+
+`generativeAISettings` is **not** returned by `cognigy_get(resource_type="projects", resource_id=<projectId>)`
+— that call hits `GET /v2.0/projects/<projectId>`, which only returns top-level project fields
+(`_id`, `name`, `color`, `primaryLocaleReference`, etc). The settings live on a separate
+sub-resource, `GET /v2.0/projects/<projectId>/settings`, which is not modeled as its own
+`resource_type`.
+
+Reach it with the existing `cognigy_get` tool by appending `/settings` to `resource_id` — the tool
+builds its path as `/v2.0/{resource_type}/{resource_id}` with no validation against slashes, so
+this composes into the right URL without any new tool:
+
+```
+cognigy_get {
+  resource_type: "projects",
+  resource_id: "<projectId>/settings",
+  fields: ["generativeAISettings"]
+}
+```
+
+This returns the full `useCasesSettings` map (each use-case's current `largeLanguageModelId`) plus
+other project-wide settings (`audioPreviewSettings`, `knowledgeAISettings`, `timezone`, etc) that
+live on the same sub-resource. Use `fields` to trim the response to just what you need.
+
 ### When `manage_packages` is still appropriate
 
 If the user's chosen LLM is `resourceLevel: "project"` (e.g. a custom connection not promoted to org level), `assign_org_llm` will refuse. Export the LLM from its source project and import it into the new project:

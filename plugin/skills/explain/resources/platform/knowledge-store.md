@@ -25,7 +25,8 @@ set_project_generative_ai_settings {
 Assigning an embedding LLM to the project via `assign_org_llm` alone is **not** sufficient —
 without the `set_project_generative_ai_settings` call, knowledge-store creation and retrieval
 silently fail to use the intended embedding model. See `explain("llm-resources")` for the full
-mechanism.
+mechanism, including how to read back the current `knowledgeSearch` assignment to verify this
+prerequisite is met before creating a store.
 
 ### List knowledge stores
   cognigy_list(resource_type="knowledgestores", project_id=...)
