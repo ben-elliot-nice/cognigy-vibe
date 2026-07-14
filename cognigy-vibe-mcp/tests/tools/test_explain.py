@@ -636,7 +636,8 @@ def test_endpoint_config_documents_rest_channel_field_divergence(mock_client, st
     result = handlers["explain"]({"topic": "endpoint-config"})
     text = result[0].text
     assert "rest" in text.lower()
-    assert "Field 'flowReferenceId' is not allowed" in text, \
+    normalized = " ".join(text.split())
+    assert "Field 'flowReferenceId' is not allowed" in normalized, \
         "Must document the exact API rejection message for the rest channel"
     assert "voiceGateway2" in text
 
