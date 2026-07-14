@@ -12,7 +12,7 @@ import mcp.types as types
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
-from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain, dev_tools, voice_ops
+from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain, dev_tools, voice_ops, schema_tools
 
 
 _CONFIG_SCHEMA_VERSION = 2
@@ -85,6 +85,7 @@ def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
         + testing.TOOLS
         + explain.TOOLS
         + voice_ops.TOOLS
+        + schema_tools.TOOLS
     )
     env_path = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd()))) / ".env"
     server = Server("cognigy-vibe")
@@ -134,6 +135,7 @@ def _create_full_server() -> tuple[Server, list[types.Tool]]:
         + testing.TOOLS
         + explain.TOOLS
         + voice_ops.TOOLS
+        + schema_tools.TOOLS
     )
     all_handlers: dict[str, Any] = {
         **state_tools.make_handlers(client, state, cache, build_config=build_config, config_source=config_source),
@@ -142,6 +144,7 @@ def _create_full_server() -> tuple[Server, list[types.Tool]]:
         **testing.make_handlers(client, state, cache),
         **explain.make_handlers(client, state, cache),
         **voice_ops.make_handlers(client, state, cache),
+        **schema_tools.make_handlers(client, state, cache),
     }
 
     if os.environ.get("COGNIGY_VIBE_DEV") == "1":

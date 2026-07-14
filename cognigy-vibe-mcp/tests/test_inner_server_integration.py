@@ -160,6 +160,7 @@ def test_degraded_server_tools_list_returns_expected_tools():
             "set_project_generative_ai_settings",
             "export_package",
             "push_knowledge_source_file",
+            "describe_resource_schema",
         ])
         assert tool_names == expected, (
             f"tool list mismatch.\nGot:      {tool_names}\nExpected: {expected}"
