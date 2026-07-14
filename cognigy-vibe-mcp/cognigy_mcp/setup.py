@@ -456,7 +456,17 @@ def _run_uninstall(args) -> None:
         return
 
     summary_rows: list[tuple[str, str]] = []
-    deferred_plugin_failure: StepFailure | None = None
+    # Best-effort cleanup: no single step's failure (plugin uninstall, Desktop
+    # config write, credential removal, marketplace removal) should stop the
+    # remaining steps from running. Each failure is printed immediately so it
+    # isn't lost behind a later, unrelated failure; the first one is re-raised
+    # once every step has had a chance to run, to preserve the exit code.
+    deferred_failures: list[Exception] = []
+
+    def _warn(step: str, exc: Exception) -> None:
+        detail = getattr(getattr(exc, "result", None), "stderr", "") or str(exc)
+        print(f"  Warning: {step} failed: {detail}")
+        deferred_failures.append(exc)
 
     if has_plugin:
         print_step(f"Uninstalling cognigy-vibe plugin (scope: {scope})")
@@ -468,23 +478,20 @@ def _run_uninstall(args) -> None:
             )
             summary_rows.append(("Plugin", f"uninstalled (scope: {scope})"))
         except StepFailure as exc:
-            # Best-effort cleanup: a plugin-uninstall failure (whether from a
-            # forced --scope guess with nothing installed there, or a genuine
-            # CLI error on the auto-detected scope) shouldn't stop Desktop
-            # config removal or the credential prompt from running. Print
-            # immediately so the failure isn't lost if a later step also
-            # raises; re-raise once cleanup has run to preserve the exit code.
-            print(f"  Warning: failed to uninstall plugin (scope: {scope}): {exc}")
-            deferred_plugin_failure = exc
+            _warn(f"uninstalling plugin (scope: {scope})", exc)
             summary_rows.append(("Plugin", f"failed to uninstall (scope: {scope})"))
 
     if has_desktop_entry:
         print_step(f"Removing Desktop config entry at {desktop_path}")
-        del desktop_config["mcpServers"][MARKETPLACE_NAME]
-        desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
-        if sys.platform != "win32":
-            desktop_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        summary_rows.append(("Desktop config", "entry removed"))
+        try:
+            del desktop_config["mcpServers"][MARKETPLACE_NAME]
+            desktop_path.write_text(json.dumps(desktop_config, indent=2) + "\n")
+            if sys.platform != "win32":
+                desktop_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            summary_rows.append(("Desktop config", "entry removed"))
+        except OSError as exc:
+            _warn(f"removing Desktop config entry at {desktop_path}", exc)
+            summary_rows.append(("Desktop config", "failed to remove entry"))
 
     cred_paths = [USER_ENV_PATH]
     if scope in ("project", "local"):
@@ -497,9 +504,13 @@ def _run_uninstall(args) -> None:
         seen.add(cred_path)
         resp = _prompt(f"Delete credentials at {cred_path}?", default="n")
         if resp.lower() in ("y", "yes"):
-            cred_path.unlink()
-            print_step(f"Removed credentials at {cred_path}")
-            summary_rows.append(("Credentials", f"removed ({cred_path})"))
+            try:
+                cred_path.unlink()
+                print_step(f"Removed credentials at {cred_path}")
+                summary_rows.append(("Credentials", f"removed ({cred_path})"))
+            except OSError as exc:
+                _warn(f"removing credentials at {cred_path}", exc)
+                summary_rows.append(("Credentials", f"failed to remove ({cred_path})"))
         else:
             print_step(f"Kept credentials at {cred_path}")
             summary_rows.append(("Credentials", f"kept ({cred_path})"))
@@ -507,16 +518,20 @@ def _run_uninstall(args) -> None:
     resp = _prompt(f"Remove the '{MARKETPLACE_NAME}' marketplace entry too?", default="n")
     if resp.lower() in ("y", "yes"):
         print_step(f"Removing '{MARKETPLACE_NAME}' marketplace entry")
-        run_subprocess(
-            ["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME],
-            "Removing marketplace entry",
-            verbose=args.verbose,
-        )
-        summary_rows.append(("Marketplace entry", "removed"))
+        try:
+            run_subprocess(
+                ["claude", "plugin", "marketplace", "remove", MARKETPLACE_NAME],
+                "Removing marketplace entry",
+                verbose=args.verbose,
+            )
+            summary_rows.append(("Marketplace entry", "removed"))
+        except StepFailure as exc:
+            _warn("removing marketplace entry", exc)
+            summary_rows.append(("Marketplace entry", "failed to remove"))
     else:
         summary_rows.append(("Marketplace entry", "kept"))
 
     print_summary(summary_rows)
 
-    if deferred_plugin_failure is not None:
-        raise deferred_plugin_failure
+    if deferred_failures:
+        raise deferred_failures[0]
