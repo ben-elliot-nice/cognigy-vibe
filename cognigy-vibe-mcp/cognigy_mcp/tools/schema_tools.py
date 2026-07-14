@@ -183,22 +183,24 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _unexpected_error_response(exc)
             spec_cache.set("openapi", "spec", spec)
 
-        paths = spec.get("paths", {})
-        rtype = _normalise_rtype(m.resource_type)
-        path, exact = _find_candidate_path(paths, rtype, m.operation)
-        if path is None:
-            return _ok({
-                "error": f"No OpenAPI path found for resource_type={m.resource_type!r}",
-                "known_resource_types": _known_resource_types(paths),
-            })
-
-        method = _OPERATION_METHOD[m.operation]
-
         # Everything below reaches into the live, externally-controlled spec content
-        # (path-item keys, operation objects, request/response schema fragments) —
+        # (paths, path-item keys, operation objects, request/response schema fragments) —
         # any structural surprise (unexpected types, missing keys) must come back as
-        # a clean error envelope rather than an unhandled exception.
+        # a clean error envelope rather than an unhandled exception. This is why the
+        # try block starts here, before paths/rtype/path are even derived, rather than
+        # only around the later per-operation lookups.
         try:
+            paths = spec.get("paths", {})
+            rtype = _normalise_rtype(m.resource_type)
+            path, exact = _find_candidate_path(paths, rtype, m.operation)
+            if path is None:
+                return _ok({
+                    "error": f"No OpenAPI path found for resource_type={m.resource_type!r}",
+                    "known_resource_types": _known_resource_types(paths),
+                })
+
+            method = _OPERATION_METHOD[m.operation]
+
             available_methods = sorted(
                 k for k in paths[path].keys() if k in _OPERATION_METHOD.values()
             )
@@ -228,23 +230,27 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 result["raw_schema"] = _raw_schema_fragment(op, m.operation)
             else:
                 result["fields"] = _extract_fields(op, m.operation)
-                if m.operation == "get" and not result["fields"]:
-                    response_schema = _raw_schema_fragment(op, m.operation)
-                    if _is_composed_schema(response_schema):
+                if m.operation in ("create", "update", "get") and not result["fields"]:
+                    schema_fragment = _raw_schema_fragment(op, m.operation)
+                    if _is_composed_schema(schema_fragment):
+                        schema_kind = "request body" if m.operation in ("create", "update") else "response"
                         result["note"] = (
-                            "This resource's response schema uses $ref/oneOf/allOf/anyOf "
+                            f"This resource's {schema_kind} schema uses $ref/oneOf/allOf/anyOf "
                             "composition rather than a flat 'properties' object, so it "
                             "could not be flattened into a field list. Call again with "
                             "verbose=True to see the raw schema fragment."
                         )
         except Exception as exc:
+            # rtype/path/method may not have been assigned yet if the exception was
+            # raised while deriving them (e.g. a malformed spec['paths']) — fall back
+            # to None rather than risk a NameError inside the error handler itself.
             return _ok({
                 "error": "schema_parse_error",
                 "detail": str(exc),
-                "resource_type": rtype,
+                "resource_type": locals().get("rtype"),
                 "operation": m.operation,
-                "path": path,
-                "method": method,
+                "path": locals().get("path"),
+                "method": locals().get("method"),
             })
         return _ok(result)
 
