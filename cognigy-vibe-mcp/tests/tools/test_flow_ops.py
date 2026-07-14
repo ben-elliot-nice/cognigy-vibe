@@ -183,6 +183,23 @@ def test_cognigy_invoke_move_node(mock_client, state, cache):
     )
 
 
+def test_cognigy_invoke_move_node_plural_resource_type(mock_client, state, cache):
+    """resource_type='nodes' must route the same as 'node' — invoke should normalise like get/list/create/update/delete."""
+    mock_client.post.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_invoke"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "operation": "move",
+        "body": {"mode": "append", "target": "node-0"},
+        "flow_id": "flow-1",
+    })
+    mock_client.post.assert_called_once_with(
+        "/v2.0/flows/flow-1/chart/nodes/node-1/move",
+        {"mode": "append", "target": "node-0"},
+    )
+
+
 def test_get_flow_chart_hierarchy_uses_real_api_format(mock_client, state, cache):
     """_build_hierarchy must use rel['node'], rel['next'], rel['children'] — not nodeId/nextId/childIds."""
     mock_client.get.return_value = {
