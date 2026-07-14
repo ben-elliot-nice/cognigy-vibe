@@ -877,6 +877,216 @@ def test_cognigy_get_fields_wrong_type_returns_validation_error(mock_client, sta
     assert any(d["field"] == "fields" for d in data["details"])
 
 
+def test_cognigy_get_fields_all_missing_returns_error(mock_client, state, cache):
+    """Regression guard for #238: an entirely-wrong `fields` list must error, not
+    silently succeed with a near-empty object."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    assert data["requested_fields"] == ["nodes"]
+    assert "_id" in data["available_fields"]
+    assert "name" in data["available_fields"]
+
+
+def test_cognigy_get_fields_all_missing_excludes_blocked_fields_from_available(mock_client, state, cache):
+    """available_fields must reflect the stripped response, not raw internal fields —
+    __v shouldn't be advertised as a valid field to request."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "__v": 3}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    assert "__v" not in data["available_fields"]
+
+
+def test_cognigy_get_fields_only_blocked_field_returns_error_not_near_empty_success(mock_client, state, cache):
+    """Regression guard: requesting ONLY a blocked field (e.g. __v) must hit the same
+    error path as requesting a genuinely nonexistent field — not match on raw data,
+    then get silently emptied by strip_response into a near-empty success."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "__v": 3}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["__v"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    assert data["requested_fields"] == ["__v"]
+
+
+def test_cognigy_get_cache_hit_fields_all_missing_returns_error(mock_client, state, cache):
+    """The fields-all-missing error path must also apply on a cache hit, not just
+    the API-fetch branch — cache.get() populates `data` before the fields check runs."""
+    cache.set("flows", "flow-1", {"_id": "flow-1", "name": "Main"})
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_get_fields_partial_match_still_filters(mock_client, state, cache):
+    """At least one valid field must still filter normally, no error."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "description": "x"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["name", "nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["name"] == "Main"
+    assert "description" not in data
+
+
+def test_cognigy_list_fields_all_missing_returns_error(mock_client, state, cache):
+    """Regression guard for #238: same silent-filter bug in cognigy_list's fields param."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1"},
+        {"_id": "f2", "name": "Flow 2"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert data["requested_fields"] == ["nodes"]
+    assert "id" in data["available_fields"]
+    assert "name" in data["available_fields"]
+
+
+def test_cognigy_list_fields_partial_match_still_filters(mock_client, state, cache):
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["name", "nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"][0] == {"name": "Flow 1"}
+
+
+def test_cognigy_list_full_objects_fields_all_missing_returns_error(mock_client, state, cache):
+    """full_objects=True holds raw API items (keyed _id, not id) — the fields-all-missing
+    error path must operate on that raw shape, not the simplified {id, name} projection."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "createdAt": "2026-01-01"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert "_id" in data["available_fields"]
+    assert "createdAt" in data["available_fields"]
+
+
+def test_cognigy_list_full_objects_fields_all_missing_excludes_blocked_fields(mock_client, state, cache):
+    """available_fields for the full_objects list path must also reflect stripped
+    items — __v shouldn't be advertised as a valid field to request."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "__v": 2},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert "__v" not in data["available_fields"]
+
+
+def test_cognigy_list_full_objects_only_blocked_field_returns_error_not_near_empty_success(mock_client, state, cache):
+    """Regression guard: requesting ONLY a blocked field across full_objects items must
+    hit the error path, not silently produce a nonzero-count list of empty dicts."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "__v": 2},
+        {"_id": "f2", "name": "Flow 2", "__v": 3},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["__v"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert data["requested_fields"] == ["__v"]
+
+
+def test_cognigy_list_full_objects_fields_partial_match_still_filters(mock_client, state, cache):
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "createdAt": "2026-01-01"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["createdAt", "nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"][0] == {"createdAt": "2026-01-01"}
+
+
+def test_cognigy_list_fields_matches_at_least_one_item_not_all(mock_client, state, cache):
+    """available_fields is a union across items — a field present on only ONE of several
+    heterogeneous items must still count as matched, not require presence on every item."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "description": "has a description"},
+        {"_id": "f2", "name": "Flow 2"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["description"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"] == [{"description": "has a description"}, {}]
+
+
+def test_cognigy_list_fields_with_empty_items_does_not_error(mock_client, state, cache):
+    """An empty result list has nothing to validate `fields` against — must not error
+    just because there's nothing to match."""
+    mock_client.get.return_value = {"items": []}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"] == []
+    assert data["count"] == 0
+
+
 def test_cognigy_list_missing_required_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["cognigy_list"]({})

@@ -913,7 +913,7 @@ cognigy_create {
     config: {
       ttsVendor: "<from buildConfig.tts.vendor>",
       ttsModel: "<from buildConfig.tts.model>",
-      ttsVoice: "<from buildConfig.tts.voice_id>",
+      ttsVoice: "<from buildConfig.tts.voiceId>",
       ttsLanguage: "<from buildConfig.tts.language>",
       ttsLabel: "<from buildConfig.tts.label>",
       sttVendor: "<from buildConfig.stt.vendor>",
