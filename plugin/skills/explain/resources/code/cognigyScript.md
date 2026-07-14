@@ -49,6 +49,30 @@ CognigyScript interpolation in payloadJSON is UNCONFIRMED.
 Safe approach: use a Code node to build the payload object and store in context,
 then reference it from the httpRequest via the context variable.
 
+### Undefined values silently drop the object key, not just render empty
+When a CognigyScript expression inside an object-typed config field (e.g. a
+`sendMetadata` node's key/value map) resolves to `undefined`, Cognigy's
+interpolation engine OMITS that key from the serialized object entirely —
+it does not send the key with an empty string value.
+
+  // config: { "sendMetadata": { "account_type": "{{context.onboarding.accountType}}" } }
+  // If context.onboarding.accountType is undefined at send time:
+  //   WRONG assumption: { "account_type": "" }  ← key present, empty
+  //   ACTUAL behavior:   {}                      ← key is GONE
+
+This breaks any downstream consumer that pattern-matches on key presence
+(e.g. frontend field-matching expecting `account_type` to always exist).
+
+**Fix:** guard every value in an object-typed config field so it can never
+resolve to `undefined` — use `|| ''` or a ternary in the source context
+value, not in the interpolation expression itself:
+  // In the code node that sets context.onboarding.accountType:
+  context.onboarding.accountType = someValue || '';
+
+This is a general constraint on ALL object-typed config fields (not just
+`sendMetadata`) — see explain("node-config-update") for the related PATCH
+full-replace gotchas on the same fields.
+
 ### Common pattern: build in code, reference in node
   // Code node:
   context.smsPayload = {

@@ -26,6 +26,12 @@ This will GET current config, deep-merge your changes, then PATCH.
 - aiAgentJobTool: conditions array when updating toolId only
 - Any node: position.x/y when updating config without including position
 
+### Object-typed config fields: unguarded CognigyScript can drop keys entirely
+Any object-typed config field (e.g. `sendMetadata`) that interpolates a
+CognigyScript expression which can resolve to `undefined` will have that key
+OMITTED from the serialized payload, not rendered as an empty string — see
+explain("cognigyScript") for the full mechanism and the guard pattern.
+
 ### GoTo node: use referenceId (UUID), NOT _id (hex)
 GoTo nodes reference their target flow by UUID referenceId, not the hex _id.
   // flow._id = "64a3f1c2b9e7d05a8c4f2e91"    ← hex, DO NOT use
