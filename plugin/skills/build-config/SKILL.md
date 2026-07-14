@@ -77,12 +77,12 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 | Field | Consumed by | How |
 |---|---|---|
 | `llm.default` | S0.0 preflight | Shown in config summary; user may switch to another from `llm.options` |
-| `llm.options` | S1.1 Step 3 | `update_ai_agent.jobConfig.llmProviderReferenceId` — default selected, alternates offered |
+| `llm.options` | S1.1 Step 4 | `aiAgentJob` node `config.llmProviderReferenceId` — default selected, alternates offered (see `explain("agent-job-node")`) |
 | `llm.embedding` | S0.5 / S1.8 | Knowledge AI connector — gated, only wired if knowledge is enabled |
-| `llm.temperatureVoice` | S1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is voice/transactional |
-| `llm.temperatureChat` | S1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is primarily chat |
-| `llm.maxTokens` | S1.1 Step 3 | `update_ai_agent.jobConfig.maxTokens` |
-| `llm.toolChoice` | S1.2 | Node patch for `toolChoice` (not reachable via `update_ai_agent`) |
+| `llm.temperatureVoice` | S1.1 Step 4 | `aiAgentJob` node `config.temperature` — used when channel is voice/transactional |
+| `llm.temperatureChat` | S1.1 Step 4 | `aiAgentJob` node `config.temperature` — used when channel is primarily chat |
+| `llm.maxTokens` | S1.1 Step 4 | `aiAgentJob` node `config.maxTokens` |
+| `llm.toolChoice` | S1.1 Step 4 | `aiAgentJob` node `config.toolChoice` — set at creation; re-verified in S1.2 |
 | `locale` | S1.5(c) | Set Session Config `locale`; also endpoint locale binding |
 | `tts.*` | S1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
 | `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, language, connection label, hints, dynamicHints) |
