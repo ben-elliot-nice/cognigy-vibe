@@ -103,10 +103,9 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 
 ## Code Review
 
-- **`/review <N>` posts findings as a PR comment** — never just output to the terminal. Use `gh pr review <N> --comment -b "..."` after completing the review.
-- **Byline**: `/review` signs as `*— Claude Reviewer*`. The implementer loop (applying fixes) signs as `*— claude implementer*`.
-- Both bylines go at the bottom of the comment body.
-- **After implementer fixes**: check the implementer's follow-up comment, then post `LGTM — all findings addressed.\n\n*— Claude Reviewer*` if satisfied.
+- **PR review is automated via CI**, not a manual step. Commenting `@claude-review` on a PR triggers `.github/workflows/claude-code-review.yml`, which runs the official `pr-review-toolkit` plugin and posts findings as a PR comment.
+- **Re-review after fixes**: once a PR has had one `@claude-review` comment, every subsequent push auto re-triggers a review — no need to re-tag.
+- **Byline**: automated CI reviews sign as `*— Claude Reviewer*`. The implementer loop (applying fixes) signs as `*— claude implementer*`.
 
 ## OpenAPI Spec
 
