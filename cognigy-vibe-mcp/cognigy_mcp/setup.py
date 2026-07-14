@@ -203,10 +203,16 @@ def _parse_args() -> "argparse.Namespace":
         help="Report what update would do without changing anything.",
     )
 
-    sub.add_parser(
+    uninstall_p = sub.add_parser(
         "uninstall",
         help="Remove the plugin, Desktop config entry, and optionally credentials.",
         parents=[verbose_parent],
+    )
+    uninstall_p.add_argument(
+        "--scope",
+        choices=["user", "project", "local"],
+        default=None,
+        help="Override the auto-detected plugin scope to uninstall from.",
     )
 
     return parser.parse_args(argv)
@@ -441,7 +447,8 @@ def _run_uninstall(args) -> None:
             desktop_config = {}
             has_desktop_entry = False
 
-    has_plugin = state.plugin_scope is not None
+    scope = args.scope or state.plugin_scope
+    has_plugin = scope is not None
 
     if not has_plugin and not has_desktop_entry:
         print("cognigy-vibe is not installed. Nothing to do.")
@@ -450,13 +457,13 @@ def _run_uninstall(args) -> None:
     summary_rows: list[tuple[str, str]] = []
 
     if has_plugin:
-        print_step(f"Uninstalling cognigy-vibe plugin (scope: {state.plugin_scope})")
+        print_step(f"Uninstalling cognigy-vibe plugin (scope: {scope})")
         run_subprocess(
-            ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", state.plugin_scope],
+            ["claude", "plugin", "uninstall", PLUGIN_ID, "--scope", scope],
             "Uninstalling plugin",
             verbose=args.verbose,
         )
-        summary_rows.append(("Plugin", f"uninstalled (was scope: {state.plugin_scope})"))
+        summary_rows.append(("Plugin", f"uninstalled (was scope: {scope})"))
 
     if has_desktop_entry:
         print_step(f"Removing Desktop config entry at {desktop_path}")
@@ -467,7 +474,7 @@ def _run_uninstall(args) -> None:
         summary_rows.append(("Desktop config", "entry removed"))
 
     cred_paths = [USER_ENV_PATH]
-    if state.plugin_scope in ("project", "local"):
+    if scope in ("project", "local"):
         cred_paths.append(Path.cwd() / ".env")
 
     seen: set[Path] = set()

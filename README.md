@@ -34,7 +34,7 @@ After the first install, use `uvx cognigy-vibe-setup` directly for everything el
 | `uvx cognigy-vibe-setup install` | `--install-only`, `--client code\|desktop\|both`, `--scope user\|project\|local` | Fresh install — the wizard above (also the default when no subcommand is given) |
 | `uvx cognigy-vibe-setup status` | `--fix` | Report drift between the installed package, marketplace pin, plugin version, and Desktop config pin; `--fix` applies fixes without touching PyPI |
 | `uvx cognigy-vibe-setup update` | `--check` | Check PyPI for a newer version and upgrade if stale, then reconcile the same surfaces as `status --fix`; `--check` is a dry run |
-| `uvx cognigy-vibe-setup uninstall` | — | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials |
+| `uvx cognigy-vibe-setup uninstall` | `--scope user\|project\|local` | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials; `--scope` overrides the auto-detected plugin scope |
 
 Any subcommand also accepts `--verbose` (inline diagnostic output and a full traceback on failure) and `--help`.
 

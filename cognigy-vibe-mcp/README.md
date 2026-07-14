@@ -31,6 +31,7 @@ cognigy-vibe-setup uninstall       # reverse install: plugin, Desktop config ent
 | `--install-only` | `install` | Skip credential collection; install the plugin only. |
 | `--client code\|desktop\|both` | `install` | Which client(s) to configure (default: both if Desktop is detected, else code). |
 | `--scope user\|project\|local` | `install` | Plugin install scope for Claude Code (default: user). |
+| `--scope user\|project\|local` | `uninstall` | Override the auto-detected plugin scope to uninstall from (default: auto-detected via `claude plugin list`). |
 | `--verbose` | all subcommands | Stream subprocess output instead of hiding it behind a status line; show a full traceback instead of a short message on failure. |
 
 `uninstall` always prompts before deleting `~/.config/cognigy-vibe/.env` — credentials are the one step that is never non-interactive, regardless of flags.
