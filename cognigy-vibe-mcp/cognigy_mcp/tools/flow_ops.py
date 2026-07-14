@@ -81,19 +81,28 @@ class GetFlowChartArgs(BaseModel):
     )
 
 
+_DISCOVERY_POINTER = (
+    " For resource_types without an obvious body shape, call explain() for the "
+    "topic index before guessing — trial-and-error against live API errors is the "
+    "fallback of last resort, not the first move."
+)
+
 TOOLS: list[Tool] = [
     Tool(
         name="cognigy_get",
         description="GET any Cognigy resource by ID. Cache-first (5-min TTL). "
-                    "Response includes _source: 'cache' or 'api'.",
+                    "Response includes _source: 'cache' or 'api'." + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyGetArgs),
     ),
     Tool(
         name="cognigy_list",
         description="List Cognigy resources. Pass project_id for project-scoped resources, "
                     "agent_id for agent-scoped resources (e.g. listing jobs). "
-                    "resource_type accepts both singular ('flow') and plural ('flows'). "
-                    "Default: returns simplified {id, name} pairs. Use full_objects=true for complete objects.",
+                    "resource_type accepts both singular ('flow') and plural ('flows'), and also "
+                    "supports nested sub-resource paths, e.g. resource_type=\"knowledgestores/{id}/connectors\" "
+                    "lists a knowledge store's connectors. "
+                    "Default: returns simplified {id, name} pairs. Use full_objects=true for complete objects."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyListArgs),
     ),
     Tool(
@@ -106,26 +115,33 @@ TOOLS: list[Tool] = [
                     "target the branch marker _id, not the parent Once/IF node), "
                     "'insertAfter' or 'insertBefore' (may return 500 on AU1 — use append instead), "
                     "target (the _id of the reference node), "
-                    "and flowId (the flow _id).",
+                    "and flowId (the flow _id)."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyCreateArgs),
     ),
     Tool(
         name="cognigy_update",
         description="PATCH a Cognigy resource. WARNING: Cognigy PATCH is full-replace on 'config' — "
                     "set merge_config=true to deep-merge instead of overwriting. Always use merge_config=true "
-                    "for partial config updates.",
+                    "for partial config updates. "
+                    "NOTE: with return_full_object=false (default), the response reflects whatever the API "
+                    "actually returns — on some resource_types this can be a bare {} even on a successful write, "
+                    "not the documented minimal {_id, type, label}. If you need write confirmation, re-fetch via "
+                    "cognigy_get rather than relying on this response."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyUpdateArgs),
     ),
     Tool(
         name="cognigy_delete",
-        description="DELETE a Cognigy resource. For nodes, pass flow_id.",
+        description="DELETE a Cognigy resource. For nodes, pass flow_id." + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyDeleteArgs),
     ),
     Tool(
         name="cognigy_invoke",
         description="Run a named operation on a Cognigy resource. "
                     "Operations: node/move, flow/clone, aiagent/train, "
-                    "knowledgestore/run, sessions/inject-context, sessions/inject-state.",
+                    "knowledgestore/run, sessions/inject-context, sessions/inject-state."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyInvokeArgs),
     ),
     Tool(

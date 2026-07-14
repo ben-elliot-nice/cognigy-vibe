@@ -33,7 +33,7 @@ aiagent:
 code:
   code-node-patterns         api.* functions, execution model, runtime objects (input/context/profile/analyticsdata), utility functions (getVar/setVar/mergeVar), as const bug, httpRequest response shape and storage config
   cognigyScript              interpolation contexts, what works where
-  function-execution         async pattern, inject-back via sessions API
+  function-execution         async pattern, inject-back via sessions API, create-body-shape gap
   output-formats             api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
   profile-editing            Writing to the Cognigy contact profile — why direct mutation doesn't persist, api.updateProfile behaviour, and getProfileVar/setProfileVar/mergeProfileVar utility functions
   session-injection          context/state inject for in-session testing
@@ -46,12 +46,19 @@ nodes:
   node-wiring                chart structure, relations array, sequential vs child chains
 
 platform:
+  connections                create/update body shape for the connections resource_type, verified via provision_webrtc_endpoint
   endpoint-config            referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint, per-channel field differences
   extension-map              complete type → extension lookup table
+  extensions-resource        no verified create/update body shape yet — discovery recipe for resource_type=extensions (installed extension config, distinct from explain("extension-map")'s node-type lookup table)
+  flow-resource              no verified create/update body shape yet — discovery recipe for resource_type=flows (raw flow creation, distinct from flow/clone via cognigy_invoke)
   knowledge-store            chunking, connector run, source management
+  lexicons                   no verified create/update body shape yet — discovery recipe for resource_type=lexicons
   llm-resources              org-level vs project-level LLMs, assign_org_llm tool, discovery pattern, referenceId resolution, manage_packages fallback
+  locales                    no verified create/update body shape yet — discovery recipe for resource_type=locales
   mcp-comparison             when to use cognigy-vibe vs NiCE official MCP
   outbound-trigger           6-step CXone trigger, Accept-Encoding: identity requirement
+  playbooks                  no verified create/update body shape yet — discovery recipe for resource_type=playbooks
+  project-resource           no verified create/update body shape yet — discovery recipe for resource_type=project
   project-snapshots          create project snapshots for versioning (flow-level versioning does not exist in the API)
   say-node                   say node config schema: correct text field, required _cognigy/_data fields, generativeAI_customInputs
   session-workspace          session workspace directory model — cwd vs Demo Builds/, .env scope, sync_remote_state project binding

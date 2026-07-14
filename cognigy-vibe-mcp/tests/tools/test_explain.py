@@ -599,3 +599,94 @@ def test_voice_gateway_documents_vendor_enum_and_real_flat_shape(mock_client, st
 
     # Must document the real flat shape's vendor fields
     assert "ttsVendor" in text and "sttVendor" in text, "Must document the real flat ttsVendor/sttVendor keys"
+
+
+# ── Issue #207: node-positioning already documents mode/target semantics ────
+
+def test_node_positioning_documents_mode_target_semantics_for_code_nodes(mock_client, state, cache):
+    """Regression guard: node-positioning must keep documenting append/appendChild and that target is a node ID.
+
+    Confirmed already correct during #207 planning — this locks it in so it can't silently regress."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-positioning"})
+    text = result[0].text
+    assert '"append"' in text
+    assert '"appendChild"' in text
+    assert "Target = node you want to insert AFTER" in text or "target" in text.lower()
+
+
+# ── Issue #207: connections resource_type topic ─────────────────────────────
+
+def test_connections_topic_documents_create_body(mock_client, state, cache):
+    """connections topic must document a real, verified create body shape."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "connections"})
+    text = result[0].text
+    assert "Unknown topic" not in text, "connections must be a known topic"
+    assert '"extension"' in text, "Must document the extension field"
+    assert '"resourceLevel"' in text, "Must document the resourceLevel field"
+    assert "MicrosoftSpeechProvider" in text, "Must show a real, verified connection type example"
+
+
+# ── Issue #207: endpoint-config channel-type field divergence ───────────────
+
+def test_endpoint_config_documents_rest_channel_field_divergence(mock_client, state, cache):
+    """endpoint-config must document that 'rest' channel reverses the flowId/flowReferenceId convention."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "endpoint-config"})
+    text = result[0].text
+    assert "rest" in text.lower()
+    normalized = " ".join(text.split())
+    assert "Field 'flowReferenceId' is not allowed" in normalized, \
+        "Must document the exact API rejection message for the rest channel"
+    assert "voiceGateway2" in text
+
+
+# ── Issue #207: functions create-body-shape gap admission ───────────────────
+
+def test_function_execution_admits_create_body_gap(mock_client, state, cache):
+    """function-execution must admit no verified create-body shape exists and give a discovery recipe."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "function-execution"})
+    text = result[0].text
+    assert "Creating a Function" in text
+    assert "full_objects=true" in text, "Must give the cognigy_list discovery recipe"
+    assert "openapi.json" in text, "Must point to openapi.json as the manual fallback"
+
+
+# ── Issue #207: sendMetadata documentation ───────────────────────────────────
+
+def test_voice_gateway_documents_sendmetadata(mock_client, state, cache):
+    """voice-gateway must document the sendMetadata node: purpose, flat-only constraint, xApp alternative."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "voice-gateway"})
+    text = result[0].text
+    assert "sendMetadata" in text
+    assert "setHTMLAppState" in text, "Must cross-reference the xApp alternative it replaces for voice"
+    assert "flat" in text.lower(), "Must document the flat-object-only constraint"
+
+
+def test_xapp_delivery_cross_references_sendmetadata(mock_client, state, cache):
+    """xapp-delivery must point to sendMetadata as the VG-native alternative to setHTMLAppState."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-delivery"})
+    text = result[0].text
+    assert "sendMetadata" in text
+
+
+# ── Issue #207: stub topics for zero-coverage resource_types ────────────────
+
+_STUB_TOPICS = ["lexicons", "playbooks", "locales", "extensions-resource", "project-resource", "flow-resource"]
+
+
+def test_stub_topics_exist_and_admit_no_verified_shape(mock_client, state, cache):
+    """Each zero-coverage resource_type stub must exist, be non-empty, and give the discovery recipe."""
+    handlers = make_handlers(mock_client, state, cache)
+    for topic in _STUB_TOPICS:
+        result = handlers["explain"]({"topic": topic})
+        text = result[0].text
+        assert "Unknown topic" not in text, f"{topic} must be a known topic"
+        assert len(text) > 100, f"{topic} stub must have real recipe content, not a one-liner"
+        assert "full_objects=true" in text, f"{topic} must give the cognigy_list discovery recipe"
+        assert "openapi.json" in text, f"{topic} must point to openapi.json as the manual fallback"
+        assert "no verified" in text.lower(), f"{topic} must honestly admit no verified body shape exists"

@@ -1,0 +1,24 @@
+---
+topic: playbooks
+description: no verified create/update body shape yet — discovery recipe for resource_type=playbooks
+group: platform
+---
+
+## playbooks — No Verified Body Shape Yet
+
+No confirmed `cognigy_create`/`cognigy_update` body shape exists for
+`resource_type="playbooks"` in this codebase — no live-verified example and no
+working code reference to draw from. Do not guess field names.
+
+### Discovery recipe
+1. If a playbook already exists in the target project, read its real shape:
+   `cognigy_list(resource_type="playbooks", project_id="<projectId>", full_objects=true)`
+2. Fall back to the OpenAPI spec (per this repo's CLAUDE.md, `./openapi.json`
+   or fetched per-environment with a session cookie) as the authoritative
+   schema reference — it is not wired into any MCP tool, so this is a manual
+   step outside the current session.
+
+### Once you confirm a working shape
+File it back as an amendment to this topic (or a dedicated one) so the next
+session doesn't repeat this discovery from scratch — see this repo's CLAUDE.md
+documentation-workflow rule.
