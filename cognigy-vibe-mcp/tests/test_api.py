@@ -373,6 +373,19 @@ def test_post_multipart_success(client):
     assert result["status"] == "queued"
 
 
+def test_post_multipart_success_with_no_data(client):
+    """files-only upload (no tags/extra form fields) — data defaults to None."""
+    with respx.mock:
+        respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(
+            return_value=httpx.Response(202, json={"_id": "task-none", "status": "queued"})
+        )
+        result = client.post_multipart(
+            "/v2.0/knowledgestores/ks-1/sources/upload",
+            files={"file": ("doc.txt", b"hello world", "text/plain")},
+        )
+    assert result["_id"] == "task-none"
+
+
 def test_post_multipart_sends_correct_content_type_and_fields(client):
     with respx.mock:
         route = respx.post(f"{BASE}/v2.0/knowledgestores/ks-1/sources/upload").mock(

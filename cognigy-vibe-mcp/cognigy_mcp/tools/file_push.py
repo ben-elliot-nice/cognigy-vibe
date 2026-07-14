@@ -381,8 +381,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if m.tags:
             if any("," in tag for tag in m.tags):
                 return _ok({"error": "Tags must not contain commas (the API joins tags with a comma delimiter)"})
-            if any(not tag for tag in m.tags):
-                return _ok({"error": "Tags must not be empty strings"})
+            if any(not tag.strip() for tag in m.tags):
+                return _ok({"error": "Tags must not be empty or whitespace-only strings"})
 
         try:
             data = path.read_bytes()

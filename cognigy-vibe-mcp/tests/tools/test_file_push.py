@@ -1043,6 +1043,36 @@ def test_push_knowledge_source_file_empty_string_tag_rejected(mock_client, state
     mock_client.post_multipart.assert_not_called()
 
 
+def test_push_knowledge_source_file_whitespace_only_tag_rejected(mock_client, state, cache, tmp_path):
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+        "tags": ["   "],
+    })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    mock_client.post_multipart.assert_not_called()
+
+
+def test_push_knowledge_source_file_comma_checked_before_empty(mock_client, state, cache, tmp_path):
+    """Locks in validation order: a comma-containing tag is rejected for the comma
+    reason even when another tag in the same list is also empty."""
+    doc = tmp_path / "policy.txt"
+    doc.write_text("content")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["push_knowledge_source_file"]({
+        "file_path": str(doc),
+        "knowledge_store_id": "ks-1",
+        "tags": ["a,b", ""],
+    })
+    data = json.loads(result[0].text)
+    assert "comma" in data["error"]
+    mock_client.post_multipart.assert_not_called()
+
+
 def test_push_knowledge_source_file_missing_knowledge_store_id_returns_validation_error(mock_client, state, cache, tmp_path):
     doc = tmp_path / "policy.txt"
     doc.write_text("content")
