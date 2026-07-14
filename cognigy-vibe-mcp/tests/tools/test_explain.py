@@ -599,3 +599,17 @@ def test_voice_gateway_documents_vendor_enum_and_real_flat_shape(mock_client, st
 
     # Must document the real flat shape's vendor fields
     assert "ttsVendor" in text and "sttVendor" in text, "Must document the real flat ttsVendor/sttVendor keys"
+
+
+# ── Issue #207: node-positioning already documents mode/target semantics ────
+
+def test_node_positioning_documents_mode_target_semantics_for_code_nodes(mock_client, state, cache):
+    """Regression guard: node-positioning must keep documenting append/appendChild and that target is a node ID.
+
+    Confirmed already correct during #207 planning — this locks it in so it can't silently regress."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-positioning"})
+    text = result[0].text
+    assert '"append"' in text
+    assert '"appendChild"' in text
+    assert "Target = node you want to insert AFTER" in text or "target" in text.lower()

@@ -651,6 +651,41 @@ def test_cognigy_create_description_documents_branch_marker_pattern():
         "cognigy_create description must mention 'branch marker' pattern for Once/IF branch insertion"
 
 
+# ── Issue #207: discovery pointer + nested-path + return-shape doc fixes ────
+
+def test_all_primitive_descriptions_point_to_explain():
+    """Every generic primitive must tell the LLM to call explain() before guessing a body shape."""
+    for name in ("cognigy_get", "cognigy_list", "cognigy_create", "cognigy_update", "cognigy_delete", "cognigy_invoke"):
+        tool = next(t for t in TOOLS if t.name == name)
+        assert "explain()" in tool.description, \
+            f"{name} description must point to explain() as the discovery mechanism"
+
+
+def test_cognigy_list_documents_nested_subresource_paths():
+    """cognigy_list description must document nested resource_type paths like 'knowledgestores/{id}/connectors'."""
+    tool = next(t for t in TOOLS if t.name == "cognigy_list")
+    assert "knowledgestores/{id}/connectors" in tool.description or "nested" in tool.description.lower(), \
+        "cognigy_list must document that nested sub-resource resource_type paths are supported"
+
+
+def test_cognigy_update_documents_variable_return_shape():
+    """cognigy_update description must warn that the API can return {} on success even with return_full_object=false."""
+    tool = next(t for t in TOOLS if t.name == "cognigy_update")
+    assert "{}" in tool.description, \
+        "cognigy_update must document that the API may return an empty object on some resource_types"
+    assert "cognigy_get" in tool.description, \
+        "cognigy_update must recommend re-fetching via cognigy_get to confirm a write"
+
+
+def test_push_code_node_field_descriptions_reference_node_positioning():
+    """push_code_node's mode/target Field descriptions must point to node-positioning (regression guard)."""
+    from cognigy_mcp.tools.file_push import TOOLS as FILE_PUSH_TOOLS
+    tool = next(t for t in FILE_PUSH_TOOLS if t.name == "push_code_node")
+    props = tool.inputSchema["properties"]
+    assert "node-positioning" in props["mode"]["description"]
+    assert "node-positioning" in props["target"]["description"]
+
+
 def test_cognigy_create_aiagentjobtool_blocked(mock_client, state, cache):
     """cognigy_create must redirect aiAgentJobTool to push_agent_tool."""
     handlers = make_handlers(mock_client, state, cache)

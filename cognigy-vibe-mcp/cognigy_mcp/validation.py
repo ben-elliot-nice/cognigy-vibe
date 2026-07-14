@@ -47,5 +47,13 @@ def _normalise_nullable(schema: dict) -> None:
         ):
             non_null = [x for x in any_of if x != {"type": "null"}]
             if len(non_null) == 1:
+                # Preserve description and title before clearing
+                description = prop.get("description")
+                title = prop.get("title")
                 prop.clear()
                 prop.update(non_null[0])
+                # Restore description and title if they existed
+                if description is not None:
+                    prop["description"] = description
+                if title is not None:
+                    prop["title"] = title

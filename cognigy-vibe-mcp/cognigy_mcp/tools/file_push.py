@@ -26,7 +26,7 @@ class PushCodeNodeArgs(BaseModel):
     )
     target: str | None = Field(
         None,
-        description="Required when creating: ID of the reference node for positioning",
+        description="Required when creating: ID of the reference node for positioning (see node-positioning)",
     )
     label: str | None = Field(None, description="Node label when creating (default: 'Code')")
 
