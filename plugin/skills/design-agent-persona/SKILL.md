@@ -92,4 +92,4 @@ Generate `{CustomerName}-agent-persona.md`. If an `output_dir` argument was supp
 - For xApp, bidirectional webchat, and handover context → `cognigy-vibe:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy-vibe:design-agent-contracts`
 - For the full design workflow in one go → `cognigy-vibe:design-agent`
-- To build after designing → use `cognigy-vibe:add-aiagent-job` (creates nodes via MCP tools)
+- To build after designing → see `explain("agent-job-node")` for the aiAgentJob node creation sequence
