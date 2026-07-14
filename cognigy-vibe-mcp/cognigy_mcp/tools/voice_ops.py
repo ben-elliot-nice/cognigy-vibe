@@ -63,9 +63,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             "fields": {"apiKey": effective_key, "region": m.region},
         }, retry=False)
         connection_id = conn_result["_id"]
-        connection_reference_id = conn_result["referenceId"]
 
+        endpoint_id = None
         try:
+            connection_reference_id = conn_result["referenceId"]
             client.patch(f"/v2.0/projects/{m.project_id}/settings", {
                 "audioPreviewSettings": {
                     "provider": "microsoft",
@@ -75,6 +76,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
             locales = client.get("/v2.0/locales", projectId=m.project_id)
             locale_items = locales.get("items", [])
+            if not locale_items:
+                raise ValueError(f"Project {m.project_id} has no locales configured")
             locale = next((loc for loc in locale_items if loc.get("primary")), locale_items[0])
             locale_reference_id = locale["referenceId"]
 
@@ -101,6 +104,11 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "webrtcWidgetConfig": _WEBRTC_WIDGET_CONFIG,
             })
         except Exception:
+            if endpoint_id:
+                try:
+                    client.delete(f"/v2.0/endpoints/{endpoint_id}")
+                except Exception:
+                    pass
             try:
                 client.delete(f"/v2.0/connections/{connection_id}")
             except Exception:
