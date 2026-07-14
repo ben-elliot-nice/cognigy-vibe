@@ -814,6 +814,7 @@ def test_push_knowledge_source_file_success(mock_client, state, cache, tmp_path)
     assert files["file"][1] == b"The battery trade-in policy allows..."
     assert files["file"][2] == "text/plain"
     assert "data" not in call[1] or not call[1]["data"]
+    assert "retry" not in call[1], "must rely on post_multipart's default retry=False, not pass retry=True"
 
 
 def test_push_knowledge_source_file_with_tags(mock_client, state, cache, tmp_path):
