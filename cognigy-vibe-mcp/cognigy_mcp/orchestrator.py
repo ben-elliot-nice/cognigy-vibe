@@ -290,21 +290,25 @@ class _Orchestrator:
                     and isinstance(msg, dict)
                     and msg.get("method") == "tools/call"
                 ):
-                    project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", "."))
-                    resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
-                    if not missing_env_keys(resolution):
-                        _log("tools/call in degraded mode: merged env now complete, restarting")
-                        self._pending_call = raw_line
-                        self._do_restart()
-                    else:
-                        _log(f"tools/call in degraded mode: still missing {missing_env_keys(resolution)}")
-                        resp = self._guidance_response(msg.get("id"), project_root)
-                        with self._write_lock:
-                            sys.stdout.buffer.write(resp)
-                            sys.stdout.buffer.flush()
+                    self._handle_degraded_tool_call(msg, raw_line)
                     continue
 
                 self._write_to_child(raw_line, msg)
+
+    def _handle_degraded_tool_call(self, msg: dict, raw_line: bytes) -> None:
+        project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", "."))
+        resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
+        missing = missing_env_keys(resolution)
+        if not missing:
+            _log("tools/call in degraded mode: merged env now complete, restarting")
+            self._pending_call = raw_line
+            self._do_restart()
+        else:
+            _log(f"tools/call in degraded mode: still missing {missing}")
+            resp = self._guidance_response(msg.get("id"), project_root)
+            with self._write_lock:
+                sys.stdout.buffer.write(resp)
+                sys.stdout.buffer.flush()
 
 
 def main() -> None:

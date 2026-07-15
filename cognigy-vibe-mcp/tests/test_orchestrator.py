@@ -474,7 +474,6 @@ def test_degraded_interceptor_restarts_when_user_global_env_fixes_it(tmp_path, m
     user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\nCOGNIGY_API_KEY=userkey\n")
 
     import cognigy_mcp.orchestrator as orch
-    from cognigy_mcp.discovery import resolve_env_layers, missing_env_keys
     monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
     monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
@@ -487,13 +486,11 @@ def test_degraded_interceptor_restarts_when_user_global_env_fixes_it(tmp_path, m
     msg = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}
     raw = (json.dumps(msg) + "\n").encode()
 
-    # Simulate the relevant slice of run()'s message loop directly — this locks in
-    # the intended restart condition (imported straight from discovery.py, not via
-    # orch's namespace, since orch is only wired to these helpers in Step 3 below).
+    # PR #266 CI review finding: drive the real code path (_handle_degraded_tool_call,
+    # extracted from run()'s tools/call branch) instead of reimplementing its logic
+    # inline — a bug in the real method would now actually fail this test.
     o._pending_call = None
-    resolution = resolve_env_layers(project_dir, Path.home(), orch.USER_ENV_PATH)
-    if not missing_env_keys(resolution):
-        o._pending_call = raw
-        o._do_restart()
+    o._handle_degraded_tool_call(msg, raw)
 
     assert restarted["called"] is True
+    assert o._pending_call == raw

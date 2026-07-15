@@ -72,6 +72,26 @@ class ConfigResolution:
     user_config_path: "Path | None" = None
 
 
+def _find_nearest_valid_ancestor(
+    filename: str, start: Path, stop: Path, loader: "Callable[[Path], dict | None]"
+) -> "tuple[Path | None, dict | None]":
+    """Like find_nearest_ancestor, but a candidate the loader rejects (returns falsy
+    for — e.g. malformed JSON) doesn't stop the walk; climbing continues toward stop
+    looking for a valid ancestor, matching the pre-#255 behavior of the original
+    server.py loop."""
+    current = start.resolve()
+    stop = stop.resolve()
+    while True:
+        candidate = current / filename
+        if candidate.exists():
+            data = loader(candidate)
+            if data:
+                return candidate, data
+        if current == stop or current == current.parent:
+            return None, None
+        current = current.parent
+
+
 def resolve_config_layers(
     filename: str,
     project_root: Path,
@@ -79,8 +99,10 @@ def resolve_config_layers(
     user_config_path: Path,
     loader: "Callable[[Path], dict | None]",
 ) -> ConfigResolution:
-    """Merge project-nearest-ancestor config with user-global config. Shallow, project wins per top-level key."""
-    project_config_path = find_nearest_ancestor(filename, project_root, _ancestor_boundary(project_root, home))
+    """Merge project-nearest-valid-ancestor config with user-global config. Shallow, project wins per top-level key."""
+    project_config_path, project_data = _find_nearest_valid_ancestor(
+        filename, project_root, _ancestor_boundary(project_root, home), loader
+    )
     values: dict = {}
     sources: dict[str, Path] = {}
 
@@ -91,12 +113,10 @@ def resolve_config_layers(
                 values[key] = val
                 sources[key] = user_config_path
 
-    if project_config_path is not None:
-        data = loader(project_config_path)
-        if data:
-            for key, val in data.items():
-                values[key] = val
-                sources[key] = project_config_path
+    if project_data:
+        for key, val in project_data.items():
+            values[key] = val
+            sources[key] = project_config_path
 
     return ConfigResolution(
         values=values,
@@ -124,7 +144,7 @@ def _layer_line(label: str, path: Path, resolution: EnvResolution) -> str:
 
 def build_env_guidance(resolution: EnvResolution, project_root: Path) -> str:
     missing = missing_env_keys(resolution)
-    missing_str = ", ".join(missing)
+    missing_str = ", ".join(missing) if missing else "(nothing — this guidance should not be shown when fully configured)"
     project_path = resolution.project_env_path or (project_root / ".env")
 
     lines = [

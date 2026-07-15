@@ -192,6 +192,33 @@ def test_resolve_config_layers_loader_returning_none_is_skipped(tmp_path):
     assert result.sources["region"] == user_config
 
 
+def test_resolve_config_layers_skips_malformed_ancestor_to_find_valid_grandparent(tmp_path):
+    """PR #266 CI review finding: the old server.py _find_config_file() loop kept
+    climbing past a malformed nearest-ancestor config to find a valid one further up.
+    resolve_config_layers must preserve that — not silently treat a malformed nearest
+    file as "no project config" while a valid ancestor config sits one level up."""
+    grandparent = tmp_path / "grandparent"
+    grandparent.mkdir()
+    (grandparent / "config.json").write_text(json.dumps({"region": "valid-grandparent"}))
+    project_dir = grandparent / "project"
+    project_dir.mkdir()
+    (project_dir / "config.json").write_text("not valid json")
+    user_config = tmp_path / "user" / "config.json"
+
+    def _loader_that_rejects_malformed(path):
+        try:
+            return json.loads(path.read_text())
+        except json.JSONDecodeError:
+            return None
+
+    result = resolve_config_layers(
+        "config.json", project_dir, tmp_path, user_config, _loader_that_rejects_malformed
+    )
+
+    assert result.values == {"region": "valid-grandparent"}
+    assert result.project_config_path == grandparent / "config.json"
+
+
 def test_resolve_config_layers_neither_exists(tmp_path):
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -259,3 +286,20 @@ def test_build_env_guidance_points_to_candidate_path_when_project_env_absent(tmp
 
     # No project .env exists yet — guidance must still show where one would be created
     assert str(project_dir / ".env") in text
+
+
+def test_build_env_guidance_no_trailing_blank_when_nothing_missing(tmp_path):
+    """PR #266 CI review suggestion: build_env_guidance shouldn't render a bare
+    'Still missing: ' with nothing after the colon if ever called with a fully
+    resolved EnvResolution (currently unreachable via the real call sites, but the
+    function should degrade sensibly rather than emit a blank)."""
+    project_dir = tmp_path / "project"
+    user_env = tmp_path / "user" / ".env"
+    resolution = EnvResolution(
+        values={"COGNIGY_BASE_URL": "https://x.example.com", "COGNIGY_API_KEY": "key"},
+        user_env_path=user_env,
+    )
+
+    text = build_env_guidance(resolution, project_dir)
+
+    assert "Still missing: \n" not in text
