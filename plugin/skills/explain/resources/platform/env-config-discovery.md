@@ -1,7 +1,6 @@
 ---
 topic: env-config-discovery
 description: how .env credentials and default-demo-config.json are discovered and merged across project and user-global scope
-group: platform
 ---
 
 ## env-config-discovery — .env and config.json discovery/merge precedence
