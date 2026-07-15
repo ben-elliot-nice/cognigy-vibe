@@ -182,3 +182,61 @@ def test_resolve_config_layers_neither_exists(tmp_path):
 
     assert result.values == {}
     assert result.project_config_path is None
+
+
+from cognigy_mcp.discovery import missing_env_keys, build_env_guidance, EnvResolution
+
+
+def test_missing_env_keys_reports_only_absent_keys():
+    resolution = EnvResolution(values={"COGNIGY_BASE_URL": "https://x.example.com"})
+    assert missing_env_keys(resolution) == ["COGNIGY_API_KEY"]
+
+
+def test_missing_env_keys_empty_when_all_present():
+    resolution = EnvResolution(values={
+        "COGNIGY_BASE_URL": "https://x.example.com",
+        "COGNIGY_API_KEY": "key",
+    })
+    assert missing_env_keys(resolution) == []
+
+
+def test_build_env_guidance_lists_missing_key_and_both_paths(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    project_env = project_dir / ".env"
+    project_env.write_text("COGNIGY_PROJECT_ID=proj-123\n")
+    user_env = tmp_path / "user" / ".env"  # not found
+
+    resolution = EnvResolution(
+        values={"COGNIGY_PROJECT_ID": "proj-123"},
+        sources={"COGNIGY_PROJECT_ID": project_env},
+        project_env_path=project_env,
+        user_env_path=user_env,
+    )
+
+    text = build_env_guidance(resolution, project_dir)
+
+    assert "COGNIGY_API_KEY" in text
+    assert "COGNIGY_BASE_URL" in text
+    assert str(project_env) in text
+    assert str(user_env) in text
+    assert "found" in text  # project file's found-state is shown
+    assert "not found" in text  # user file's not-found-state is shown
+
+
+def test_build_env_guidance_points_to_candidate_path_when_project_env_absent(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    user_env = tmp_path / "user" / ".env"
+
+    resolution = EnvResolution(
+        values={},
+        sources={},
+        project_env_path=None,
+        user_env_path=user_env,
+    )
+
+    text = build_env_guidance(resolution, project_dir)
+
+    # No project .env exists yet — guidance must still show where one would be created
+    assert str(project_dir / ".env") in text

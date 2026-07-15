@@ -95,3 +95,46 @@ def resolve_config_layers(
         project_config_path=project_config_path,
         user_config_path=user_config_path,
     )
+
+
+REQUIRED_ENV_KEYS: tuple[str, ...] = ("COGNIGY_BASE_URL", "COGNIGY_API_KEY")
+
+
+def missing_env_keys(resolution: EnvResolution) -> list[str]:
+    return [key for key in REQUIRED_ENV_KEYS if not resolution.values.get(key)]
+
+
+def _layer_line(label: str, path: Path, resolution: EnvResolution) -> str:
+    keys_from_here = sorted(k for k, src in resolution.sources.items() if src == path)
+    if path.exists():
+        detail = f"(found — sets: {', '.join(keys_from_here)})" if keys_from_here else "(found — sets nothing usable)"
+    else:
+        detail = "(not found)"
+    return f"  {label}. {path}  {detail}"
+
+
+def build_env_guidance(resolution: EnvResolution, project_root: Path) -> str:
+    missing = missing_env_keys(resolution)
+    missing_str = ", ".join(missing)
+    project_path = resolution.project_env_path or (project_root / ".env")
+
+    lines = [
+        "cognigy-vibe-mcp is not configured.",
+        "",
+        f"Still missing: {missing_str}",
+        "",
+        "Checked (nearest wins):",
+        _layer_line("1", project_path, resolution),
+        _layer_line("2", resolution.user_env_path, resolution),
+        "",
+        f"Add {missing_str} to either file (#1 takes precedence if both set it).",
+        "",
+        "COGNIGY_BASE_URL is the API endpoint for your deployment — not the UI URL.",
+        "  CXone: https://cognigy-api-au1.nicecxone.com  (note: cognigy-api-*, not cognigy-*)",
+        "  Trial: https://api-trial.cognigy.ai  (note: api-trial.*, not trial.*)",
+        "",
+        "Get your API key in Cognigy: My Profile → API Keys → +",
+        "",
+        "Once saved, retry this tool call — credentials will load automatically.",
+    ]
+    return "\n".join(lines)
