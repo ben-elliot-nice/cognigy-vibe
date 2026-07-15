@@ -185,8 +185,8 @@ def make_handlers(
         ext_map: dict[str, str] = {}
         try:
             exts_resp = client.get("/v2.0/extensions", projectId=project_id, limit=100)
-            for ext_summary in exts_resp.get("_embedded", {}).get("extensions", []):
-                ext_id = ext_summary["_links"]["self"]["href"].split("/")[-1]
+            for ext_summary in exts_resp.get("items", []):
+                ext_id = ext_summary["_id"]
                 ext_name = ext_summary["name"]
                 try:
                     ext_detail = client.get(f"/v2.0/extensions/{ext_id}")

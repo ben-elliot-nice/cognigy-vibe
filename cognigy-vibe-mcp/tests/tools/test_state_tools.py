@@ -38,7 +38,7 @@ def test_sync_remote_state_calls_api(mock_client, state, cache):
     project_id = state.project_id
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                     # GET /v2.0/flows?projectId=...
-        {"_embedded": {"extensions": []}},                                                        # GET /v2.0/extensions?projectId=...
+        {"items": []},                                                        # GET /v2.0/extensions?projectId=...
         {"nodes": []},                                                                            # chart (tool discovery)
         {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                     # chart/nodes/aiagents
         {"_id": "agent-1", "name": "My Agent", "speakingStyle": "formal"},                       # GET /v2.0/aiagents/agent-1
@@ -76,7 +76,7 @@ def test_sync_remote_state_caches_canonical_aiagent_resource(mock_client, state,
     }
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
-        {"_embedded": {"extensions": []}},                      # extensions
+        {"items": []},                      # extensions
         {"nodes": []},                                          # chart (tool discovery)
         {"items": [chart_node_data]},                           # chart/nodes/aiagents
         canonical_resource,                                     # /v2.0/aiagents/agent-1
@@ -155,7 +155,7 @@ def test_sync_remote_state_binds_project_in_session(mock_client, cache, tmp_path
 
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
-        {"_embedded": {"extensions": []}},                      # extensions (empty)
+        {"items": []},                      # extensions (empty)
         {"nodes": []},                                          # chart (tool discovery)
         {"items": []},                                          # chart/nodes/aiagents
         {"items": []},                                          # endpoints
@@ -174,7 +174,7 @@ def test_sync_stores_endpoint_token_from_URLToken_field(mock_client, state, cach
     project_id = state.project_id
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},
-        {"_embedded": {"extensions": []}},
+        {"items": []},
         {"nodes": []},
         {"items": []},
         {"items": [{"_id": "ep-1", "name": "REST Endpoint", "URLToken": "real-token-abc", "flowId": "flow-ref-1"}]},
@@ -229,13 +229,18 @@ def test_get_build_state_filtered_includes_config_fields(mock_client, state, cac
 
 
 def test_sync_remote_state_builds_extension_map(mock_client, state, cache, monkeypatch):
-    """sync_remote_state must fetch installed extensions and store type→name index in state."""
+    """sync_remote_state must fetch installed extensions and store type→name index in state.
+
+    Uses the real flat {"items": [...]} shape returned by /v2.0/extensions — confirmed against
+    both the live OpenAPI spec and a real AU1 call (issue #263). Each item's extension ID is
+    directly on `_id`, not nested under `_links.self.href` as an earlier stale HAL assumption had it.
+    """
     monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
     mock_client.get.side_effect = [
         {"items": []},                                                   # GET /v2.0/flows
-        {"_embedded": {"extensions": [                                   # GET /v2.0/extensions
-            {"name": "my-ext", "_links": {"self": {"href": "https://api/v2.0/extensions/ext-1"}}}
-        ]}},
+        {"items": [                                                      # GET /v2.0/extensions
+            {"_id": "ext-1", "name": "my-ext"}
+        ], "total": 1, "previousCursor": None, "nextCursor": None},
         {"_id": "ext-1", "name": "my-ext",                              # GET /v2.0/extensions/ext-1
          "nodes": [{"type": "myNode"}, {"type": "anotherNode"}]},
         {"items": []},                                                   # GET /v2.0/endpoints
