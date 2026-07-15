@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 from cognigy_mcp.config import CONFIG_BASE, USER_ENV_PATH
+from cognigy_mcp.discovery import resolve_env_layers
 from cognigy_mcp.migrate import safe_move
 
 def _migrate_flat_logs(config_base: Path, log_dir: Path) -> None:
@@ -57,34 +58,6 @@ _ENV_KEYS = frozenset([
     "COGNIGY_API_KEY",
     "COGNIGY_PROJECT_ID",
 ])
-
-
-def _find_env_file(start: Path, stop: Path) -> "Path | None":
-    """Walk up from start toward stop looking for .env. Stop is the boundary (exclusive above)."""
-    current = start.resolve()
-    stop = stop.resolve()
-    while True:
-        candidate = current / ".env"
-        if candidate.exists():
-            return candidate
-        if current == stop or current == current.parent:
-            return None
-        current = current.parent
-
-
-def _resolve_env_file(start: Path, stop: Path) -> "Path | None":
-    """Walk up from start toward stop, then check user-scope fallback."""
-    env_file = _find_env_file(start, stop)
-    if env_file is None:
-        if USER_ENV_PATH.exists():
-            _log(f"_resolve_env_file: no project .env found; using user-scope fallback {USER_ENV_PATH}")
-            return USER_ENV_PATH
-    elif env_file != USER_ENV_PATH and USER_ENV_PATH.exists():
-        _log(
-            f"_resolve_env_file: using {env_file}; "
-            f"user-scope {USER_ENV_PATH} exists but is shadowed by the walk-up result"
-        )
-    return env_file
 
 
 def _detect_mode() -> str:
@@ -350,13 +323,17 @@ def main() -> None:
     truststore.inject_into_ssl()
     home = Path.home()
     cwd = Path.cwd()
-    env_file = _resolve_env_file(cwd, home)
-    project_root = cwd if (env_file is None or env_file == USER_ENV_PATH) else env_file.parent
+    resolution = resolve_env_layers(cwd, home, USER_ENV_PATH)
+    project_root = cwd if resolution.project_env_path is None else resolution.project_env_path.parent
     os.environ.setdefault("COGNIGY_PROJECT_ROOT", str(project_root))
-    _log(f"main: start cwd={cwd} project_root={project_root} env_found={env_file is not None}")
-    if env_file:
-        load_dotenv(dotenv_path=env_file)
-    _log(f"main: after load_dotenv mode={_detect_mode()}")
+    _log(
+        f"main: start cwd={cwd} project_root={project_root} "
+        f"project_env_found={resolution.project_env_path is not None} "
+        f"user_env_found={resolution.user_env_path.exists()}"
+    )
+    for key, val in resolution.values.items():
+        os.environ.setdefault(key, val)
+    _log(f"main: after merge mode={_detect_mode()}")
     try:
         _Orchestrator().run()
     except KeyboardInterrupt:
