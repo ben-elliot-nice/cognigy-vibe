@@ -105,3 +105,80 @@ def test_resolve_env_layers_neither_exists(tmp_path):
     assert result.sources == {}
     assert result.project_env_path is None
     assert result.user_env_path == user_env
+
+
+import json
+from cognigy_mcp.discovery import resolve_config_layers
+
+
+def _json_loader(path):
+    return json.loads(path.read_text())
+
+
+def test_resolve_config_layers_project_only(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / "config.json").write_text(json.dumps({"region": "au1"}))
+    user_config = tmp_path / "user" / "config.json"
+
+    result = resolve_config_layers("config.json", project_dir, tmp_path, user_config, _json_loader)
+
+    assert result.values == {"region": "au1"}
+    assert result.sources["region"] == project_dir / "config.json"
+    assert result.project_config_path == project_dir / "config.json"
+
+
+def test_resolve_config_layers_shallow_merge_nearest_wins(tmp_path):
+    """Nested objects are NOT deep-merged — nearest file's top-level key wins wholesale."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / "config.json").write_text(json.dumps({"connection": {"region": "na1"}}))
+    user_config = tmp_path / "user" / "config.json"
+    user_config.parent.mkdir()
+    user_config.write_text(json.dumps({
+        "connection": {"region": "au1", "timeout": 30},
+        "logging": {"level": "debug"},
+    }))
+
+    result = resolve_config_layers("config.json", project_dir, tmp_path, user_config, _json_loader)
+
+    # project's "connection" wins wholesale — user's "timeout" field is NOT merged in
+    assert result.values == {
+        "connection": {"region": "na1"},
+        "logging": {"level": "debug"},
+    }
+    assert result.sources["connection"] == project_dir / "config.json"
+    assert result.sources["logging"] == user_config
+
+
+def test_resolve_config_layers_loader_returning_none_is_skipped(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / "config.json").write_text("not valid json")
+    user_config = tmp_path / "user" / "config.json"
+    user_config.parent.mkdir()
+    user_config.write_text(json.dumps({"region": "jp1"}))
+
+    def _loader_that_rejects_malformed(path):
+        try:
+            return json.loads(path.read_text())
+        except json.JSONDecodeError:
+            return None
+
+    result = resolve_config_layers(
+        "config.json", project_dir, tmp_path, user_config, _loader_that_rejects_malformed
+    )
+
+    assert result.values == {"region": "jp1"}
+    assert result.sources["region"] == user_config
+
+
+def test_resolve_config_layers_neither_exists(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    user_config = tmp_path / "user" / "config.json"
+
+    result = resolve_config_layers("config.json", project_dir, tmp_path, user_config, _json_loader)
+
+    assert result.values == {}
+    assert result.project_config_path is None
