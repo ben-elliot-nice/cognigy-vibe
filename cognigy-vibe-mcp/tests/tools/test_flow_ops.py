@@ -564,6 +564,92 @@ def test_get_flow_chart_hierarchy_nests_branch_marker_content(mock_client, state
     assert job_depth == after_depth + 2
 
 
+def test_get_flow_chart_hierarchy_nests_if_then_else_content(mock_client, state, cache):
+    """Same marker+next nesting rule applied to an `if` node's `then`/`else` branch markers.
+
+    Per issue #257 review: only once/onFirstExecution/afterwards was covered by a test;
+    this guards the if/then/else marker types in _BRANCH_MARKER_TYPES against regression.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "if-id", "type": "if", "label": "Check Trigger"},
+            {"_id": "then-id", "type": "then", "label": "Then"},
+            {"_id": "sayyes-id", "type": "say", "label": "Say Yes"},
+            {"_id": "else-id", "type": "else", "label": "Else"},
+            {"_id": "sayno-id", "type": "say", "label": "Say No"},
+        ],
+        "relations": [
+            {"node": "if-id", "next": None, "children": ["then-id", "else-id"], "_id": "rel-if"},
+            {"node": "then-id", "next": "sayyes-id", "children": [], "_id": "rel-then"},
+            {"node": "sayyes-id", "next": None, "children": [], "_id": "rel-sayyes"},
+            {"node": "else-id", "next": "sayno-id", "children": [], "_id": "rel-else"},
+            {"node": "sayno-id", "next": None, "children": [], "_id": "rel-sayno"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    if_depth = depth("Check Trigger")
+    then_depth = depth("Then")
+    else_depth = depth("Else")
+    yes_depth = depth("Say Yes")
+    no_depth = depth("Say No")
+
+    assert then_depth == if_depth + 2
+    assert else_depth == then_depth
+    assert yes_depth == then_depth + 2
+    assert no_depth == else_depth + 2
+
+
+def test_get_flow_chart_hierarchy_nests_lookup_default_case_content(mock_client, state, cache):
+    """Same marker+next nesting rule applied to a `lookup` node's `default`/`case` branch markers.
+
+    Per issue #257 review: guards the lookup marker types in _BRANCH_MARKER_TYPES against
+    regression, since no prior test constructed a lookup chart.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "lookup-id", "type": "lookup", "label": "Route Intent"},
+            {"_id": "case-id", "type": "case", "label": "Case: refund"},
+            {"_id": "sayrefund-id", "type": "say", "label": "Say Refund"},
+            {"_id": "default-id", "type": "default", "label": "Default"},
+            {"_id": "saydefault-id", "type": "say", "label": "Say Default"},
+        ],
+        "relations": [
+            {"node": "lookup-id", "next": None, "children": ["case-id", "default-id"], "_id": "rel-lookup"},
+            {"node": "case-id", "next": "sayrefund-id", "children": [], "_id": "rel-case"},
+            {"node": "sayrefund-id", "next": None, "children": [], "_id": "rel-sayrefund"},
+            {"node": "default-id", "next": "saydefault-id", "children": [], "_id": "rel-default"},
+            {"node": "saydefault-id", "next": None, "children": [], "_id": "rel-saydefault"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    lookup_depth = depth("Route Intent")
+    case_depth = depth("Case: refund")
+    default_depth = depth("Default")
+    refund_depth = depth("Say Refund")
+    saydefault_depth = depth("Say Default")
+
+    assert case_depth == lookup_depth + 2
+    assert default_depth == case_depth
+    assert refund_depth == case_depth + 2
+    assert saydefault_depth == default_depth + 2
+
+
 def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, cache):
     """cognigy_create must not raise KeyError when API response lacks _id.
     Repro: creating a knowledge source returns a response without _id.
