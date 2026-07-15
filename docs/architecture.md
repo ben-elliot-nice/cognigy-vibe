@@ -82,7 +82,7 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 | `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `export_package` |
 | `tools/voice_ops.py` | `provision_webrtc_endpoint` — VoiceGateway webRTC endpoint provisioning with real/dummy Azure Speech connection path |
 | `tools/testing.py` | `talk_to_agent` — REST endpoint test harness |
-| `tools/explain.py` | `explain` — 37-topic in-server reference library |
+| `tools/explain.py` | `explain` — 51-key tiered reference library (6 groups, 45 leaf topics) |
 | `tools/dev_tools.py` | `reload_mcp` — dev-mode server respawn signal |
 
 ### State storage
@@ -114,7 +114,7 @@ State is loaded at startup by deep-merging seed into runtime. `sync_remote_state
 
 ### Reference docs (runtime guidance)
 
-The `explain` tool carries a 37-topic in-server reference library (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("topic")`. The full topic list is front-loaded in the tool description — no tool call needed to see what's available.
+The `explain` tool carries a 51-key tiered reference library — 6 top-level groups (aiagent, code, nodes, platform, voice, xapp), each expanding to its own set of leaf topics, 45 leaf topics in total (node creation patterns, xApp delivery, extension map, voice gateway setup, CXone outbound trigger, etc.). Access via `explain("group")` to see a group's primer plus its child topic list, then `explain("topic")` to drill into a specific leaf. The tool description still enumerates every key up front, but the no-arg `explain()` response itself only surfaces the 6 group names — a drill-down call is required to see any group's topics.
 
 Topic source files live at `plugin/skills/explain/resources/` and are compiled into the MCP server by `scripts/build_explain_topics.py`. Edit the resource markdown files and re-run the script to update both the skill and the in-server library.
 

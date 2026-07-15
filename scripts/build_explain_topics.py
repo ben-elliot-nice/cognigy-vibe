@@ -201,6 +201,10 @@ def main() -> None:
     root = scan_dir(RESOURCES, "", errors)
     entries = flatten(root)
 
+    # Groups/subgroups get path-derived keys (e.g. "aiagent/tools"), but leaf
+    # topic keys (their `topic:` frontmatter value) share one flat global
+    # namespace by design — two leaf topics in different groups cannot use
+    # the same `topic:` value, and will fail the build here if they do.
     seen: set[str] = set()
     for key, _, _ in entries:
         if key in seen:
