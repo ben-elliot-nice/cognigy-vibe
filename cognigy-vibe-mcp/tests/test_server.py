@@ -82,16 +82,34 @@ def test_create_server_degraded_when_missing_key(monkeypatch, tmp_path):
 def test_create_server_full_when_env_set(monkeypatch, tmp_path, respx_mock):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://example.com")
     monkeypatch.setenv("COGNIGY_API_KEY", "key")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(tmp_path))
     monkeypatch.delenv("COGNIGY_VIBE_DEV", raising=False)
     monkeypatch.setattr("cognigy_mcp.state.CONFIG_BASE", tmp_path / "config")
     from cognigy_mcp import server
     import importlib
     importlib.reload(server)
+    monkeypatch.setattr(server, "USER_ENV_PATH", tmp_path / "no-such-user.env")
     s, tools = server.create_server()
     tool_names = [t.name for t in tools]
     assert "init" not in tool_names
     assert "sync_remote_state" in tool_names
     assert "reload_mcp" not in tool_names
+
+
+def test_env_configured_true_from_raw_os_environ_without_dotenv_file(monkeypatch, tmp_path):
+    """PR #266 CI review regression: _env_configured() must honor credentials supplied
+    purely via os.environ (e.g. container/CI secrets, or an MCP client's own launch-config
+    env), not only credentials discoverable via an on-disk .env file. Before this fix,
+    _env_configured() only checked resolve_env_layers()'s disk-only merge, so a raw
+    os.environ-only setup with zero .env files anywhere silently reported degraded."""
+    monkeypatch.setenv("COGNIGY_BASE_URL", "https://cognigy-api-au1.nicecxone.com")
+    monkeypatch.setenv("COGNIGY_API_KEY", "test-key")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(tmp_path))
+    from cognigy_mcp import server
+    import importlib
+    importlib.reload(server)
+    monkeypatch.setattr(server, "USER_ENV_PATH", tmp_path / "no-such-user.env")
+    assert server._env_configured() is True
 
 
 def test_create_server_dev_mode_includes_reload_tool(monkeypatch, tmp_path):
@@ -267,3 +285,8 @@ def test_find_config_file_merges_project_and_global_shallow(tmp_path, monkeypatc
     assert result["connection"]["region"] == "na1"  # project wins for this key
     assert result["logging"]["level"] == "debug"  # global fills in the key project didn't set
     assert "default-demo-config.json" in source
+    # PR #266 CI review finding: config_source must name BOTH contributing files when a
+    # merge draws keys from each, not just one — otherwise a user editing the reported
+    # file alone won't see their change take effect if the key they wanted lives in the
+    # other layer.
+    assert str(global_config) in source

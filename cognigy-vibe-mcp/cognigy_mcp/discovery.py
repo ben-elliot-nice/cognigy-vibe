@@ -8,6 +8,15 @@ from typing import Callable
 from dotenv import dotenv_values
 
 
+def _ancestor_boundary(project_root: Path, home: Path) -> Path:
+    """Only climb toward home when it's actually an ancestor of project_root — otherwise
+    (CI checkout, /tmp, a mounted volume) don't escape project_root onto unrelated
+    ancestors looking for a stray .env/config file."""
+    home = home.resolve()
+    current = project_root.resolve()
+    return home if (home == current or home in current.parents) else current
+
+
 def find_nearest_ancestor(filename: str, start: Path, stop: Path) -> "Path | None":
     """Walk up from start toward stop looking for filename. Checks stop itself, but never ascends past it."""
     current = start.resolve()
@@ -31,7 +40,7 @@ class EnvResolution:
 
 def resolve_env_layers(project_root: Path, home: Path, user_env_path: Path) -> EnvResolution:
     """Merge project-nearest-ancestor .env with user-global .env. Project wins per-key."""
-    project_env_path = find_nearest_ancestor(".env", project_root, home)
+    project_env_path = find_nearest_ancestor(".env", project_root, _ancestor_boundary(project_root, home))
     values: dict[str, str] = {}
     sources: dict[str, Path] = {}
 
@@ -71,7 +80,7 @@ def resolve_config_layers(
     loader: "Callable[[Path], dict | None]",
 ) -> ConfigResolution:
     """Merge project-nearest-ancestor config with user-global config. Shallow, project wins per top-level key."""
-    project_config_path = find_nearest_ancestor(filename, project_root, home)
+    project_config_path = find_nearest_ancestor(filename, project_root, _ancestor_boundary(project_root, home))
     values: dict = {}
     sources: dict[str, Path] = {}
 

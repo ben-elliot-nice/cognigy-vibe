@@ -2,6 +2,25 @@ from pathlib import Path
 from cognigy_mcp.discovery import find_nearest_ancestor, resolve_env_layers
 
 
+def test_resolve_env_layers_does_not_escape_home_boundary(tmp_path):
+    """PR #266 CI review finding: when `home` isn't actually an ancestor of project_root
+    (CI checkout, /tmp, mounted volume), resolve_env_layers must not climb past project_root
+    onto unrelated ancestors looking for a stray .env — mirrors server.py's
+    test_find_config_file_does_not_escape_home_boundary, which this exact scenario could
+    silently disagree with (orchestrator sees a stray file server.py correctly ignores)."""
+    outside_home = tmp_path / "not-home"
+    child = outside_home / "acme-demo"
+    child.mkdir(parents=True)
+    fake_home = tmp_path / "home-dir"
+    fake_home.mkdir()
+    (outside_home / ".env").write_text("COGNIGY_BASE_URL=https://stray.example.com\n")
+
+    result = resolve_env_layers(child, fake_home, tmp_path / "user" / ".env")
+
+    assert result.project_env_path is None
+    assert result.values == {}
+
+
 def test_find_nearest_ancestor_in_start_dir(tmp_path):
     (tmp_path / ".env").write_text("X=1\n")
     result = find_nearest_ancestor(".env", tmp_path, tmp_path.parent)

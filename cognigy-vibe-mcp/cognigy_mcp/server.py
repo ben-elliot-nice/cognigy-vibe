@@ -17,7 +17,6 @@ from cognigy_mcp.config import USER_CONFIG_PATH, USER_ENV_PATH
 from cognigy_mcp.discovery import (
     resolve_config_layers,
     resolve_env_layers,
-    missing_env_keys,
     build_env_guidance,
 )
 
@@ -43,15 +42,6 @@ def _load_config_candidate(candidate: Path) -> "dict | None":
     return data
 
 
-def _ancestor_search_boundary(project_root: Path) -> Path:
-    """Only climb toward $HOME when it's actually an ancestor of project_root —
-    otherwise (CI checkout, /tmp, a mounted volume) don't escape project_root
-    onto unrelated ancestors looking for a stray config/env file."""
-    home = Path.home().resolve()
-    current = project_root.resolve()
-    return home if (home == current or home in current.parents) else current
-
-
 def _find_config_file() -> "tuple[dict | None, str | None]":
     """Merge nearest-ancestor default-demo-config.json (bounded by $HOME) with the
     user-global config.json. Shallow merge, nearest-ancestor wins per top-level key."""
@@ -59,20 +49,23 @@ def _find_config_file() -> "tuple[dict | None, str | None]":
     resolution = resolve_config_layers(
         "default-demo-config.json",
         project_root,
-        _ancestor_search_boundary(project_root),
+        Path.home(),
         USER_CONFIG_PATH,
         _load_config_candidate,
     )
     if not resolution.values:
         return None, None
-    source = str(resolution.project_config_path or resolution.user_config_path)
+    contributing_paths = [
+        str(path)
+        for path in (resolution.project_config_path, resolution.user_config_path)
+        if path is not None and path in resolution.sources.values()
+    ]
+    source = " + ".join(contributing_paths) if contributing_paths else None
     return resolution.values, source
 
 
 def _env_configured() -> bool:
-    project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd())))
-    resolution = resolve_env_layers(project_root, _ancestor_search_boundary(project_root), USER_ENV_PATH)
-    return not missing_env_keys(resolution)
+    return bool(os.environ.get("COGNIGY_BASE_URL")) and bool(os.environ.get("COGNIGY_API_KEY"))
 
 
 def create_server() -> tuple[Server, list[types.Tool]]:
@@ -95,7 +88,7 @@ def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
         + schema_tools.TOOLS
     )
     project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd())))
-    resolution = resolve_env_layers(project_root, _ancestor_search_boundary(project_root), USER_ENV_PATH)
+    resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
     server = Server("cognigy-vibe")
 
     @server.list_tools()
