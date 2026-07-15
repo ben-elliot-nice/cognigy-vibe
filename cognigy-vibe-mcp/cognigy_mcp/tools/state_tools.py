@@ -198,6 +198,17 @@ def make_handlers(
             errors.append(f"extensions: {exc}")
         state.set("extension_map", value=ext_map)
 
+        if flows:
+            try:
+                descriptors_resp = client.get(f"/v2.0/flows/{flows[0]['_id']}/chart/descriptors")
+                marker_types = {
+                    d["type"] for d in descriptors_resp.get("items", []) if d.get("parentType")
+                }
+                if marker_types:
+                    state.set("branch_marker_types", value=sorted(marker_types))
+            except Exception as exc:
+                errors.append(f"chart_descriptors: {exc}")
+
         seen_agents: set = set()
         for flow in flows:
             try:
