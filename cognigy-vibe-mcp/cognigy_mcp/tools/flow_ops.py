@@ -291,7 +291,7 @@ def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dic
 _BRANCH_MARKER_TYPES = frozenset({"onFirstExecution", "afterwards", "then", "else", "default", "case"})
 
 
-def _build_hierarchy(chart: dict) -> str:
+def _build_hierarchy(chart: dict, marker_types: frozenset[str] = _BRANCH_MARKER_TYPES) -> str:
     nodes = {n["_id"]: n for n in chart.get("nodes", [])}
 
     # Real Cognigy API format: {"node": "<nodeId>", "next": "<nextId>", "children": [...], "_id": "<relId>"}
@@ -315,7 +315,7 @@ def _build_hierarchy(chart: dict) -> str:
             lines += render(child_id, indent + 1, visited)
         next_id = rel.get("next")
         if next_id:
-            bump = 1 if ntype in _BRANCH_MARKER_TYPES else 0
+            bump = 1 if ntype in marker_types else 0
             lines += render(next_id, indent + bump, visited)
         return lines
 
@@ -613,10 +613,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return _api_error_response(exc)
         except Exception as exc:
             return _unexpected_error_response(exc)
+        cached_marker_types = state.get("branch_marker_types")
+        marker_types = frozenset(cached_marker_types) if cached_marker_types else _BRANCH_MARKER_TYPES
         stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if m.format == "hierarchy":
             stripped_chart = {**chart, "nodes": stripped_nodes}
-            hierarchy = _build_hierarchy(stripped_chart)
+            hierarchy = _build_hierarchy(stripped_chart, marker_types)
             return _ok({"hierarchy": hierarchy})
         elif m.format == "raw":
             return _ok({
@@ -625,7 +627,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             })
         else:
             stripped_chart = {**chart, "nodes": stripped_nodes}
-            hierarchy = _build_hierarchy(stripped_chart)
+            hierarchy = _build_hierarchy(stripped_chart, marker_types)
             return _ok({
                 "relations": chart.get("relations", []),
                 "nodes": stripped_nodes,
