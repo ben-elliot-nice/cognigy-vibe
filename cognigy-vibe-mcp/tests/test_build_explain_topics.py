@@ -53,6 +53,63 @@ def test_scan_dir_rejects_stray_leaf_file_and_index_at_root(tmp_path):
     assert any("stray.md" in e for e in errors)
 
 
+def test_scan_dir_collects_malformed_frontmatter_as_error_not_crash(tmp_path):
+    """Regression (PR #260 review): malformed frontmatter must not crash the scan and
+    discard every other error already collected — it must be reported like any other
+    build error, and scanning must continue for the rest of the tree."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "broken.md", "---\ntopic: broken\ndescription: d\nno closing marker\n")
+    _write(resources / "code" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "dup.md", "---\ntopic: dup\ndescription: d2\n---\nbody2\n")
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert any("No frontmatter found" in e and "broken.md" in e for e in errors)
+    keys = {k for k, _, _ in bet.flatten(root)}
+    assert "dup" in keys, "scanning other directories must continue past the malformed file"
+
+
+def test_parse_frontmatter_rejects_duplicate_key_in_same_file(tmp_path):
+    """Regression (PR #260 review): a key declared twice in one file's frontmatter was
+    silently overwritten by the last value — now must raise instead of clobbering."""
+    content = "---\ntopic: first-value\ntopic: second-value\ndescription: d\n---\nbody\n"
+    with pytest.raises(ValueError, match="Duplicate frontmatter key 'topic'"):
+        bet.parse_frontmatter(content, tmp_path / "fake.md")
+
+
+def test_scan_dir_collects_duplicate_frontmatter_key_as_build_error(tmp_path):
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "dup-key.md", "---\ntopic: dup-key\ntopic: other\ndescription: d\n---\nbody\n")
+    errors: list[str] = []
+    bet.scan_dir(resources, "", errors)
+    assert any("Duplicate frontmatter key" in e and "dup-key.md" in e for e in errors)
+
+
+def test_generate_python_escapes_triple_quote_in_description(tmp_path, monkeypatch):
+    """Regression (PR #260 review): a description containing a literal '\"\"\"' must not
+    produce a syntactically invalid generated file. Verified by actually parsing the
+    generated source with ast.parse, not just checking for a substring."""
+    import ast
+
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", '---\ndescription: has a """ triple quote\n---\nbody\n')
+    monkeypatch.setattr(bet, "RESOURCES", resources)
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert errors == []
+    entries = bet.flatten(root)
+
+    output_path = tmp_path / "generated.py"
+    bet.generate_python(entries, root, output_path)
+
+    source = output_path.read_text(encoding="utf-8")
+    ast.parse(source)  # raises SyntaxError if the embedding is unsafe
+    namespace: dict = {}
+    exec(compile(source, str(output_path), "exec"), namespace)
+    assert 'has a """ triple quote' in namespace["_TOPIC_INDEX"]
+
+
 def test_flatten_produces_leaf_and_group_entries_with_full_keys(tmp_path):
     resources = tmp_path / "resources"
     _write(resources / "aiagent" / "index.md", "---\ndescription: AI Agent group primer\n---\nPrimer text.\n")

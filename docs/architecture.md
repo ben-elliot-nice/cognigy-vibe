@@ -174,7 +174,7 @@ Call the cognigy-vibe MCP tool cognigy_create with resource_type="node" and body
 1. Add a `Tool` definition to the relevant module in `cognigy-vibe-mcp/cognigy_mcp/tools/`
 2. Add a handler function and register it in `make_handlers()`
 3. Add tests in `cognigy-vibe-mcp/tests/tools/`
-4. If it covers new Cognigy API patterns, add an `explain` topic in `explain.py`
+4. If it covers new Cognigy API patterns, add an `explain` topic: a markdown file under `plugin/skills/explain/resources/<group>/` (with `topic:`+`description:` frontmatter), then re-run `scripts/build_explain_topics.py` to recompile it into both `SKILL.md` and `explain.py`'s in-server library
 5. Bump the patch version in `cognigy-vibe-mcp/pyproject.toml` and `plugin/.claude-plugin/plugin.json`
 
 For new node types, add the type → extension mapping to `_NODE_EXTENSION_MAP` in `flow_ops.py` — no other changes needed.
