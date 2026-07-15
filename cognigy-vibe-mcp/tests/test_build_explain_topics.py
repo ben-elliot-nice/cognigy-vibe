@@ -139,8 +139,15 @@ def test_main_generates_python_and_skill_md_on_success(tmp_path, monkeypatch):
     assert "'aiagent'" in generated_py
     assert "'leaf'" in generated_py
     assert "| Topic | Description |" in generated_py, "generated index must be a renderable markdown table"
+    assert "leaf.md" not in generated_py, \
+        "MCP-facing generated content must not carry filesystem paths — the tool already returns real content"
+    assert "index.md" not in generated_py, \
+        "MCP-facing generated content must not carry filesystem paths"
 
     skill_md = (tmp_path / "SKILL.md").read_text(encoding="utf-8")
     assert "before" in skill_md and "after" in skill_md
     assert "aiagent" in skill_md
-    assert "| Topic | Description |" in skill_md
+    assert "| Topic | Description | File |" in skill_md, \
+        "SKILL.md must carry a File column so a session without the MCP tool can read topics directly"
+    assert "`aiagent/index.md`" in skill_md, "SKILL.md must show each group's own index.md path"
+    assert "`aiagent/leaf.md`" in skill_md, "SKILL.md must show each leaf topic's source file path"
