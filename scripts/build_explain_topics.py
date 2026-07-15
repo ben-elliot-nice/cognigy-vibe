@@ -15,7 +15,7 @@ Run with: uv run scripts/build_explain_topics.py
 from __future__ import annotations
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -32,6 +32,14 @@ class LeafTopic:
     body: str
     path: str  # source file path, relative to resources/ — SKILL.md-only, never in MCP output
 
+    def __post_init__(self) -> None:
+        # Only constructed once scan_dir has already validated topic/description are
+        # non-empty — this is a type-level guarantee of that invariant, not new scan logic.
+        if not self.key:
+            raise ValueError("LeafTopic.key must be non-empty")
+        if not self.description:
+            raise ValueError("LeafTopic.description must be non-empty")
+
 
 @dataclass(frozen=True)
 class GroupIndex:
@@ -39,8 +47,10 @@ class GroupIndex:
     description: str | None
     body: str | None
     path: str | None  # this group's index.md path, relative to resources/ ("" root has none)
-    leaf_topics: list[LeafTopic] = field(default_factory=list)
-    subgroups: list["GroupIndex"] = field(default_factory=list)
+    # tuple, not list — frozen=True only blocks attribute rebinding, not in-place mutation
+    # of a mutable field's contents; tuples make "never mutated after construction" real.
+    leaf_topics: tuple[LeafTopic, ...] = ()
+    subgroups: tuple["GroupIndex", ...] = ()
 
 
 def parse_frontmatter(content: str, path: Path) -> tuple[dict[str, str], str]:
@@ -94,6 +104,14 @@ def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
         return GroupIndex(key=rel, description=None, body=None, path=(f"{rel}/index.md" if rel else None))
     md_files = [p for p in entries if p.is_file() and p.suffix == ".md"]
     subdirs = [p for p in entries if p.is_dir()]
+
+    # Path.is_file()/is_dir() swallow ENOENT/ELOOP and just return False for a broken
+    # or looping symlink — they don't raise. Left unguarded, such an entry silently
+    # vanishes from both md_files and subdirs instead of being reported (issue found
+    # in PR #260 review, round 3).
+    for entry in entries:
+        if not entry.is_file() and not entry.is_dir():
+            errors.append(f"{entry}: cannot classify as file or directory (broken symlink?)")
 
     index_candidates = [p for p in md_files if p.name == "index.md"]
     leaf_files = [p for p in md_files if p.name != "index.md"]
@@ -165,8 +183,8 @@ def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
         description=description,
         body=body,
         path=(f"{rel}/index.md" if rel else None),
-        leaf_topics=sorted(leaf_topics, key=lambda t: t.key),
-        subgroups=sorted(subgroups, key=lambda g: g.key),
+        leaf_topics=tuple(sorted(leaf_topics, key=lambda t: t.key)),
+        subgroups=tuple(sorted(subgroups, key=lambda g: g.key)),
     )
 
 

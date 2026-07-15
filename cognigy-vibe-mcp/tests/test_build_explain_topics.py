@@ -53,6 +53,58 @@ def test_scan_dir_rejects_stray_leaf_file_and_index_at_root(tmp_path):
     assert any("stray.md" in e for e in errors)
 
 
+def test_scan_dir_rejects_more_than_one_index_md(tmp_path, monkeypatch):
+    """A real filesystem can't hold two entries both named 'index.md' in one directory,
+    so this branch is exercised by monkeypatching iterdir() to return a synthetic
+    listing combining two genuinely-named 'index.md' files from two separate real
+    directories — each Path's .name is real, only the combined listing is synthetic."""
+    resources = tmp_path / "resources"
+    first_index = resources / "aiagent" / "index.md"
+    second_index = resources / "_other_dir" / "index.md"
+    _write(first_index, "---\ndescription: d\n---\nbody\n")
+    _write(second_index, "---\ndescription: d2\n---\nbody2\n")
+    assert first_index.name == "index.md" and second_index.name == "index.md"
+
+    real_iterdir = Path.iterdir
+
+    def fake_iterdir(self):
+        if self.name == "aiagent":
+            return iter([first_index, second_index])
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", fake_iterdir)
+
+    errors: list[str] = []
+    bet.scan_dir(resources, "", errors)
+    assert any("aiagent/ has more than one index.md" in e for e in errors)
+
+
+def test_scan_dir_rejects_index_md_missing_description(tmp_path):
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription:\n---\nbody\n")
+    errors: list[str] = []
+    bet.scan_dir(resources, "", errors)
+    assert any("index.md" in e and "missing 'description'" in e for e in errors)
+
+
+def test_scan_dir_rejects_leaf_missing_topic(tmp_path):
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "no-topic.md", "---\ndescription: d\n---\nbody\n")
+    errors: list[str] = []
+    bet.scan_dir(resources, "", errors)
+    assert any("no-topic.md" in e and "missing 'topic'" in e for e in errors)
+
+
+def test_scan_dir_rejects_leaf_missing_description(tmp_path):
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "no-desc.md", "---\ntopic: no-desc\n---\nbody\n")
+    errors: list[str] = []
+    bet.scan_dir(resources, "", errors)
+    assert any("no-desc.md" in e and "missing 'description'" in e for e in errors)
+
+
 def test_scan_dir_collects_malformed_frontmatter_as_error_not_crash(tmp_path):
     """Regression (PR #260 review): malformed frontmatter must not crash the scan and
     discard every other error already collected — it must be reported like any other
@@ -84,6 +136,21 @@ def test_scan_dir_collects_duplicate_frontmatter_key_as_build_error(tmp_path):
     errors: list[str] = []
     bet.scan_dir(resources, "", errors)
     assert any("Duplicate frontmatter key" in e and "dup-key.md" in e for e in errors)
+
+
+def test_scan_dir_reports_broken_symlink_instead_of_silently_dropping_it(tmp_path):
+    """Regression (PR #260 review, round 3): Path.is_file()/is_dir() both return False
+    for a broken symlink instead of raising, so it previously vanished from both
+    md_files and subdirs with no error and no trace in the output count."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    (resources / "aiagent" / "broken-link.md").symlink_to(resources / "aiagent" / "does-not-exist.md")
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert any("broken-link.md" in e and "cannot classify" in e for e in errors)
+    aiagent = next(g for g in root.subgroups if g.key == "aiagent")
+    assert aiagent.leaf_topics == (), \
+        "the broken symlink must not be silently counted as a valid leaf topic"
 
 
 def test_generate_python_escapes_triple_quote_in_description(tmp_path, monkeypatch):
@@ -337,3 +404,67 @@ def test_main_generates_python_and_skill_md_on_success(tmp_path, monkeypatch):
         "SKILL.md must carry a File column so a session without the MCP tool can read topics directly"
     assert "`aiagent/index.md`" in skill_md, "SKILL.md must show each group's own index.md path"
     assert "`aiagent/leaf.md`" in skill_md, "SKILL.md must show each leaf topic's source file path"
+
+
+def test_main_is_idempotent(tmp_path, monkeypatch):
+    """Regression (PR #260 review, round 3): the PR claimed idempotency ('re-running
+    the script produces no git diff') but had no automated check. Runs main() twice
+    against the same resource tree and asserts both generated files are byte-identical,
+    which would catch a non-deterministic ordering bug (e.g. an unstable sort key)."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: AI Agent group primer\n---\nPrimer.\n")
+    _write(resources / "aiagent" / "b-leaf.md", "---\ntopic: b-leaf\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "a-leaf.md", "---\ntopic: a-leaf\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "index.md", "---\ndescription: Code group primer\n---\nPrimer.\n")
+    _write(resources / "code" / "leaf.md", "---\ntopic: leaf\ndescription: d\n---\nbody\n")
+    monkeypatch.setattr(bet, "RESOURCES", resources)
+    monkeypatch.setattr(bet, "TEMPLATE", tmp_path / "SKILL.md.template")
+    monkeypatch.setattr(bet, "GENERATED_PY", tmp_path / "generated.py")
+    monkeypatch.setattr(bet, "GENERATED_SKILL", tmp_path / "SKILL.md")
+    _write(tmp_path / "SKILL.md.template", "{{TOPIC_REGISTRY}}")
+
+    bet.main()
+    first_py = (tmp_path / "generated.py").read_text(encoding="utf-8")
+    first_skill = (tmp_path / "SKILL.md").read_text(encoding="utf-8")
+
+    bet.main()
+    second_py = (tmp_path / "generated.py").read_text(encoding="utf-8")
+    second_skill = (tmp_path / "SKILL.md").read_text(encoding="utf-8")
+
+    assert first_py == second_py, "re-running the build must produce byte-identical output"
+    assert first_skill == second_skill, "re-running the build must produce byte-identical output"
+
+
+def test_render_table_escapes_pipe_in_description(tmp_path):
+    """Regression (PR #260 review, round 3): a description containing a literal '|'
+    must not break the generated markdown table's column alignment."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: uses a | pipe character\n---\nbody\n")
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert errors == []
+    index_text = bet.build_top_level_index(root)
+    assert "uses a \\| pipe character" in index_text
+    # exactly 2 unescaped pipes per data row (the two column delimiters), not 3
+    data_row = next(line for line in index_text.splitlines() if line.startswith("| `aiagent`"))
+    assert data_row.count("|") - data_row.count("\\|") == 3, \
+        "an unescaped '|' in the description would add a phantom table column"
+
+
+def test_main_fails_on_leaf_key_colliding_with_group_key(tmp_path, monkeypatch, capsys):
+    """A leaf topic named the same as a top-level group key shares the same flat
+    namespace as group paths (by design, per the comment in main()) — confirm the
+    collision is caught, not just leaf-vs-leaf duplicates."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "code.md", "---\ntopic: code\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "index.md", "---\ndescription: d\n---\nbody\n")
+    monkeypatch.setattr(bet, "RESOURCES", resources)
+    monkeypatch.setattr(bet, "TEMPLATE", tmp_path / "SKILL.md.template")
+    monkeypatch.setattr(bet, "GENERATED_PY", tmp_path / "generated.py")
+    monkeypatch.setattr(bet, "GENERATED_SKILL", tmp_path / "SKILL.md")
+    _write(tmp_path / "SKILL.md.template", "{{TOPIC_REGISTRY}}")
+    with pytest.raises(SystemExit):
+        bet.main()
+    captured = capsys.readouterr()
+    assert "Duplicate topic/group key: 'code'" in captured.err
