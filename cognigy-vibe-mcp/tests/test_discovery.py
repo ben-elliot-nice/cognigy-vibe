@@ -113,6 +113,39 @@ def test_resolve_env_layers_merges_nearest_wins_per_key(tmp_path):
     assert result.sources["COGNIGY_BASE_URL"] == user_env
 
 
+def test_resolve_env_layers_survives_non_utf8_user_env(tmp_path):
+    """PR #266 CI review Critical finding: a non-UTF-8 .env (e.g. saved as UTF-16 by
+    Notepad) must not crash resolve_env_layers — this is a wider blast radius than
+    before #255, since both layers are now always read unconditionally (the old
+    if/elif code often never touched the second file at all)."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / ".env").write_text("COGNIGY_PROJECT_ID=proj-123\n")
+    user_env = tmp_path / "user" / ".env"
+    user_env.parent.mkdir()
+    user_env.write_bytes("COGNIGY_BASE_URL=https://user.example.com\n".encode("utf-16"))
+
+    result = resolve_env_layers(project_dir, tmp_path, user_env)
+
+    # The corrupted user-global layer contributes nothing, but the valid project
+    # layer must still come through — a bad user-global .env shouldn't take down
+    # the whole session, nor mask an otherwise-working project .env.
+    assert result.values == {"COGNIGY_PROJECT_ID": "proj-123"}
+
+
+def test_resolve_env_layers_survives_non_utf8_project_env(tmp_path):
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / ".env").write_bytes("COGNIGY_BASE_URL=https://project.example.com\n".encode("utf-16"))
+    user_env = tmp_path / "user" / ".env"
+    user_env.parent.mkdir()
+    user_env.write_text("COGNIGY_API_KEY=userkey\n")
+
+    result = resolve_env_layers(project_dir, tmp_path, user_env)
+
+    assert result.values == {"COGNIGY_API_KEY": "userkey"}
+
+
 def test_resolve_env_layers_neither_exists(tmp_path):
     project_dir = tmp_path / "project"
     project_dir.mkdir()

@@ -1,11 +1,22 @@
 # cognigy-vibe-mcp/cognigy_mcp/discovery.py
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 from dotenv import dotenv_values
+
+
+def _safe_dotenv_values(path: Path) -> dict:
+    """dotenv_values(), but a file in an unreadable encoding (e.g. UTF-16 saved by
+    Notepad) contributes zero values instead of crashing the whole process."""
+    try:
+        return dotenv_values(path)
+    except (UnicodeDecodeError, OSError) as e:
+        print(f"cognigy-vibe: skipping unreadable .env {path}: {e}", file=sys.stderr)
+        return {}
 
 
 def _ancestor_boundary(project_root: Path, home: Path) -> Path:
@@ -45,13 +56,13 @@ def resolve_env_layers(project_root: Path, home: Path, user_env_path: Path) -> E
     sources: dict[str, Path] = {}
 
     if user_env_path.exists():
-        for key, val in dotenv_values(user_env_path).items():
+        for key, val in _safe_dotenv_values(user_env_path).items():
             if val is not None:
                 values[key] = val
                 sources[key] = user_env_path
 
     if project_env_path is not None:
-        for key, val in dotenv_values(project_env_path).items():
+        for key, val in _safe_dotenv_values(project_env_path).items():
             if val is not None:
                 values[key] = val
                 sources[key] = project_env_path
@@ -85,8 +96,8 @@ def _find_nearest_valid_ancestor(
         candidate = current / filename
         if candidate.exists():
             data = loader(candidate)
-            if data:
-                return candidate, data
+            if data:  # intentionally truthy, not `is not None` — a real config always
+                return candidate, data  # sets $schemaVersion, so an empty {} is as unusable as None
         if current == stop or current == current.parent:
             return None, None
         current = current.parent
@@ -108,7 +119,7 @@ def resolve_config_layers(
 
     if user_config_path.exists():
         data = loader(user_config_path)
-        if data:
+        if data:  # same intentional truthy check as above — an empty {} contributes nothing
             for key, val in data.items():
                 values[key] = val
                 sources[key] = user_config_path

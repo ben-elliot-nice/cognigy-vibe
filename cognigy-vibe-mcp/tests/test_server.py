@@ -65,6 +65,29 @@ def test_create_server_degraded_when_no_env(monkeypatch, tmp_path):
     assert len(tools) == 22
 
 
+def test_degraded_server_call_tool_returns_source_aware_guidance(monkeypatch, tmp_path):
+    """PR #266 CI review finding: _create_degraded_server()'s call_tool handler
+    (the fallback path for any tool call that slips past the orchestrator's own
+    interceptor) had zero coverage — no test ever asserted on the guidance text
+    it actually returns."""
+    monkeypatch.delenv("COGNIGY_BASE_URL", raising=False)
+    monkeypatch.delenv("COGNIGY_API_KEY", raising=False)
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(tmp_path))
+    from cognigy_mcp import server
+    import importlib
+    importlib.reload(server)
+    monkeypatch.setattr(server, "USER_ENV_PATH", tmp_path / "no-such-user.env")
+
+    resolution = server.resolve_env_layers(tmp_path, Path.home(), tmp_path / "no-such-user.env")
+    result = server._degraded_call_tool_response(resolution, tmp_path)
+
+    assert len(result) == 1
+    assert result[0].type == "text"
+    assert "COGNIGY_BASE_URL" in result[0].text
+    assert "COGNIGY_API_KEY" in result[0].text
+    assert str(tmp_path) in result[0].text
+
+
 def test_create_server_degraded_when_missing_key(monkeypatch, tmp_path):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://example.com")
     monkeypatch.delenv("COGNIGY_API_KEY", raising=False)

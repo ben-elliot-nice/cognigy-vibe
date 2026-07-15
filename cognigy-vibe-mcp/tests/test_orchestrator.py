@@ -494,3 +494,52 @@ def test_degraded_interceptor_restarts_when_user_global_env_fixes_it(tmp_path, m
 
     assert restarted["called"] is True
     assert o._pending_call == raw
+
+
+def test_degraded_interceptor_writes_guidance_and_does_not_restart_when_still_missing(tmp_path, monkeypatch):
+    """PR #266 CI review finding: the 'still missing' branch (the common case a real
+    user hits on every tool call before fixing their config) had no test asserting
+    guidance is written and no restart happens."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    # Neither project nor user-global .env exists — credentials remain missing.
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
+
+    o = orch._Orchestrator()
+    o._mode = "degraded"
+    restarted = {"called": False}
+    monkeypatch.setattr(o, "_do_restart", lambda: restarted.update(called=True))
+
+    written = []
+
+    class _FakeBuffer:
+        def write(self, data):
+            written.append(data)
+
+        def flush(self):
+            pass
+
+    class _FakeStdout:
+        buffer = _FakeBuffer()
+
+    monkeypatch.setattr(orch.sys, "stdout", _FakeStdout())
+
+    msg = {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {}}
+    raw = (json.dumps(msg) + "\n").encode()
+
+    o._pending_call = None
+    o._handle_degraded_tool_call(msg, raw)
+
+    assert restarted["called"] is False
+    assert o._pending_call is None
+    assert len(written) == 1
+    payload = json.loads(written[0])
+    assert payload["id"] == 7
+    text = payload["result"]["content"][0]["text"]
+    assert "COGNIGY_BASE_URL" in text
+    assert "COGNIGY_API_KEY" in text

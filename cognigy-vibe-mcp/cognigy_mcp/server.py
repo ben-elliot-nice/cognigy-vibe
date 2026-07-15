@@ -74,6 +74,10 @@ def create_server() -> tuple[Server, list[types.Tool]]:
     return _create_full_server()
 
 
+def _degraded_call_tool_response(resolution, project_root: Path) -> "list[types.TextContent]":
+    return [types.TextContent(type="text", text=build_env_guidance(resolution, project_root))]
+
+
 def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
     # Expose the full tool surface so the session tool list is identical to full mode.
     # Tool calls are intercepted by the orchestrator before reaching here; this fallback
@@ -97,7 +101,7 @@ def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-        return [types.TextContent(type="text", text=build_env_guidance(resolution, project_root))]
+        return _degraded_call_tool_response(resolution, project_root)
 
     return server, all_tools
 
