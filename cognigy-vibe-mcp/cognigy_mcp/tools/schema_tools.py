@@ -429,10 +429,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         # the cache is keyed by project_id, not flow_id — otherwise every distinct
         # flow_id a caller passes would be an avoidable cache miss for the same data.
         cache_key = state.project_id or "_unscoped"
-        cached_descriptors, fresh = spec_cache.get("chart_descriptors", cache_key)
-        next_cursor = None
-        if fresh and cached_descriptors is not None:
-            descriptors = cached_descriptors
+        cached_entry, fresh = spec_cache.get("chart_descriptors", cache_key)
+        if fresh and cached_entry is not None:
+            descriptors = cached_entry.get("descriptors", [])
+            next_cursor = cached_entry.get("next_cursor")
         else:
             try:
                 resp = client.get(f"/v2.0/flows/{m.flow_id}/chart/descriptors")
@@ -442,31 +442,46 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _unexpected_error_response(exc)
             descriptors = resp.get("items", []) if isinstance(resp, dict) else resp
             next_cursor = resp.get("nextCursor") if isinstance(resp, dict) else None
-            spec_cache.set("chart_descriptors", cache_key, descriptors)
+            # Cache next_cursor alongside descriptors so a cache-hit response still
+            # carries the pagination warning below, not just the call that fetched live.
+            spec_cache.set("chart_descriptors", cache_key, {"descriptors": descriptors, "next_cursor": next_cursor})
 
-        descriptor = _find_node_descriptor(descriptors, m.node_type)
-        if descriptor is None:
+        # descriptors/node_type come from the live, externally-controlled chart/descriptors
+        # endpoint — same rationale as the OpenAPI-spec try/except above (structural
+        # surprises must come back as a clean error envelope, not an unhandled exception),
+        # applied here too since this is a newer endpoint with no established stability
+        # track record.
+        try:
+            descriptor = _find_node_descriptor(descriptors, m.node_type)
+            if descriptor is None:
+                return _ok({
+                    "error": f"No node descriptor found for node_type={m.node_type!r}",
+                    "known_node_types": _known_node_types(descriptors),
+                })
+
+            result = {"resource_type": "node", "node_type": m.node_type, "flow_id": m.flow_id}
+            # This endpoint's OpenAPI operation (indexNodeDescriptors_2_0) takes no query
+            # parameters and its documented response schema declares only 'items' — no
+            # cursor/limit params exist to page through, so a non-null nextCursor here
+            # would mean the live API added pagination this client doesn't yet support.
+            # Surface that as a warning rather than silently returning a partial catalog.
+            if next_cursor:
+                result["warning"] = (
+                    "API response included a non-null nextCursor, which this tool does not "
+                    "yet follow — the node-type catalog below may be incomplete."
+                )
+            raw_fields = descriptor.get("fields") or []
+            if m.verbose:
+                result["raw_fields"] = raw_fields
+            else:
+                result["fields"] = _simplify_descriptor_fields(raw_fields)
+        except (AttributeError, TypeError, KeyError, IndexError) as exc:
             return _ok({
-                "error": f"No node descriptor found for node_type={m.node_type!r}",
-                "known_node_types": _known_node_types(descriptors),
+                "error": "descriptor_parse_error",
+                "detail": str(exc),
+                "node_type": m.node_type,
+                "flow_id": m.flow_id,
             })
-
-        result = {"resource_type": "node", "node_type": m.node_type, "flow_id": m.flow_id}
-        # This endpoint's OpenAPI operation (indexNodeDescriptors_2_0) takes no query
-        # parameters and its documented response schema declares only 'items' — no
-        # cursor/limit params exist to page through, so a non-null nextCursor here
-        # would mean the live API added pagination this client doesn't yet support.
-        # Surface that as a warning rather than silently returning a partial catalog.
-        if next_cursor:
-            result["warning"] = (
-                "API response included a non-null nextCursor, which this tool does not "
-                "yet follow — the node-type catalog below may be incomplete."
-            )
-        raw_fields = descriptor.get("fields", [])
-        if m.verbose:
-            result["raw_fields"] = raw_fields
-        else:
-            result["fields"] = _simplify_descriptor_fields(raw_fields)
         return _ok(result)
 
     return {"describe_resource_schema": _describe_resource_schema}

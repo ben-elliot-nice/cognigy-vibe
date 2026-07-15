@@ -898,3 +898,35 @@ def test_describe_resource_schema_node_type_non_null_next_cursor_adds_warning(mo
     data = json.loads(result[0].text)
     assert "nextCursor" in data["warning"]
     assert data["fields"]  # descriptor data is still returned alongside the warning
+
+
+def test_describe_resource_schema_node_type_next_cursor_warning_persists_on_cache_hit(mock_client, state, cache):
+    """The pagination warning must survive a cache hit, not just the call that fetched
+    live — otherwise a caller relying on cached results never sees the signal."""
+    response = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    response["nextCursor"] = "some-cursor-token"
+    mock_client.get.return_value = response
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "say", "flow_id": "flow-1"})
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "if", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert mock_client.get.call_count == 1  # second call served from cache
+    assert "nextCursor" in data["warning"]
+
+
+def test_describe_resource_schema_node_type_malformed_descriptor_returns_clean_error(mock_client, state, cache):
+    """A malformed descriptor entry (fields not a list) must come back as a clean
+    error envelope, mirroring the OpenAPI path's schema_parse_error guard."""
+    mock_client.get.return_value = {
+        "items": [{"type": "say", "fields": "not-a-list"}],
+        "nextCursor": None,
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "say", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert data["error"] == "descriptor_parse_error"
+    assert data["node_type"] == "say"
