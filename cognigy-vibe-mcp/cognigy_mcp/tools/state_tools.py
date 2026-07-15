@@ -200,6 +200,10 @@ def make_handlers(
 
         if flows:
             try:
+                # Descriptors are project-scoped, not flow-scoped: any flow ID in the project
+                # returns the identical catalog, so anchoring on flows[0] is safe. Verified
+                # byte-identical (order-normalized) across two different flowIds in the same
+                # AU1 project — see issue #261.
                 descriptors_resp = client.get(f"/v2.0/flows/{flows[0]['_id']}/chart/descriptors")
                 marker_types = {
                     d["type"] for d in descriptors_resp.get("items", [])
