@@ -513,6 +513,143 @@ def test_get_flow_chart_hierarchy_is_structured(mock_client, state, cache):
     assert sum(1 for l in lines if not l.startswith("  ")) == 1
 
 
+def test_get_flow_chart_hierarchy_nests_branch_marker_content(mock_client, state, cache):
+    """Content chained via `next` off a branch marker (onFirstExecution/afterwards/then/else)
+    must be indented one level deeper than the marker itself, not flattened to its level.
+
+    Regression guard for issue #256: Once/if branch content rendered as siblings of the
+    branch marker instead of nested inside it.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "once-id", "type": "once", "label": "Once"},
+            {"_id": "onfirst-id", "type": "onFirstExecution", "label": "On First Time"},
+            {"_id": "setcfg-id", "type": "setSessionConfig", "label": "Set Session Config"},
+            {"_id": "say-id", "type": "say", "label": "Say"},
+            {"_id": "after-id", "type": "afterwards", "label": "Afterwards"},
+            {"_id": "job-id", "type": "aiAgentJob", "label": "AI Agent"},
+        ],
+        "relations": [
+            {"node": "once-id", "next": None, "children": ["onfirst-id", "after-id"], "_id": "rel-once"},
+            {"node": "onfirst-id", "next": "setcfg-id", "children": [], "_id": "rel-onfirst"},
+            {"node": "setcfg-id", "next": "say-id", "children": [], "_id": "rel-setcfg"},
+            {"node": "say-id", "next": None, "children": [], "_id": "rel-say"},
+            {"node": "after-id", "next": "job-id", "children": [], "_id": "rel-after"},
+            {"node": "job-id", "next": None, "children": [], "_id": "rel-job"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    once_depth = depth("Once")
+    onfirst_depth = depth("On First Time")
+    after_depth = depth("Afterwards")
+    setcfg_depth = depth("Set Session Config")
+    say_depth = depth("Say")
+    job_depth = depth("AI Agent")
+
+    # markers are one level deeper than Once itself, and siblings of each other
+    assert onfirst_depth == once_depth + 2
+    assert after_depth == onfirst_depth
+
+    # content chained off a marker via `next` nests one level deeper than the marker
+    assert setcfg_depth == onfirst_depth + 2
+    assert say_depth == setcfg_depth
+    assert job_depth == after_depth + 2
+
+
+def test_get_flow_chart_hierarchy_nests_if_then_else_content(mock_client, state, cache):
+    """Same marker+next nesting rule applied to an `if` node's `then`/`else` branch markers.
+
+    Per issue #257 review: only once/onFirstExecution/afterwards was covered by a test;
+    this guards the if/then/else marker types in _BRANCH_MARKER_TYPES against regression.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "if-id", "type": "if", "label": "Check Trigger"},
+            {"_id": "then-id", "type": "then", "label": "Then"},
+            {"_id": "sayyes-id", "type": "say", "label": "Say Yes"},
+            {"_id": "else-id", "type": "else", "label": "Else"},
+            {"_id": "sayno-id", "type": "say", "label": "Say No"},
+        ],
+        "relations": [
+            {"node": "if-id", "next": None, "children": ["then-id", "else-id"], "_id": "rel-if"},
+            {"node": "then-id", "next": "sayyes-id", "children": [], "_id": "rel-then"},
+            {"node": "sayyes-id", "next": None, "children": [], "_id": "rel-sayyes"},
+            {"node": "else-id", "next": "sayno-id", "children": [], "_id": "rel-else"},
+            {"node": "sayno-id", "next": None, "children": [], "_id": "rel-sayno"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    if_depth = depth("Check Trigger")
+    then_depth = depth("Then")
+    else_depth = depth("Else")
+    yes_depth = depth("Say Yes")
+    no_depth = depth("Say No")
+
+    assert then_depth == if_depth + 2
+    assert else_depth == then_depth
+    assert yes_depth == then_depth + 2
+    assert no_depth == else_depth + 2
+
+
+def test_get_flow_chart_hierarchy_nests_lookup_default_case_content(mock_client, state, cache):
+    """Same marker+next nesting rule applied to a `lookup` node's `default`/`case` branch markers.
+
+    Per issue #257 review: guards the lookup marker types in _BRANCH_MARKER_TYPES against
+    regression, since no prior test constructed a lookup chart.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "lookup-id", "type": "lookup", "label": "Route Intent"},
+            {"_id": "case-id", "type": "case", "label": "Case: refund"},
+            {"_id": "sayrefund-id", "type": "say", "label": "Say Refund"},
+            {"_id": "default-id", "type": "default", "label": "Default"},
+            {"_id": "saydefault-id", "type": "say", "label": "Say Default"},
+        ],
+        "relations": [
+            {"node": "lookup-id", "next": None, "children": ["case-id", "default-id"], "_id": "rel-lookup"},
+            {"node": "case-id", "next": "sayrefund-id", "children": [], "_id": "rel-case"},
+            {"node": "sayrefund-id", "next": None, "children": [], "_id": "rel-sayrefund"},
+            {"node": "default-id", "next": "saydefault-id", "children": [], "_id": "rel-default"},
+            {"node": "saydefault-id", "next": None, "children": [], "_id": "rel-saydefault"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    lookup_depth = depth("Route Intent")
+    case_depth = depth("Case: refund")
+    default_depth = depth("Default")
+    refund_depth = depth("Say Refund")
+    saydefault_depth = depth("Say Default")
+
+    assert case_depth == lookup_depth + 2
+    assert default_depth == case_depth
+    assert refund_depth == case_depth + 2
+    assert saydefault_depth == default_depth + 2
+
+
 def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, cache):
     """cognigy_create must not raise KeyError when API response lacks _id.
     Repro: creating a knowledge source returns a response without _id.
