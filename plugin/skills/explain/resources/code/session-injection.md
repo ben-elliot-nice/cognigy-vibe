@@ -1,7 +1,6 @@
 ---
 topic: session-injection
 description: context/state inject for in-session testing
-group: code
 ---
 
 ## session-injection — Injecting State for Testing

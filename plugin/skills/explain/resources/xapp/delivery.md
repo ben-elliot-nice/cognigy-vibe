@@ -1,7 +1,6 @@
 ---
 topic: xapp-delivery
 description: session init, postMessage bridge, SDK.submit, dual xApp moments
-group: xapp
 ---
 
 ## xapp-delivery — xApp Patterns

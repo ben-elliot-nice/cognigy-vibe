@@ -1,7 +1,6 @@
 ---
 topic: agent-tool-scaffold
 description: Cognigy auto-scaffolds a default placeholder tool node when an AI Agent Job node is created — detect and delete it before authoring real tools
-group: aiagent
 ---
 
 ## agent-tool-scaffold — Auto-Scaffolded Placeholder Tool on Job Node Creation

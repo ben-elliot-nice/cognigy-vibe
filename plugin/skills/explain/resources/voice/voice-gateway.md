@@ -1,7 +1,6 @@
 ---
 topic: voice-gateway
 description: VG endpoint routing, Set Session Config, SIP headers, DTMF
-group: voice
 ---
 
 ## voice-gateway — Voice Channel Patterns

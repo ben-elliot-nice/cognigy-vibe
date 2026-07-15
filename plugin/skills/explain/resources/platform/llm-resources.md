@@ -1,7 +1,6 @@
 ---
 topic: llm-resources
 description: org-level vs project-level LLMs, assign_org_llm tool, discovery pattern, referenceId resolution, manage_packages fallback
-group: platform
 ---
 
 ## llm-resources — LLM Discovery and Project Assignment

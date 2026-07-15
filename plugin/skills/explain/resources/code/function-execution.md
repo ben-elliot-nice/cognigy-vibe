@@ -1,7 +1,6 @@
 ---
 topic: function-execution
 description: async pattern, inject-back via sessions API, create-body-shape gap
-group: code
 ---
 
 ## function-execution — Cognigy Functions (Async Pattern)

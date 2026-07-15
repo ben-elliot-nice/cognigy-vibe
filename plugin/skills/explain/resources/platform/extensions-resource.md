@@ -1,7 +1,6 @@
 ---
 topic: extensions-resource
 description: no verified create/update body shape yet — discovery recipe for resource_type=extensions (installed extension config, distinct from explain("extension-map")'s node-type lookup table)
-group: platform
 ---
 
 ## extensions-resource — No Verified Body Shape Yet

@@ -14,13 +14,50 @@ def test_tool_description_contains_all_topic_names():
         assert topic in tool.description, f"Topic '{topic}' missing from explain description"
 
 
+_TOP_LEVEL_GROUPS = ["aiagent", "code", "nodes", "platform", "voice", "xapp"]
+
+
 def test_explain_no_args_returns_orientation(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["explain"]({})
     text = result[0].text
     assert "Topics" in text
-    for topic in TOPICS:
-        assert topic in text
+    for group in _TOP_LEVEL_GROUPS:
+        assert group in text
+    assert "agent-avatar-image" not in text, \
+        "top-level orientation must list groups only, not individual leaf topics"
+
+
+def test_explain_group_returns_primer_and_children_index(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "aiagent"})
+    text = result[0].text
+    assert "Unknown topic" not in text
+    assert "agent-avatar-image" in text, \
+        "group primer must list its child topics via the auto-generated children section"
+    assert "Topics in this group" in text
+
+
+def test_explain_xapp_group_still_works_after_frontmatter_simplification(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp"})
+    text = result[0].text
+    assert "Unknown topic" not in text
+    assert "xapp-delivery" in text
+    assert "xapp-event-handling" in text
+
+
+def test_explain_topic_with_empty_body_is_not_reported_unknown(mock_client, state, cache, monkeypatch):
+    """Regression (PR #260 review): `_CONTENT.get(topic)` used truthiness, so a real key
+    whose body happens to be empty (e.g. a childless group with a blank-bodied index.md)
+    was misreported as 'Unknown topic'. Lookup must be by key presence, not body truthiness."""
+    import cognigy_mcp.tools.explain as explain_module
+
+    monkeypatch.setitem(explain_module._CONTENT, "empty-body-topic", "")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "empty-body-topic"})
+    text = result[0].text
+    assert "Unknown topic" not in text
 
 
 def test_explain_known_topic_returns_content(mock_client, state, cache):

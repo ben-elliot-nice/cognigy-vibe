@@ -1,7 +1,6 @@
 ---
 topic: endpoint-config
 description: referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint, per-channel field differences
-group: platform
 ---
 
 ## endpoint-config — Creating and Referencing Endpoints

@@ -1,7 +1,6 @@
 ---
 topic: voice-silence-timeout
 description: Voice Gateway silence detection — three modes, noUserInput intent wiring, reprompt-then-escalate counter
-group: voice
 ---
 
 ## voice-silence-timeout — User Input Timeout Handling

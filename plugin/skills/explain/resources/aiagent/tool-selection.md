@@ -1,7 +1,6 @@
 ---
 topic: tool-selection
 description: when to use push_agent_tool vs push_code_node vs cognigy_create vs cognigy_update
-group: aiagent
 ---
 
 ## tool-selection — Choosing the Right Tool

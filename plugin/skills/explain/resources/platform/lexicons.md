@@ -1,7 +1,6 @@
 ---
 topic: lexicons
 description: no verified create/update body shape yet — discovery recipe for resource_type=lexicons
-group: platform
 ---
 
 ## lexicons — No Verified Body Shape Yet

@@ -1,7 +1,6 @@
 ---
 topic: project-snapshots
 description: create project snapshots for versioning (flow-level versioning does not exist in the API)
-group: platform
 ---
 
 ## project-snapshots — Project Versioning via Snapshots

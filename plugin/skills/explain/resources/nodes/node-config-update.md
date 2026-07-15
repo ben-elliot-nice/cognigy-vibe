@@ -1,7 +1,6 @@
 ---
 topic: node-config-update
 description: full-replace semantics, merge_config pattern, silent field deletion
-group: nodes
 ---
 
 ## node-config-update — Safe Config Updates

@@ -1,7 +1,6 @@
 ---
 topic: flow-chart-reading
 description: reading chart output, node type strings, extension field
-group: nodes
 ---
 
 ## flow-chart-reading — Reading get_flow_chart Output

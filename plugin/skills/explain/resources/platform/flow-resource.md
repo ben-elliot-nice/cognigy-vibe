@@ -1,7 +1,6 @@
 ---
 topic: flow-resource
 description: no verified create/update body shape yet — discovery recipe for resource_type=flows (raw flow creation, distinct from flow/clone via cognigy_invoke)
-group: platform
 ---
 
 ## flow-resource — No Verified Body Shape Yet
