@@ -262,6 +262,7 @@ def test_sync_remote_state_builds_branch_marker_types_from_descriptors(mock_clie
     derive branch-marker types (any type whose parentType is truthy) into state, so
     get_flow_chart's hierarchy nesting isn't limited to the hardcoded core-type list.
     parentType may be a plain string or a list of strings — both count as a marker type.
+    A descriptor with parentType but no type key must be skipped, not raise KeyError.
     """
     monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
     mock_client.get.side_effect = [
@@ -272,6 +273,7 @@ def test_sync_remote_state_builds_branch_marker_types_from_descriptors(mock_clie
             {"type": "afterwards", "parentType": "once"},
             {"type": "success", "parentType": "airtable-getoneorfail"},
             {"type": "executeWorkflowTool", "parentType": ["aiAgentJob", "llmPromptV2"]},
+            {"parentType": "malformedParent"},
         ]},
         {"nodes": []},                                                # chart (tool discovery)
         {"items": []},                                                # chart/nodes/aiagents
@@ -284,6 +286,33 @@ def test_sync_remote_state_builds_branch_marker_types_from_descriptors(mock_clie
     assert marker_types is not None, "branch_marker_types should be written to state"
     assert set(marker_types) == {"afterwards", "success", "executeWorkflowTool"}
     assert "once" not in marker_types, "a type with no parentType is not itself a marker"
+
+
+def test_sync_remote_state_self_heals_branch_marker_types_to_empty_list(mock_client, state, cache, monkeypatch):
+    """A successful descriptors fetch that yields zero marker-bearing items must still write
+    an empty list to state (self-healing), mirroring extension_map's unconditional-write
+    pattern, so a stale set from a prior sync doesn't persist forever if all marker-bearing
+    extensions are later removed. get_flow_chart's `cached_marker_types if cached_marker_types
+    else _BRANCH_MARKER_TYPES` check still falls back correctly since [] is falsy.
+    """
+    monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # GET /v2.0/flows
+        {"_embedded": {"extensions": []}},                      # GET /v2.0/extensions
+        {"items": [                                              # GET /v2.0/flows/flow-1/chart/descriptors
+            {"type": "once", "parentType": None},
+            {"type": "start", "parentType": None},
+        ]},
+        {"nodes": []},                                          # chart (tool discovery)
+        {"items": []},                                          # chart/nodes/aiagents
+        {"items": []},                                          # endpoints
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["sync_remote_state"]({"project_id": state.project_id})
+
+    assert state.get("branch_marker_types") == [], (
+        "branch_marker_types should self-heal to [] rather than stay unset"
+    )
 
 
 def test_sync_remote_state_descriptors_failure_appends_error_and_leaves_state_unset(mock_client, state, cache, monkeypatch):

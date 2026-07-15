@@ -202,10 +202,10 @@ def make_handlers(
             try:
                 descriptors_resp = client.get(f"/v2.0/flows/{flows[0]['_id']}/chart/descriptors")
                 marker_types = {
-                    d["type"] for d in descriptors_resp.get("items", []) if d.get("parentType")
+                    d["type"] for d in descriptors_resp.get("items", [])
+                    if d.get("type") and d.get("parentType")
                 }
-                if marker_types:
-                    state.set("branch_marker_types", value=sorted(marker_types))
+                state.set("branch_marker_types", value=sorted(marker_types))
             except Exception as exc:
                 errors.append(f"chart_descriptors: {exc}")
 
