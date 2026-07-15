@@ -23,13 +23,14 @@ Cognigy REST API
 
 The MCP server is the only thing that talks to the Cognigy API. It handles authentication, per-project state management, filesystem cache, and conflict detection. Skills call MCP tools — they never make HTTP requests directly.
 
-### Tools (20 total: 19 always registered + 1 dev-only)
+### Tools (23 total: 22 always registered + 1 dev-only)
 
 | Group | Tools |
 |---|---|
-| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
+| State & sync | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm`, `set_project_generative_ai_settings` |
 | Flow ops | `cognigy_get`, `cognigy_list`, `cognigy_create`, `cognigy_update`, `cognigy_delete`, `cognigy_invoke`, `get_flow_chart` |
-| File push | `push_code_node`, `push_html_node`, `push_agent_tool`, `push_agent_avatar`, `export_package` |
+| Schema | `describe_resource_schema` |
+| File push | `push_code_node`, `push_html_node`, `push_agent_tool`, `push_agent_avatar`, `push_knowledge_source_file`, `export_package` |
 | Voice | `provision_webrtc_endpoint` |
 | Testing | `talk_to_agent` |
 | Guidance | `explain` |
@@ -77,10 +78,11 @@ The MCP server is the only thing that talks to the Cognigy API. It handles authe
 | `setup.py` | `cognigy-vibe-setup` console-script entry point — `install`/`status`/`update`/`uninstall` subcommands |
 | `reconcile.py` | `SetupState`/`DriftIssue` dataclasses, `gather_state()`/`diff_state()`/`apply_fixes()`, `check_pypi_latest()` — drift detection and reconciliation backing `status`/`update` |
 | `wizard_ui.py` | `rich`-based terminal presentation helpers (`print_header`, `print_section`, `print_summary`, `print_drift_table`, `print_step`, `print_error_panel`) and `run_subprocess()`/`StepFailure` — shared UI layer for all `setup.py` subcommands |
-| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm` |
+| `tools/state_tools.py` | `sync_remote_state`, `get_build_state`, `resolve_resource`, `assign_org_llm`, `set_project_generative_ai_settings` |
 | `tools/flow_ops.py` | CRUD ops, normalisation logic, `get_flow_chart` hierarchy renderer, `cognigy_invoke` operation routing |
-| `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `export_package` |
-| `tools/voice_ops.py` | `provision_webrtc_endpoint` — VoiceGateway webRTC endpoint provisioning with real/dummy Azure Speech connection path |
+| `tools/schema_tools.py` | `describe_resource_schema` — OpenAPI-spec-backed schema introspection for `cognigy_create`/`cognigy_update`, plus live `chart/descriptors`-backed node-type config schema lookups |
+| `tools/file_push.py` | `push_code_node`/`push_html_node` (conflict detection), `push_agent_tool`, `push_agent_avatar`, `push_knowledge_source_file`, `export_package` |
+| `tools/voice_ops.py` | `provision_webrtc_endpoint` — VoiceGateway webRTC endpoint provisioning, genericized to any speech vendor via `connection_type`/`connection_fields` (defaults to Azure), with a real/dummy connection path |
 | `tools/testing.py` | `talk_to_agent` — REST endpoint test harness |
 | `tools/explain.py` | `explain` — 51-key tiered reference library (6 groups, 45 leaf topics) |
 | `tools/dev_tools.py` | `reload_mcp` — dev-mode server respawn signal |

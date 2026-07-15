@@ -215,6 +215,56 @@ def test_locales_fetched_and_primary_locale_used(mock_client, state, cache, monk
     assert ep_body["localeId"] == "ref-b"
 
 
+def test_locale_fallback_without_primary_surfaces_warning(mock_client, state, cache, monkeypatch):
+    """When no locale is marked primary, the first-locale fallback is still used but a
+    warning is surfaced in the response instead of silently picking one."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    mock_client.get.return_value = {
+        "items": [
+            {"_id": "loc-a", "referenceId": "ref-a", "name": "de-DE"},
+            {"_id": "loc-b", "referenceId": "ref-b", "name": "en-AU"},
+        ]
+    }
+    mock_client.post.side_effect = [
+        {"_id": "conn-1", "referenceId": "conn-ref-1"},
+        {"_id": "ep-1", "URLToken": "tok"},
+    ]
+    mock_client.patch.side_effect = [{}, {}]
+    mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-abc",
+        "flow_reference_id": "flow-uuid",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+
+    ep_body = mock_client.post.call_args_list[1][0][1]
+    assert ep_body["localeId"] == "ref-a"
+    assert data["warnings"] == [
+        "No primary locale set on project proj-abc; fell back to the first locale "
+        "returned by the API (de-DE)."
+    ]
+
+
+def test_locales_fetched_and_primary_locale_used_has_no_warning(mock_client, state, cache, monkeypatch):
+    """When a primary locale is present, no fallback warning is surfaced."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "flow-uuid",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert "warnings" not in data
+
+
 def test_endpoint_post_body(mock_client, state, cache, monkeypatch):
     monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
     _args(mock_client)
@@ -301,7 +351,8 @@ def test_endpoint_base_url_raises_propagates_before_api_calls(mock_client, state
 
 
 def test_locale_fetch_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
-    """If the locales GET raises, the speech connection is deleted before re-raising."""
+    """If the locales GET raises, the speech connection is deleted and a structured
+    api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
     mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
@@ -309,35 +360,41 @@ def test_locale_fetch_failure_cleans_up_connection(mock_client, state, cache, mo
     mock_client.get.side_effect = ApiError(500, "locales fetch failed")
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(ApiError):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "proj-1", "flow_reference_id": "fref",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1", "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 500
 
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
 
 
 def test_audio_preview_settings_patch_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
-    """If the audioPreviewSettings PATCH raises, the speech connection is deleted before re-raising."""
+    """If the audioPreviewSettings PATCH raises, the speech connection is deleted and a
+    structured api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
     mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
     mock_client.patch.side_effect = ApiError(400, "unsupported provider slug")
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(ApiError):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "proj-1", "flow_reference_id": "fref",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1", "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
 
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
     mock_client.get.assert_not_called()
 
 
 def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, monkeypatch):
-    """If the endpoint creation POST raises, the speech connection is deleted before re-raising."""
+    """If the endpoint creation POST raises, the speech connection is deleted and a
+    structured api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
     mock_client.get.return_value = LOCALES_RESPONSE
@@ -348,18 +405,21 @@ def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, m
     ]
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(ApiError):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "proj-1", "flow_reference_id": "fref",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1", "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 500
 
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
 
 
 def test_widget_patch_failure_cleans_up_connection_and_endpoint(mock_client, state, cache, monkeypatch):
     """If the widget-enable PATCH raises after the endpoint was already created,
-    both the orphaned endpoint and the speech connection are deleted before re-raising."""
+    both the orphaned endpoint and the speech connection are deleted, and a structured
+    api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
     mock_client.get.return_value = LOCALES_RESPONSE
@@ -370,11 +430,13 @@ def test_widget_patch_failure_cleans_up_connection_and_endpoint(mock_client, sta
     mock_client.patch.side_effect = [{}, ApiError(400, "widget enable failed")]
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(ApiError):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "proj-1", "flow_reference_id": "fref",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1", "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
 
     assert mock_client.delete.call_args_list == [
         (("/v2.0/endpoints/ep-1",),),
@@ -383,25 +445,28 @@ def test_widget_patch_failure_cleans_up_connection_and_endpoint(mock_client, sta
 
 
 def test_connection_reference_id_missing_cleans_up_connection(mock_client, state, cache, monkeypatch):
-    """If the connection response lacks referenceId, the KeyError still triggers connection cleanup."""
+    """If the connection response lacks referenceId, the KeyError still triggers connection
+    cleanup and is returned as a structured unexpected_error response."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
     mock_client.post.side_effect = [{"_id": "conn-real"}]
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(KeyError):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "proj-1", "flow_reference_id": "fref",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1", "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "unexpected_error"
 
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
     mock_client.patch.assert_not_called()
 
 
 def test_locale_list_empty_raises_and_cleans_up_connection(mock_client, state, cache, monkeypatch):
-    """If the project has no locales configured, a clear ValueError is raised
-    instead of an unguarded IndexError, and the connection is still cleaned up."""
+    """If the project has no locales configured, a clear ValueError is raised internally
+    instead of an unguarded IndexError, surfaced as a structured unexpected_error response,
+    and the connection is still cleaned up."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
     mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
@@ -409,11 +474,13 @@ def test_locale_list_empty_raises_and_cleans_up_connection(mock_client, state, c
     mock_client.get.return_value = {"items": []}
 
     handlers = make_handlers(mock_client, state, cache)
-    with pytest.raises(ValueError, match="no locales configured"):
-        handlers["provision_webrtc_endpoint"]({
-            "project_id": "proj-1", "flow_reference_id": "fref",
-            "endpoint_name": "Click-to-Call", "connection_name": "Test",
-        })
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1", "flow_reference_id": "fref",
+        "endpoint_name": "Click-to-Call", "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "unexpected_error"
+    assert "no locales configured" in data["detail"]
 
     mock_client.delete.assert_called_once_with("/v2.0/connections/conn-real")
 

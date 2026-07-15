@@ -385,7 +385,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                     "requested_fields": m.fields,
                     "available_fields": sorted(stripped_view.keys()),
                 })
-            data = {k: data[k] for k in m.fields if k in data}
+            data = {k: stripped_view[k] for k in m.fields if k in stripped_view}
         data = strip_response(data)
         return _ok({**data, "_source": source})
 
@@ -427,14 +427,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result_data = data if not isinstance(data, list) else {"items": data, "count": len(data)}
         if m.fields:
             items = result_data.get("items", [])
-            stripped_available = {k for item in items for k in strip_response(item).keys()}
+            stripped_items = [strip_response(item) for item in items]
+            stripped_available = {k for item in stripped_items for k in item.keys()}
             if items and not (set(m.fields) & stripped_available):
                 return _ok({
                     "error": "none of the requested fields exist on any item in this list",
                     "requested_fields": m.fields,
                     "available_fields": sorted(stripped_available),
                 })
-            filtered = [{k: item[k] for k in m.fields if k in item} for item in items]
+            filtered = [{k: item[k] for k in m.fields if k in item} for item in stripped_items]
             result_data = {"items": filtered, "count": len(filtered)}
         if m.full_objects:
             items = result_data.get("items", [])

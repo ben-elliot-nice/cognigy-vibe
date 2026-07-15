@@ -1,7 +1,7 @@
 from __future__ import annotations
 import re
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from mcp.types import Tool, TextContent
 from cognigy_mcp.tools.flow_ops import (
     _RESOURCE_TYPE_ALIASES,
@@ -290,6 +290,19 @@ class DescribeResourceSchemaArgs(BaseModel):
         "fields, for node_type lookups) instead of a simplified field list.",
     )
 
+    @model_validator(mode="after")
+    def _check_node_type_and_operation_invariants(self) -> "DescribeResourceSchemaArgs":
+        if self.node_type is not None:
+            if _normalise_rtype(self.resource_type) != "node":
+                raise ValueError(
+                    f"node_type is only valid with resource_type='node', got {self.resource_type!r}"
+                )
+            if not self.flow_id:
+                raise ValueError("flow_id is required when node_type is set")
+        elif self.operation is None:
+            raise ValueError("operation is required unless node_type is set")
+        return self
+
 
 TOOLS: list[Tool] = [
     Tool(
@@ -319,14 +332,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return err
 
         if m.node_type is not None:
-            if _normalise_rtype(m.resource_type) != "node":
-                return _ok({
-                    "error": f"node_type is only valid with resource_type='node', got {m.resource_type!r}",
-                })
             return _describe_node_type_schema(m)
-
-        if m.operation is None:
-            return _ok({"error": "operation is required unless node_type is set"})
 
         cached_spec, fresh = spec_cache.get("openapi", "spec")
         if fresh and cached_spec:
@@ -421,9 +427,6 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         return _ok(result)
 
     def _describe_node_type_schema(m: DescribeResourceSchemaArgs) -> list[TextContent]:
-        if not m.flow_id:
-            return _ok({"error": "flow_id is required when node_type is set"})
-
         # chart/descriptors returns the project-wide node-type catalog (verified live:
         # identical content regardless of which flow_id in the project is queried), so
         # the cache is keyed by project_id, not flow_id — otherwise every distinct

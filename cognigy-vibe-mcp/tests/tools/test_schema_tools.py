@@ -14,19 +14,23 @@ from cognigy_mcp.tools.schema_tools import (
 )
 
 def test_describe_resource_schema_missing_operation_and_node_type_returns_error(mock_client, state, cache):
-    """operation is now optional at the pydantic level (node_type lookups don't need
-    it), so the handler itself must reject the case where neither is given."""
+    """operation is optional at the pydantic level (node_type lookups don't need it), but
+    a model_validator rejects the case where neither operation nor node_type is given."""
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["describe_resource_schema"]({"resource_type": "node"})
-    data = json.loads(result[0].text)
-    assert data["error"] == "operation is required unless node_type is set"
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any("operation is required unless node_type is set" in d["message"] for d in data["details"])
 
 
 def test_describe_resource_schema_node_type_missing_flow_id_returns_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "say"})
-    data = json.loads(result[0].text)
-    assert data["error"] == "flow_id is required when node_type is set"
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any("flow_id is required when node_type is set" in d["message"] for d in data["details"])
 
 
 FIXTURE_SPEC = {
@@ -882,8 +886,10 @@ def test_describe_resource_schema_node_type_wrong_resource_type_rejected(mock_cl
     result = handlers["describe_resource_schema"](
         {"resource_type": "flows", "node_type": "say", "flow_id": "flow-1"}
     )
-    data = json.loads(result[0].text)
-    assert "node_type is only valid with resource_type='node'" in data["error"]
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any("node_type is only valid with resource_type='node'" in d["message"] for d in data["details"])
     mock_client.get.assert_not_called()
 
 

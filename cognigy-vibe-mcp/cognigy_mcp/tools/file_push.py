@@ -5,7 +5,7 @@ import json
 import struct
 import time
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
@@ -68,6 +68,17 @@ class PushKnowledgeSourceFileArgs(BaseModel):
         None,
         description="Optional tags applied to the created Knowledge Source",
     )
+
+    @field_validator("tags")
+    @classmethod
+    def _tags_must_be_well_formed(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return value
+        if any("," in tag for tag in value):
+            raise ValueError("Tags must not contain commas (the API joins tags with a comma delimiter)")
+        if any(not tag.strip() for tag in value):
+            raise ValueError("Tags must not be empty or whitespace-only strings")
+        return value
 
 
 class ExportPackageArgs(BaseModel):
@@ -377,12 +388,6 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             supported = ', '.join('.' + e for e in _KNOWLEDGE_SOURCE_CONTENT_TYPES)
             found = f".{ext}" if ext else "no file extension"
             return _ok({"error": f"Unsupported file type: {found}. Supported formats: {supported}"})
-
-        if m.tags:
-            if any("," in tag for tag in m.tags):
-                return _ok({"error": "Tags must not contain commas (the API joins tags with a comma delimiter)"})
-            if any(not tag.strip() for tag in m.tags):
-                return _ok({"error": "Tags must not be empty or whitespace-only strings"})
 
         try:
             data = path.read_bytes()

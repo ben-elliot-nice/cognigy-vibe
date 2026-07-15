@@ -918,9 +918,10 @@ def test_push_knowledge_source_file_tag_with_comma_rejected(mock_client, state, 
         "knowledge_store_id": "ks-1",
         "tags": ["a,b", "c"],
     })
-    data = json.loads(result[0].text)
-    assert "error" in data
-    assert "comma" in data["error"]
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "tags" and "comma" in d["message"] for d in data["details"])
     mock_client.post_multipart.assert_not_called()
 
 
@@ -1039,8 +1040,10 @@ def test_push_knowledge_source_file_empty_string_tag_rejected(mock_client, state
         "knowledge_store_id": "ks-1",
         "tags": [""],
     })
-    data = json.loads(result[0].text)
-    assert "error" in data
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "tags" for d in data["details"])
     mock_client.post_multipart.assert_not_called()
 
 
@@ -1053,8 +1056,10 @@ def test_push_knowledge_source_file_whitespace_only_tag_rejected(mock_client, st
         "knowledge_store_id": "ks-1",
         "tags": ["   "],
     })
-    data = json.loads(result[0].text)
-    assert "error" in data
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "tags" for d in data["details"])
     mock_client.post_multipart.assert_not_called()
 
 
@@ -1069,8 +1074,9 @@ def test_push_knowledge_source_file_comma_checked_before_empty(mock_client, stat
         "knowledge_store_id": "ks-1",
         "tags": ["a,b", ""],
     })
-    data = json.loads(result[0].text)
-    assert "comma" in data["error"]
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert any(d["field"] == "tags" and "comma" in d["message"] for d in data["details"])
     mock_client.post_multipart.assert_not_called()
 
 

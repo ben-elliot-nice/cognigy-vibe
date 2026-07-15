@@ -3,10 +3,11 @@ import os
 from typing import Any
 from pydantic import BaseModel, Field, field_validator
 from mcp.types import Tool, TextContent
-from cognigy_mcp.api import CognigyClient
+from cognigy_mcp.api import CognigyClient, ApiError
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 from cognigy_mcp.validation import _ok, validate, make_schema
+from cognigy_mcp.tools.flow_ops import _api_error_response, _unexpected_error_response
 
 
 class ProvisionWebrtcEndpointArgs(BaseModel):
@@ -94,16 +95,21 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         else:
             connection_fields = {}
 
-        conn_result = client.post("/v2.0/connections", {
-            "name": m.connection_name,
-            "extension": "@cognigy/audio-preview-provider",
-            "type": m.connection_type,
-            "resourceLevel": "project",
-            "projectId": m.project_id,
-            # apiKey placed last so it always wins over any caller-supplied
-            # connection_fields["apiKey"] -- do not reorder these keys.
-            "fields": {**connection_fields, "apiKey": effective_key},
-        }, retry=False)
+        try:
+            conn_result = client.post("/v2.0/connections", {
+                "name": m.connection_name,
+                "extension": "@cognigy/audio-preview-provider",
+                "type": m.connection_type,
+                "resourceLevel": "project",
+                "projectId": m.project_id,
+                # apiKey placed last so it always wins over any caller-supplied
+                # connection_fields["apiKey"] -- do not reorder these keys.
+                "fields": {**connection_fields, "apiKey": effective_key},
+            }, retry=False)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         connection_id = conn_result["_id"]
 
         endpoint_id = None
@@ -130,7 +136,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             locale_items = locales.get("items", [])
             if not locale_items:
                 raise ValueError(f"Project {m.project_id} has no locales configured")
-            locale = next((loc for loc in locale_items if loc.get("primary")), locale_items[0])
+            locale = next((loc for loc in locale_items if loc.get("primary")), None)
+            locale_warning = None
+            if locale is None:
+                locale = locale_items[0]
+                locale_warning = (
+                    f"No primary locale set on project {m.project_id}; fell back to "
+                    f"the first locale returned by the API ({locale.get('name', locale.get('referenceId'))})."
+                )
             locale_reference_id = locale["referenceId"]
 
             ep_result = client.post("/v2.0/endpoints", {
@@ -155,7 +168,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "localeId": locale_reference_id,
                 "webrtcWidgetConfig": _WEBRTC_WIDGET_CONFIG,
             })
-        except Exception:
+        except ApiError as exc:
             if endpoint_id:
                 try:
                     client.delete(f"/v2.0/endpoints/{endpoint_id}")
@@ -165,7 +178,18 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 client.delete(f"/v2.0/connections/{connection_id}")
             except Exception:
                 pass
-            raise
+            return _api_error_response(exc)
+        except Exception as exc:
+            if endpoint_id:
+                try:
+                    client.delete(f"/v2.0/endpoints/{endpoint_id}")
+                except Exception:
+                    pass
+            try:
+                client.delete(f"/v2.0/connections/{connection_id}")
+            except Exception:
+                pass
+            return _unexpected_error_response(exc)
 
         demo_url = f"{endpoint_base}/demo/{url_token}"
 
@@ -180,12 +204,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             client.delete(f"/v2.0/connections/{connection_id}")
             connection_id = None
 
-        return _ok({
+        response = {
             "endpoint_id": endpoint_id,
             "url_token": url_token,
             "demo_url": demo_url,
             "connection_id": connection_id,
             "path": "dummy" if is_dummy else "real",
-        })
+        }
+        if locale_warning:
+            response["warnings"] = [locale_warning]
+        return _ok(response)
 
     return {"provision_webrtc_endpoint": _provision_webrtc_endpoint}
