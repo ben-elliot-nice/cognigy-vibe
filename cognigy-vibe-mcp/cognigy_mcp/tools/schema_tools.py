@@ -259,7 +259,7 @@ def _simplify_descriptor_fields(fields: list[dict]) -> list[dict]:
         if "required" in params:
             entry["required"] = params["required"]
         if "options" in params:
-            entry["options"] = [
+            entry["enum"] = [
                 option.get("value") for option in params["options"] if isinstance(option, dict)
             ]
         simplified.append(entry)
@@ -319,6 +319,10 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return err
 
         if m.node_type is not None:
+            if _normalise_rtype(m.resource_type) != "node":
+                return _ok({
+                    "error": f"node_type is only valid with resource_type='node', got {m.resource_type!r}",
+                })
             return _describe_node_type_schema(m)
 
         if m.operation is None:
@@ -420,7 +424,13 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if not m.flow_id:
             return _ok({"error": "flow_id is required when node_type is set"})
 
-        cached_descriptors, fresh = spec_cache.get("chart_descriptors", m.flow_id)
+        # chart/descriptors returns the project-wide node-type catalog (verified live:
+        # identical content regardless of which flow_id in the project is queried), so
+        # the cache is keyed by project_id, not flow_id — otherwise every distinct
+        # flow_id a caller passes would be an avoidable cache miss for the same data.
+        cache_key = state.project_id or "_unscoped"
+        cached_descriptors, fresh = spec_cache.get("chart_descriptors", cache_key)
+        next_cursor = None
         if fresh and cached_descriptors is not None:
             descriptors = cached_descriptors
         else:
@@ -431,7 +441,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             except Exception as exc:
                 return _unexpected_error_response(exc)
             descriptors = resp.get("items", []) if isinstance(resp, dict) else resp
-            spec_cache.set("chart_descriptors", m.flow_id, descriptors)
+            next_cursor = resp.get("nextCursor") if isinstance(resp, dict) else None
+            spec_cache.set("chart_descriptors", cache_key, descriptors)
 
         descriptor = _find_node_descriptor(descriptors, m.node_type)
         if descriptor is None:
@@ -441,6 +452,16 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             })
 
         result = {"resource_type": "node", "node_type": m.node_type, "flow_id": m.flow_id}
+        # This endpoint's OpenAPI operation (indexNodeDescriptors_2_0) takes no query
+        # parameters and its documented response schema declares only 'items' — no
+        # cursor/limit params exist to page through, so a non-null nextCursor here
+        # would mean the live API added pagination this client doesn't yet support.
+        # Surface that as a warning rather than silently returning a partial catalog.
+        if next_cursor:
+            result["warning"] = (
+                "API response included a non-null nextCursor, which this tool does not "
+                "yet follow — the node-type catalog below may be incomplete."
+            )
         raw_fields = descriptor.get("fields", [])
         if m.verbose:
             result["raw_fields"] = raw_fields

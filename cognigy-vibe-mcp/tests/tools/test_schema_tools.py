@@ -818,7 +818,7 @@ def test_describe_resource_schema_node_type_simplified_fields(mock_client, state
     by_field = {f["field"]: f for f in data["fields"]}
     assert set(by_field) == {"say", "handoverOutput", "preventTranscript"}
     assert by_field["handoverOutput"]["required"] is True
-    assert by_field["handoverOutput"]["options"] == ["userAndAgent", "userOnly"]
+    assert by_field["handoverOutput"]["enum"] == ["userAndAgent", "userOnly"]
     assert by_field["handoverOutput"]["default"] == "userAndAgent"
     assert by_field["preventTranscript"]["type"] == "toggle"
     mock_client.get.assert_called_once_with("/v2.0/flows/flow-1/chart/descriptors")
@@ -854,6 +854,17 @@ def test_describe_resource_schema_node_type_caches_descriptors_across_calls(mock
     assert mock_client.get.call_count == 1
 
 
+def test_describe_resource_schema_node_type_cache_shared_across_different_flow_ids(mock_client, state, cache):
+    """chart/descriptors returns the project-wide node-type catalog, so the cache
+    must be keyed by project (state.project_id), not flow_id — a second call with a
+    different flow_id in the same project must still hit the cache."""
+    mock_client.get.return_value = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "say", "flow_id": "flow-1"})
+    handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "if", "flow_id": "flow-2"})
+    assert mock_client.get.call_count == 1
+
+
 def test_describe_resource_schema_node_type_handler_returns_api_error_response(mock_client, state, cache):
     mock_client.get.side_effect = ApiError(500, "boom")
     handlers = make_handlers(mock_client, state, cache)
@@ -864,3 +875,26 @@ def test_describe_resource_schema_node_type_handler_returns_api_error_response(m
     assert data["error"] == "api_error"
     assert data["status"] == 500
     assert "boom" in data["detail"]
+
+
+def test_describe_resource_schema_node_type_wrong_resource_type_rejected(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "flows", "node_type": "say", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert "node_type is only valid with resource_type='node'" in data["error"]
+    mock_client.get.assert_not_called()
+
+
+def test_describe_resource_schema_node_type_non_null_next_cursor_adds_warning(mock_client, state, cache):
+    response = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    response["nextCursor"] = "some-cursor-token"
+    mock_client.get.return_value = response
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "say", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert "nextCursor" in data["warning"]
+    assert data["fields"]  # descriptor data is still returned alongside the warning
