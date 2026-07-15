@@ -9,7 +9,6 @@ import sys
 import threading
 import time
 from pathlib import Path
-from dotenv import load_dotenv
 from cognigy_mcp.config import CONFIG_BASE, USER_ENV_PATH
 from cognigy_mcp.discovery import resolve_env_layers
 from cognigy_mcp.migrate import safe_move
@@ -91,15 +90,14 @@ class _Orchestrator:
     def _spawn(self) -> subprocess.Popen:
         for key in _ENV_KEYS:
             os.environ.pop(key, None)
-        project_env = Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env"
-        if project_env.exists():
-            load_dotenv(dotenv_path=project_env, override=True)
-            _log(f"_spawn: loaded project env {project_env} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
-        elif USER_ENV_PATH.exists():
-            load_dotenv(dotenv_path=USER_ENV_PATH, override=True)
-            _log(f"_spawn: loaded user-scope env {USER_ENV_PATH} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
-        else:
-            _log("_spawn: no .env found — starting in degraded mode")
+        project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", "."))
+        resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
+        os.environ.update(resolution.values)
+        _log(
+            f"_spawn: merged env | project_env={resolution.project_env_path} "
+            f"user_env_found={resolution.user_env_path.exists()} "
+            f"project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}"
+        )
         mode = _detect_mode()
         self._mode = mode
         cmd = _inner_command(mode)

@@ -7,6 +7,7 @@ import sys
 import time
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -425,4 +426,37 @@ def test_main_merges_project_and_user_env(tmp_path, monkeypatch):
         assert os.environ["COGNIGY_PROJECT_ROOT"] == str(project_dir)
     finally:
         for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY", "COGNIGY_PROJECT_ROOT"):
+            os.environ.pop(key, None)
+
+
+def test_spawn_merges_project_and_user_env(tmp_path, monkeypatch):
+    """Hot-reload path (_spawn, invoked by reload_mcp) must merge just like main()."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / ".env").write_text("COGNIGY_PROJECT_ID=proj-123\n")
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+    user_env.parent.mkdir(parents=True)
+    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\nCOGNIGY_API_KEY=userkey\n")
+
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
+    for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(orch.subprocess, "Popen", lambda *a, **k: SimpleNamespace(pid=1234))
+
+    # _spawn() writes directly to os.environ via os.environ.update(), which
+    # monkeypatch's setenv/delenv-based teardown does not track — reset these keys
+    # afterward so this test doesn't leak COGNIGY_PROJECT_ID (etc.) into later tests
+    # in the same session.
+    try:
+        o = orch._Orchestrator()
+        o._spawn()
+
+        assert os.environ["COGNIGY_PROJECT_ID"] == "proj-123"
+        assert os.environ["COGNIGY_BASE_URL"] == "https://user.example.com"
+        assert os.environ["COGNIGY_API_KEY"] == "userkey"
+    finally:
+        for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY"):
             os.environ.pop(key, None)
