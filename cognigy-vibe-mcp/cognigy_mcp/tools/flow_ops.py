@@ -613,8 +613,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             return _api_error_response(exc)
         except Exception as exc:
             return _unexpected_error_response(exc)
-        cached_marker_types = state.get("branch_marker_types")
-        marker_types = frozenset(cached_marker_types) if cached_marker_types else _BRANCH_MARKER_TYPES
+        cached_marker_types = state.get("branch_marker_types") or []
+        marker_types = frozenset(cached_marker_types) | _BRANCH_MARKER_TYPES
         stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if m.format == "hierarchy":
             stripped_chart = {**chart, "nodes": stripped_nodes}
