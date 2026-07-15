@@ -50,8 +50,8 @@ def _log(msg: str) -> None:
 # Only credential keys are popped on each _spawn() so they reload from .env on restart.
 # COGNIGY_VIBE_DEV and COGNIGY_VIBE_SOURCE_DIR are structural config injected by .mcp.json
 # and must NOT be popped — they survive in os.environ across restarts. A contributor who
-# wants to opt out of dev mode can set COGNIGY_VIBE_DEV= in their .env (load_dotenv
-# override=True will clear it).
+# wants to opt out of dev mode can set COGNIGY_VIBE_DEV= in their .env — resolve_env_layers()
+# picks up the empty value and os.environ.update() in _spawn() will clear it.
 _ENV_KEYS = frozenset([
     "COGNIGY_BASE_URL",
     "COGNIGY_API_KEY",

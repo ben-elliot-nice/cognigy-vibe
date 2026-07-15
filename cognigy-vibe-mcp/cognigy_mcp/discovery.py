@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 
 
 def find_nearest_ancestor(filename: str, start: Path, stop: Path) -> "Path | None":
-    """Walk up from start toward stop looking for filename. Stop is the boundary (inclusive)."""
+    """Walk up from start toward stop looking for filename. Checks stop itself, but never ascends past it."""
     current = start.resolve()
     stop = stop.resolve()
     while True:
