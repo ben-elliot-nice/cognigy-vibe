@@ -1,7 +1,16 @@
 import json
 from pathlib import Path
 import pytest
+from cognigy_mcp import server as _server_module
 from cognigy_mcp.server import create_server, _find_config_file
+
+
+def _isolate_user_config(monkeypatch, tmp_path):
+    """Point USER_CONFIG_PATH at a nonexistent file so a real
+    ~/.config/cognigy-vibe/config.json on the dev machine can't leak into a test
+    that only mocked Path.home() (USER_CONFIG_PATH is a module constant baked in
+    at import time from the real home, so mocking Path.home() alone doesn't move it)."""
+    monkeypatch.setattr(_server_module, "USER_CONFIG_PATH", tmp_path / "no-such-global-config.json")
 
 
 def test_server_creates_without_error(monkeypatch, tmp_path):
@@ -36,12 +45,14 @@ def test_server_boots_without_project_id(monkeypatch, tmp_path):
 
 # --- degraded / dev mode tests (append below existing tests) ---
 
-def test_create_server_degraded_when_no_env(monkeypatch):
+def test_create_server_degraded_when_no_env(monkeypatch, tmp_path):
     monkeypatch.delenv("COGNIGY_BASE_URL", raising=False)
     monkeypatch.delenv("COGNIGY_API_KEY", raising=False)
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(tmp_path))
     from cognigy_mcp import server
     import importlib
     importlib.reload(server)
+    monkeypatch.setattr(server, "USER_ENV_PATH", tmp_path / "no-such-user.env")
     s, tools = server.create_server()
     tool_names = [t.name for t in tools]
     # Degraded mode exposes the full tool surface so the session list is identical to full mode.
@@ -54,12 +65,14 @@ def test_create_server_degraded_when_no_env(monkeypatch):
     assert len(tools) == 22
 
 
-def test_create_server_degraded_when_missing_key(monkeypatch):
+def test_create_server_degraded_when_missing_key(monkeypatch, tmp_path):
     monkeypatch.setenv("COGNIGY_BASE_URL", "https://example.com")
     monkeypatch.delenv("COGNIGY_API_KEY", raising=False)
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(tmp_path))
     from cognigy_mcp import server
     import importlib
     importlib.reload(server)
+    monkeypatch.setattr(server, "USER_ENV_PATH", tmp_path / "no-such-user.env")
     s, tools = server.create_server()
     tool_names = [t.name for t in tools]
     assert "cognigy_get" in tool_names
@@ -95,13 +108,15 @@ def test_create_server_dev_mode_includes_reload_tool(monkeypatch, tmp_path):
     assert "sync_remote_state" in tool_names
 
 
-def test_create_server_dev_flag_ignored_without_credentials(monkeypatch):
+def test_create_server_dev_flag_ignored_without_credentials(monkeypatch, tmp_path):
     monkeypatch.setenv("COGNIGY_VIBE_DEV", "1")
     monkeypatch.delenv("COGNIGY_BASE_URL", raising=False)
     monkeypatch.delenv("COGNIGY_API_KEY", raising=False)
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(tmp_path))
     from cognigy_mcp import server
     import importlib
     importlib.reload(server)
+    monkeypatch.setattr(server, "USER_ENV_PATH", tmp_path / "no-such-user.env")
     s, tools = server.create_server()
     tool_names = [t.name for t in tools]
     assert "cognigy_get" in tool_names
@@ -113,6 +128,8 @@ def test_create_server_dev_flag_ignored_without_credentials(monkeypatch):
 
 def test_find_config_file_in_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    _isolate_user_config(monkeypatch, tmp_path)
     cfg = {"$schemaVersion": 2, "connection": {"region": "au1"}}
     (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
     result, source = _find_config_file()
@@ -126,6 +143,7 @@ def test_find_config_file_in_ancestor(tmp_path, monkeypatch):
     child.mkdir()
     monkeypatch.chdir(child)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    _isolate_user_config(monkeypatch, tmp_path)
     cfg = {"$schemaVersion": 2, "connection": {"region": "na1"}}
     (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
     result, source = _find_config_file()
@@ -138,8 +156,10 @@ def test_find_config_file_global_fallback(tmp_path, monkeypatch):
     global_dir = tmp_path / ".config" / "cognigy-vibe"
     global_dir.mkdir(parents=True)
     cfg = {"$schemaVersion": 2, "connection": {"region": "jp1"}}
-    (global_dir / "config.json").write_text(json.dumps(cfg))
+    global_config = global_dir / "config.json"
+    global_config.write_text(json.dumps(cfg))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(_server_module, "USER_CONFIG_PATH", global_config)
     result, source = _find_config_file()
     assert result is not None
     assert result["connection"]["region"] == "jp1"
@@ -149,6 +169,7 @@ def test_find_config_file_global_fallback(tmp_path, monkeypatch):
 def test_find_config_file_not_found(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    _isolate_user_config(monkeypatch, tmp_path)
     result, source = _find_config_file()
     assert result is None
     assert source is None
@@ -164,6 +185,7 @@ def test_find_config_file_does_not_escape_home_boundary(tmp_path, monkeypatch):
     fake_home = tmp_path / "home-dir"
     fake_home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: fake_home)
+    _isolate_user_config(monkeypatch, tmp_path)
     cfg = {"$schemaVersion": 2, "connection": {"region": "stray"}}
     (outside_home / "default-demo-config.json").write_text(json.dumps(cfg))
     result, source = _find_config_file()
@@ -179,6 +201,7 @@ def test_find_config_file_uses_project_root_env_over_cwd(tmp_path, monkeypatch):
     project_root.mkdir()
     monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_root))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    _isolate_user_config(monkeypatch, tmp_path)
     cfg = {"$schemaVersion": 2, "connection": {"region": "root-anchored"}}
     (project_root / "default-demo-config.json").write_text(json.dumps(cfg))
     result, source = _find_config_file()
@@ -189,6 +212,7 @@ def test_find_config_file_uses_project_root_env_over_cwd(tmp_path, monkeypatch):
 def test_find_config_file_warns_on_schema_version_mismatch(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    _isolate_user_config(monkeypatch, tmp_path)
     cfg = {"$schemaVersion": 1, "connection": {"region": "au1"}}
     (tmp_path / "default-demo-config.json").write_text(json.dumps(cfg))
     result, source = _find_config_file()
@@ -201,6 +225,7 @@ def test_find_config_file_cwd_wins_over_ancestor(tmp_path, monkeypatch):
     child.mkdir()
     monkeypatch.chdir(child)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    _isolate_user_config(monkeypatch, tmp_path)
     parent_cfg = {"$schemaVersion": 2, "connection": {"region": "au1"}}
     child_cfg = {"$schemaVersion": 2, "connection": {"region": "na1"}}
     (tmp_path / "default-demo-config.json").write_text(json.dumps(parent_cfg))
@@ -217,3 +242,28 @@ def test_describe_resource_schema_tool_registered(monkeypatch, tmp_path):
     _, tools = create_server()
     names = [t.name for t in tools]
     assert "describe_resource_schema" in names
+
+
+def test_find_config_file_merges_project_and_global_shallow(tmp_path, monkeypatch):
+    """#255 scope: project config only sets 'connection', global config's other
+    top-level keys must still come through instead of being fully shadowed."""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    monkeypatch.chdir(project_root)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    (project_root / "default-demo-config.json").write_text(json.dumps({
+        "$schemaVersion": 2, "connection": {"region": "na1"},
+    }))
+    global_dir = tmp_path / ".config" / "cognigy-vibe"
+    global_dir.mkdir(parents=True)
+    global_config = global_dir / "config.json"
+    global_config.write_text(json.dumps({
+        "$schemaVersion": 2, "connection": {"region": "au1"}, "logging": {"level": "debug"},
+    }))
+    monkeypatch.setattr(_server_module, "USER_CONFIG_PATH", global_config)
+
+    result, source = _find_config_file()
+
+    assert result["connection"]["region"] == "na1"  # project wins for this key
+    assert result["logging"]["level"] == "debug"  # global fills in the key project didn't set
+    assert "default-demo-config.json" in source

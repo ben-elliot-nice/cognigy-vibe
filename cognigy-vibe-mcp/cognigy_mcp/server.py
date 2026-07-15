@@ -13,6 +13,13 @@ from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 from cognigy_mcp.tools import state_tools, flow_ops, file_push, testing, explain, dev_tools, voice_ops, schema_tools
+from cognigy_mcp.config import USER_CONFIG_PATH, USER_ENV_PATH
+from cognigy_mcp.discovery import (
+    resolve_config_layers,
+    resolve_env_layers,
+    missing_env_keys,
+    build_env_guidance,
+)
 
 
 _CONFIG_SCHEMA_VERSION = 2
@@ -36,36 +43,36 @@ def _load_config_candidate(candidate: Path) -> "dict | None":
     return data
 
 
-def _find_config_file() -> "tuple[dict | None, str | None]":
-    """Cascade: COGNIGY_PROJECT_ROOT (or cwd) → ancestors (bounded by $HOME, if an ancestor)
-    → ~/.config/cognigy-vibe/config.json. First wins, no merging."""
+def _ancestor_search_boundary(project_root: Path) -> Path:
+    """Only climb toward $HOME when it's actually an ancestor of project_root —
+    otherwise (CI checkout, /tmp, a mounted volume) don't escape project_root
+    onto unrelated ancestors looking for a stray config/env file."""
     home = Path.home().resolve()
-    current = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd()))).resolve()
-    # Only climb toward $HOME when it's actually an ancestor — otherwise (CI checkout,
-    # /tmp, a mounted volume) don't escape the starting directory onto unrelated ancestors.
-    stop = home if (home == current or home in current.parents) else current
+    current = project_root.resolve()
+    return home if (home == current or home in current.parents) else current
 
-    while True:
-        candidate = current / "default-demo-config.json"
-        if candidate.exists():
-            data = _load_config_candidate(candidate)
-            if data is not None:
-                return data, str(candidate)
-        if current == stop or current == current.parent:
-            break
-        current = current.parent
 
-    global_config = home / ".config" / "cognigy-vibe" / "config.json"
-    if global_config.exists():
-        data = _load_config_candidate(global_config)
-        if data is not None:
-            return data, str(global_config)
-
-    return None, None
+def _find_config_file() -> "tuple[dict | None, str | None]":
+    """Merge nearest-ancestor default-demo-config.json (bounded by $HOME) with the
+    user-global config.json. Shallow merge, nearest-ancestor wins per top-level key."""
+    project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd())))
+    resolution = resolve_config_layers(
+        "default-demo-config.json",
+        project_root,
+        _ancestor_search_boundary(project_root),
+        USER_CONFIG_PATH,
+        _load_config_candidate,
+    )
+    if not resolution.values:
+        return None, None
+    source = str(resolution.project_config_path or resolution.user_config_path)
+    return resolution.values, source
 
 
 def _env_configured() -> bool:
-    return bool(os.environ.get("COGNIGY_BASE_URL")) and bool(os.environ.get("COGNIGY_API_KEY"))
+    project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd())))
+    resolution = resolve_env_layers(project_root, _ancestor_search_boundary(project_root), USER_ENV_PATH)
+    return not missing_env_keys(resolution)
 
 
 def create_server() -> tuple[Server, list[types.Tool]]:
@@ -87,7 +94,8 @@ def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
         + voice_ops.TOOLS
         + schema_tools.TOOLS
     )
-    env_path = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd()))) / ".env"
+    project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", str(Path.cwd())))
+    resolution = resolve_env_layers(project_root, _ancestor_search_boundary(project_root), USER_ENV_PATH)
     server = Server("cognigy-vibe")
 
     @server.list_tools()
@@ -96,18 +104,7 @@ def _create_degraded_server() -> tuple[Server, list[types.Tool]]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-        return [types.TextContent(type="text", text=(
-            f"cognigy-vibe-mcp is not configured.\n\n"
-            f"Create a .env file at:\n  {env_path}\n\n"
-            f"  COGNIGY_BASE_URL=<your-api-base-url>\n"
-            f"  COGNIGY_API_KEY=<your-api-key>\n"
-            f"  COGNIGY_PROJECT_ID=<your-project-id>  # optional\n\n"
-            f"COGNIGY_BASE_URL is the API endpoint — not the UI URL.\n"
-            f"  CXone: https://cognigy-api-au1.nicecxone.com  (cognigy-api-*, not cognigy-*)\n"
-            f"  Trial: https://api-trial.cognigy.ai  (api-trial.*, not trial.*)\n\n"
-            f"Get your API key in Cognigy: My Profile → API Keys → +\n\n"
-            f"Once saved, retry this tool call — credentials will load automatically."
-        ))]
+        return [types.TextContent(type="text", text=build_env_guidance(resolution, project_root))]
 
     return server, all_tools
 

@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -65,10 +66,19 @@ def _spawn_degraded_inner_server() -> subprocess.Popen:
     are absent from the environment, so an empty-string value prevents it from loading
     real credentials from a local .env file. bool("") is False, so _env_configured()
     returns False and the server starts in degraded mode.
+
+    Also points HOME/COGNIGY_PROJECT_ROOT at a fresh empty tmp dir so
+    _env_configured()'s config-cascade merge (#255) can't pick up real credentials
+    from the developer's own ~/.config/cognigy-vibe/.env or a project .env — those
+    live outside os.environ and blanking COGNIGY_BASE_URL/COGNIGY_API_KEY alone no
+    longer prevents the merge from finding them.
     """
+    isolated_root = tempfile.mkdtemp(prefix="cognigy-vibe-degraded-test-")
     env = dict(os.environ)
     env["COGNIGY_BASE_URL"] = ""
     env["COGNIGY_API_KEY"] = ""
+    env["HOME"] = isolated_root
+    env["COGNIGY_PROJECT_ROOT"] = isolated_root
     env.pop("COGNIGY_PROJECT_ID", None)
     env.pop("COGNIGY_VIBE_DEV", None)
     return subprocess.Popen(
