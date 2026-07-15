@@ -32,14 +32,6 @@ class LeafTopic:
     body: str
     path: str  # source file path, relative to resources/ — SKILL.md-only, never in MCP output
 
-    def __post_init__(self) -> None:
-        # Only constructed once scan_dir has already validated topic/description are
-        # non-empty — this is a type-level guarantee of that invariant, not new scan logic.
-        if not self.key:
-            raise ValueError("LeafTopic.key must be non-empty")
-        if not self.description:
-            raise ValueError("LeafTopic.description must be non-empty")
-
 
 @dataclass(frozen=True)
 class GroupIndex:
