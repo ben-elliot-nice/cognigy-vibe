@@ -9,8 +9,8 @@ import sys
 import threading
 import time
 from pathlib import Path
-from dotenv import load_dotenv
 from cognigy_mcp.config import CONFIG_BASE, USER_ENV_PATH
+from cognigy_mcp.discovery import resolve_env_layers, missing_env_keys, build_env_guidance
 from cognigy_mcp.migrate import safe_move
 
 def _migrate_flat_logs(config_base: Path, log_dir: Path) -> None:
@@ -50,41 +50,13 @@ def _log(msg: str) -> None:
 # Only credential keys are popped on each _spawn() so they reload from .env on restart.
 # COGNIGY_VIBE_DEV and COGNIGY_VIBE_SOURCE_DIR are structural config injected by .mcp.json
 # and must NOT be popped — they survive in os.environ across restarts. A contributor who
-# wants to opt out of dev mode can set COGNIGY_VIBE_DEV= in their .env (load_dotenv
-# override=True will clear it).
+# wants to opt out of dev mode can set COGNIGY_VIBE_DEV= in their .env — resolve_env_layers()
+# picks up the empty value and os.environ.update() in _spawn() will clear it.
 _ENV_KEYS = frozenset([
     "COGNIGY_BASE_URL",
     "COGNIGY_API_KEY",
     "COGNIGY_PROJECT_ID",
 ])
-
-
-def _find_env_file(start: Path, stop: Path) -> "Path | None":
-    """Walk up from start toward stop looking for .env. Stop is the boundary (exclusive above)."""
-    current = start.resolve()
-    stop = stop.resolve()
-    while True:
-        candidate = current / ".env"
-        if candidate.exists():
-            return candidate
-        if current == stop or current == current.parent:
-            return None
-        current = current.parent
-
-
-def _resolve_env_file(start: Path, stop: Path) -> "Path | None":
-    """Walk up from start toward stop, then check user-scope fallback."""
-    env_file = _find_env_file(start, stop)
-    if env_file is None:
-        if USER_ENV_PATH.exists():
-            _log(f"_resolve_env_file: no project .env found; using user-scope fallback {USER_ENV_PATH}")
-            return USER_ENV_PATH
-    elif env_file != USER_ENV_PATH and USER_ENV_PATH.exists():
-        _log(
-            f"_resolve_env_file: using {env_file}; "
-            f"user-scope {USER_ENV_PATH} exists but is shadowed by the walk-up result"
-        )
-    return env_file
 
 
 def _detect_mode() -> str:
@@ -118,15 +90,14 @@ class _Orchestrator:
     def _spawn(self) -> subprocess.Popen:
         for key in _ENV_KEYS:
             os.environ.pop(key, None)
-        project_env = Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env"
-        if project_env.exists():
-            load_dotenv(dotenv_path=project_env, override=True)
-            _log(f"_spawn: loaded project env {project_env} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
-        elif USER_ENV_PATH.exists():
-            load_dotenv(dotenv_path=USER_ENV_PATH, override=True)
-            _log(f"_spawn: loaded user-scope env {USER_ENV_PATH} | project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}")
-        else:
-            _log("_spawn: no .env found — starting in degraded mode")
+        project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", "."))
+        resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
+        os.environ.update(resolution.values)
+        _log(
+            f"_spawn: merged env | project_env={resolution.project_env_path} "
+            f"user_env_found={resolution.user_env_path.exists()} "
+            f"project_id={'set' if os.environ.get('COGNIGY_PROJECT_ID') else 'NOT SET'}"
+        )
         mode = _detect_mode()
         self._mode = mode
         cmd = _inner_command(mode)
@@ -162,19 +133,9 @@ class _Orchestrator:
         child.stdin.flush()
         _log("replay_handshake: done")
 
-    def _guidance_response(self, request_id: object, env_path: Path) -> bytes:
-        text = (
-            f"cognigy-vibe-mcp is not configured.\n\n"
-            f"Create a .env file at:\n  {env_path}\n\n"
-            f"  COGNIGY_BASE_URL=<your-api-base-url>\n"
-            f"  COGNIGY_API_KEY=<your-api-key>\n"
-            f"  COGNIGY_PROJECT_ID=<your-project-id>  # optional\n\n"
-            f"COGNIGY_BASE_URL is the API endpoint for your deployment — not the UI URL.\n"
-            f"  CXone: https://cognigy-api-au1.nicecxone.com  (note: cognigy-api-*, not cognigy-*)\n"
-            f"  Trial: https://api-trial.cognigy.ai  (note: api-trial.*, not trial.*)\n\n"
-            f"Get your API key in Cognigy: My Profile → API Keys → +\n\n"
-            f"Once the file is saved, retry this tool call — credentials will load automatically."
-        )
+    def _guidance_response(self, request_id: object, project_root: Path) -> bytes:
+        resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
+        text = build_env_guidance(resolution, project_root)
         resp = json.dumps({
             "jsonrpc": "2.0",
             "id": request_id,
@@ -329,20 +290,25 @@ class _Orchestrator:
                     and isinstance(msg, dict)
                     and msg.get("method") == "tools/call"
                 ):
-                    env_path = Path(os.environ.get("COGNIGY_PROJECT_ROOT", ".")) / ".env"
-                    if env_path.exists():
-                        _log(f"tools/call in degraded mode: .env found, restarting")
-                        self._pending_call = raw_line
-                        self._do_restart()
-                    else:
-                        _log("tools/call in degraded mode: no .env, returning guidance")
-                        resp = self._guidance_response(msg.get("id"), env_path)
-                        with self._write_lock:
-                            sys.stdout.buffer.write(resp)
-                            sys.stdout.buffer.flush()
+                    self._handle_degraded_tool_call(msg, raw_line)
                     continue
 
                 self._write_to_child(raw_line, msg)
+
+    def _handle_degraded_tool_call(self, msg: dict, raw_line: bytes) -> None:
+        project_root = Path(os.environ.get("COGNIGY_PROJECT_ROOT", "."))
+        resolution = resolve_env_layers(project_root, Path.home(), USER_ENV_PATH)
+        missing = missing_env_keys(resolution)
+        if not missing:
+            _log("tools/call in degraded mode: merged env now complete, restarting")
+            self._pending_call = raw_line
+            self._do_restart()
+        else:
+            _log(f"tools/call in degraded mode: still missing {missing}")
+            resp = self._guidance_response(msg.get("id"), project_root)
+            with self._write_lock:
+                sys.stdout.buffer.write(resp)
+                sys.stdout.buffer.flush()
 
 
 def main() -> None:
@@ -350,13 +316,17 @@ def main() -> None:
     truststore.inject_into_ssl()
     home = Path.home()
     cwd = Path.cwd()
-    env_file = _resolve_env_file(cwd, home)
-    project_root = cwd if (env_file is None or env_file == USER_ENV_PATH) else env_file.parent
+    resolution = resolve_env_layers(cwd, home, USER_ENV_PATH)
+    project_root = cwd if resolution.project_env_path is None else resolution.project_env_path.parent
     os.environ.setdefault("COGNIGY_PROJECT_ROOT", str(project_root))
-    _log(f"main: start cwd={cwd} project_root={project_root} env_found={env_file is not None}")
-    if env_file:
-        load_dotenv(dotenv_path=env_file)
-    _log(f"main: after load_dotenv mode={_detect_mode()}")
+    _log(
+        f"main: start cwd={cwd} project_root={project_root} "
+        f"project_env_found={resolution.project_env_path is not None} "
+        f"user_env_found={resolution.user_env_path.exists()}"
+    )
+    for key, val in resolution.values.items():
+        os.environ.setdefault(key, val)
+    _log(f"main: after merge mode={_detect_mode()}")
     try:
         _Orchestrator().run()
     except KeyboardInterrupt:

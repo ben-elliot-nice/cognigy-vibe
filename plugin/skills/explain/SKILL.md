@@ -76,6 +76,7 @@ Project-level platform resources — connections, endpoints, extensions, LLMs, l
 | --- | --- | --- |
 | `connections` | create/update body shape for the connections resource_type, verified via provision_webrtc_endpoint | `platform/connections.md` |
 | `endpoint-config` | referenceId vs _id gotcha, urlToken caching, VoiceGateway webRTC endpoint, per-channel field differences | `platform/endpoint-config.md` |
+| `env-config-discovery` | how .env credentials and default-demo-config.json are discovered and merged across project and user-global scope | `platform/env-config-discovery.md` |
 | `extension-map` | complete type → extension lookup table | `platform/extension-map.md` |
 | `extensions-resource` | no verified create/update body shape yet — discovery recipe for resource_type=extensions (installed extension config, distinct from explain("extension-map")'s node-type lookup table) | `platform/extensions-resource.md` |
 | `flow-resource` | no verified create/update body shape yet — discovery recipe for resource_type=flows (raw flow creation, distinct from flow/clone via cognigy_invoke) | `platform/flow-resource.md` |
