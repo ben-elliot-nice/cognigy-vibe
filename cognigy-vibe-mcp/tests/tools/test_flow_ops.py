@@ -564,6 +564,127 @@ def test_get_flow_chart_hierarchy_nests_branch_marker_content(mock_client, state
     assert job_depth == after_depth + 2
 
 
+def test_get_flow_chart_hierarchy_uses_cached_branch_marker_types_for_extension_outcomes(mock_client, state, cache):
+    """An extension-defined outcome branch (e.g. Airtable's 'success'/'notFound') is not in
+    the hardcoded _BRANCH_MARKER_TYPES, but must still nest correctly once sync_remote_state
+    has cached it into state (issue #261)."""
+    state.set("branch_marker_types", value=["success", "notFound"])
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "airtable-id", "type": "airtable-getoneorfail", "label": "Get Record"},
+            {"_id": "success-id", "type": "success", "label": "Success"},
+            {"_id": "say-id", "type": "say", "label": "Say Found"},
+            {"_id": "notfound-id", "type": "notFound", "label": "Not Found"},
+            {"_id": "sayerr-id", "type": "say", "label": "Say Missing"},
+        ],
+        "relations": [
+            {"node": "airtable-id", "next": None, "children": ["success-id", "notfound-id"], "_id": "rel-airtable"},
+            {"node": "success-id", "next": "say-id", "children": [], "_id": "rel-success"},
+            {"node": "say-id", "next": None, "children": [], "_id": "rel-say"},
+            {"node": "notfound-id", "next": "sayerr-id", "children": [], "_id": "rel-notfound"},
+            {"node": "sayerr-id", "next": None, "children": [], "_id": "rel-sayerr"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    airtable_depth = depth("Get Record")
+    success_depth = depth("Success")
+    say_depth = depth("Say Found")
+
+    assert success_depth == airtable_depth + 2
+    assert say_depth == success_depth + 2, \
+        "content chained off an extension-defined marker via `next` must nest one level deeper"
+
+
+def test_get_flow_chart_hierarchy_unions_cached_marker_types_with_hardcoded_core_set(mock_client, state, cache):
+    """Cached branch_marker_types must be UNIONED with _BRANCH_MARKER_TYPES, not replace it.
+
+    Per PR #268 review: /v2.0/flows/{id}/chart/descriptors is geared toward describing
+    extension-defined outcome branches. If a cached set ever omitted a structural core type
+    (e.g. `then`/`else`, auto-created by every `if` node), every get_flow_chart hierarchy
+    render would silently mis-nest core if/once/lookup branches project-wide, with no error
+    and no test catching it — since the old code did
+    `frozenset(cached_marker_types) if cached_marker_types else _BRANCH_MARKER_TYPES`,
+    which substitutes rather than merges. This test caches a set containing ONLY an
+    extension-defined type (deliberately omitting every core type) and asserts that an
+    `if`/`then`/`else` chart still nests correctly in the same render.
+    """
+    state.set("branch_marker_types", value=["success"])
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "if-id", "type": "if", "label": "Check Trigger"},
+            {"_id": "then-id", "type": "then", "label": "Then"},
+            {"_id": "sayyes-id", "type": "say", "label": "Say Yes"},
+            {"_id": "else-id", "type": "else", "label": "Else"},
+            {"_id": "sayno-id", "type": "say", "label": "Say No"},
+        ],
+        "relations": [
+            {"node": "if-id", "next": None, "children": ["then-id", "else-id"], "_id": "rel-if"},
+            {"node": "then-id", "next": "sayyes-id", "children": [], "_id": "rel-then"},
+            {"node": "sayyes-id", "next": None, "children": [], "_id": "rel-sayyes"},
+            {"node": "else-id", "next": "sayno-id", "children": [], "_id": "rel-else"},
+            {"node": "sayno-id", "next": None, "children": [], "_id": "rel-sayno"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    if_depth = depth("Check Trigger")
+    then_depth = depth("Then")
+    else_depth = depth("Else")
+    yes_depth = depth("Say Yes")
+    no_depth = depth("Say No")
+
+    assert then_depth == if_depth + 2, \
+        "core type 'then' must still nest even though it's absent from the cached set"
+    assert else_depth == then_depth
+    assert yes_depth == then_depth + 2
+    assert no_depth == else_depth + 2
+
+
+def test_get_flow_chart_hierarchy_falls_back_to_hardcoded_marker_types_when_uncached(mock_client, state, cache):
+    """When sync_remote_state has never run (branch_marker_types unset in state), hierarchy
+    rendering must still work for core types via the hardcoded fallback — regression guard
+    so Task 1 landing doesn't break behavior for sessions that haven't synced yet."""
+    assert state.get("branch_marker_types") is None
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "once-id", "type": "once", "label": "Once"},
+            {"_id": "after-id", "type": "afterwards", "label": "Afterwards"},
+            {"_id": "job-id", "type": "aiAgentJob", "label": "AI Agent"},
+        ],
+        "relations": [
+            {"node": "once-id", "next": None, "children": ["after-id"], "_id": "rel-once"},
+            {"node": "after-id", "next": "job-id", "children": [], "_id": "rel-after"},
+            {"node": "job-id", "next": None, "children": [], "_id": "rel-job"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    assert depth("Afterwards") == depth("Once") + 2
+    assert depth("AI Agent") == depth("Afterwards") + 2
+
+
 def test_get_flow_chart_hierarchy_nests_if_then_else_content(mock_client, state, cache):
     """Same marker+next nesting rule applied to an `if` node's `then`/`else` branch markers.
 

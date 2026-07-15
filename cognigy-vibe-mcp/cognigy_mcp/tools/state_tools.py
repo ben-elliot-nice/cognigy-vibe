@@ -198,6 +198,21 @@ def make_handlers(
             errors.append(f"extensions: {exc}")
         state.set("extension_map", value=ext_map)
 
+        if flows:
+            try:
+                # Descriptors are project-scoped, not flow-scoped: any flow ID in the project
+                # returns the identical catalog, so anchoring on flows[0] is safe. Verified
+                # byte-identical (order-normalized) across two different flowIds in the same
+                # AU1 project — see issue #261.
+                descriptors_resp = client.get(f"/v2.0/flows/{flows[0]['_id']}/chart/descriptors")
+                marker_types = {
+                    d["type"] for d in descriptors_resp.get("items", [])
+                    if d.get("type") and d.get("parentType")
+                }
+                state.set("branch_marker_types", value=sorted(marker_types))
+            except Exception as exc:
+                errors.append(f"chart_descriptors: {exc}")
+
         seen_agents: set = set()
         for flow in flows:
             try:
