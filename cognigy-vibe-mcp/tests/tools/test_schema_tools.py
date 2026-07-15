@@ -13,6 +13,22 @@ from cognigy_mcp.tools.schema_tools import (
     make_handlers,
 )
 
+def test_describe_resource_schema_missing_operation_and_node_type_returns_error(mock_client, state, cache):
+    """operation is now optional at the pydantic level (node_type lookups don't need
+    it), so the handler itself must reject the case where neither is given."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "node"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "operation is required unless node_type is set"
+
+
+def test_describe_resource_schema_node_type_missing_flow_id_returns_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "say"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "flow_id is required when node_type is set"
+
+
 FIXTURE_SPEC = {
     "openapi": "3.0.0",
     "paths": {
@@ -741,3 +757,110 @@ def test_describe_resource_schema_verbose_delete_returns_empty_raw_schema(mock_c
     data = json.loads(result[0].text)
     assert "fields" not in data
     assert data["raw_schema"] == {}
+
+
+FIXTURE_DESCRIPTORS_RESPONSE = {
+    "items": [
+        {
+            "type": "say",
+            "fields": [
+                {
+                    "type": "cognigyTextArray",
+                    "key": "say",
+                    "label": "Say",
+                    "defaultValue": {"text": []},
+                },
+                {
+                    "type": "select",
+                    "key": "handoverOutput",
+                    "label": "Handover Output",
+                    "description": "Who sees this message",
+                    "defaultValue": "userAndAgent",
+                    "params": {
+                        "required": True,
+                        "options": [
+                            {"label": "User and agent", "value": "userAndAgent"},
+                            {"label": "User only", "value": "userOnly"},
+                        ],
+                    },
+                },
+                {
+                    "type": "toggle",
+                    "key": "preventTranscript",
+                    "label": "Prevent Transcript",
+                    "defaultValue": False,
+                },
+            ],
+        },
+        {
+            "type": "if",
+            "fields": [
+                {"type": "condition", "key": "condition", "label": "Condition"},
+            ],
+        },
+    ],
+    "total": 2,
+    "nextCursor": None,
+    "previousCursor": None,
+}
+
+
+def test_describe_resource_schema_node_type_simplified_fields(mock_client, state, cache):
+    mock_client.get.return_value = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "say", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert data["resource_type"] == "node"
+    assert data["node_type"] == "say"
+    assert data["flow_id"] == "flow-1"
+    by_field = {f["field"]: f for f in data["fields"]}
+    assert set(by_field) == {"say", "handoverOutput", "preventTranscript"}
+    assert by_field["handoverOutput"]["required"] is True
+    assert by_field["handoverOutput"]["options"] == ["userAndAgent", "userOnly"]
+    assert by_field["handoverOutput"]["default"] == "userAndAgent"
+    assert by_field["preventTranscript"]["type"] == "toggle"
+    mock_client.get.assert_called_once_with("/v2.0/flows/flow-1/chart/descriptors")
+
+
+def test_describe_resource_schema_node_type_verbose_returns_raw_fields(mock_client, state, cache):
+    mock_client.get.return_value = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "if", "flow_id": "flow-1", "verbose": True}
+    )
+    data = json.loads(result[0].text)
+    assert "fields" not in data
+    assert data["raw_fields"] == [{"type": "condition", "key": "condition", "label": "Condition"}]
+
+
+def test_describe_resource_schema_node_type_unknown_lists_known_types(mock_client, state, cache):
+    mock_client.get.return_value = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "doesNotExist", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert "No node descriptor found" in data["error"]
+    assert data["known_node_types"] == ["if", "say"]
+
+
+def test_describe_resource_schema_node_type_caches_descriptors_across_calls(mock_client, state, cache):
+    mock_client.get.return_value = copy.deepcopy(FIXTURE_DESCRIPTORS_RESPONSE)
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "say", "flow_id": "flow-1"})
+    handlers["describe_resource_schema"]({"resource_type": "node", "node_type": "if", "flow_id": "flow-1"})
+    assert mock_client.get.call_count == 1
+
+
+def test_describe_resource_schema_node_type_handler_returns_api_error_response(mock_client, state, cache):
+    mock_client.get.side_effect = ApiError(500, "boom")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["describe_resource_schema"](
+        {"resource_type": "node", "node_type": "say", "flow_id": "flow-1"}
+    )
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 500
+    assert "boom" in data["detail"]

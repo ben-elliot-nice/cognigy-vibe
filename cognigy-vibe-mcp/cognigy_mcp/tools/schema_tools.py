@@ -228,12 +228,66 @@ def _raw_schema_fragment(op: dict, operation: str) -> dict:
     return {}
 
 
+def _known_node_types(descriptors: list[dict]) -> list[str]:
+    return sorted({d.get("type") for d in descriptors if d.get("type")})
+
+
+def _find_node_descriptor(descriptors: list[dict], node_type: str) -> dict | None:
+    for descriptor in descriptors:
+        if descriptor.get("type") == node_type:
+            return descriptor
+    return None
+
+
+def _simplify_descriptor_fields(fields: list[dict]) -> list[dict]:
+    """Flatten a chart/descriptors node-type's raw fields[] (UI-editor field metadata:
+    key/type/label/defaultValue/condition/params.options) into the same
+    {field, type, ...} shape describe_resource_schema already returns for
+    OpenAPI-derived fields, so callers don't need two different result shapes."""
+    simplified = []
+    for descriptor_field in fields:
+        entry = {
+            "field": descriptor_field.get("key"),
+            "type": descriptor_field.get("type"),
+        }
+        for key in ("label", "description", "condition"):
+            if key in descriptor_field:
+                entry[key] = descriptor_field[key]
+        if "defaultValue" in descriptor_field:
+            entry["default"] = descriptor_field["defaultValue"]
+        params = descriptor_field.get("params") or {}
+        if "required" in params:
+            entry["required"] = params["required"]
+        if "options" in params:
+            entry["options"] = [
+                option.get("value") for option in params["options"] if isinstance(option, dict)
+            ]
+        simplified.append(entry)
+    return simplified
+
+
 class DescribeResourceSchemaArgs(BaseModel):
     resource_type: str = Field(description="e.g. flows, lexicons, endpoints, connections")
-    operation: Literal["create", "update", "get", "list", "delete"]
+    operation: Literal["create", "update", "get", "list", "delete"] | None = Field(
+        None,
+        description="Required unless node_type is set — a node_type lookup returns a "
+        "config field schema directly, not a CRUD operation's schema.",
+    )
+    node_type: str | None = Field(
+        None,
+        description="When resource_type='node', pass the node's type (e.g. 'say', "
+        "'aiAgentJob', or a 3rd-party extension node type) to fetch its live config "
+        "field schema from GET /v2.0/flows/{flowId}/chart/descriptors. Requires flow_id.",
+    )
+    flow_id: str | None = Field(
+        None,
+        description="Required when node_type is set. Any flow _id in the project works — "
+        "chart/descriptors returns the project-wide node-type catalog, not per-flow data.",
+    )
     verbose: bool = Field(
         False,
-        description="When true, return the raw OpenAPI schema fragment instead of a simplified field list.",
+        description="When true, return the raw OpenAPI schema fragment (or raw descriptor "
+        "fields, for node_type lookups) instead of a simplified field list.",
     )
 
 
@@ -245,9 +299,11 @@ TOOLS: list[Tool] = [
             "(create/update/get/list/delete), derived from the live OpenAPI spec (cached ~24h). "
             "Use this before guessing a body for cognigy_create/cognigy_update against an "
             "unfamiliar resource_type — cheaper than trial-and-error against live API 400s. "
-            "NOTE: for resource_type='node', only the generic envelope (type/mode/target/label/etc.) "
-            "is covered here — a node's 'config' shape is node-type-specific and NOT in the OpenAPI "
-            "spec; use explain() for per-node-type config topics (e.g. say-node) instead."
+            "For resource_type='node', the OpenAPI spec only covers the generic envelope "
+            "(type/mode/target/label/etc.) — a node's 'config' shape is node-type-specific and "
+            "lives in the live node-descriptor catalog instead. Pass node_type (e.g. 'say') plus "
+            "flow_id to fetch that node type's live config field schema "
+            "(GET /v2.0/flows/{flowId}/chart/descriptors, cached ~24h) instead of the generic envelope."
         ),
         inputSchema=make_schema(DescribeResourceSchemaArgs),
     ),
@@ -261,6 +317,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         m, err = validate(DescribeResourceSchemaArgs, args)
         if err:
             return err
+
+        if m.node_type is not None:
+            return _describe_node_type_schema(m)
+
+        if m.operation is None:
+            return _ok({"error": "operation is required unless node_type is set"})
 
         cached_spec, fresh = spec_cache.get("openapi", "spec")
         if fresh and cached_spec:
@@ -352,6 +414,38 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 "path": path,
                 "method": method,
             })
+        return _ok(result)
+
+    def _describe_node_type_schema(m: DescribeResourceSchemaArgs) -> list[TextContent]:
+        if not m.flow_id:
+            return _ok({"error": "flow_id is required when node_type is set"})
+
+        cached_descriptors, fresh = spec_cache.get("chart_descriptors", m.flow_id)
+        if fresh and cached_descriptors is not None:
+            descriptors = cached_descriptors
+        else:
+            try:
+                resp = client.get(f"/v2.0/flows/{m.flow_id}/chart/descriptors")
+            except ApiError as exc:
+                return _api_error_response(exc)
+            except Exception as exc:
+                return _unexpected_error_response(exc)
+            descriptors = resp.get("items", []) if isinstance(resp, dict) else resp
+            spec_cache.set("chart_descriptors", m.flow_id, descriptors)
+
+        descriptor = _find_node_descriptor(descriptors, m.node_type)
+        if descriptor is None:
+            return _ok({
+                "error": f"No node descriptor found for node_type={m.node_type!r}",
+                "known_node_types": _known_node_types(descriptors),
+            })
+
+        result = {"resource_type": "node", "node_type": m.node_type, "flow_id": m.flow_id}
+        raw_fields = descriptor.get("fields", [])
+        if m.verbose:
+            result["raw_fields"] = raw_fields
+        else:
+            result["fields"] = _simplify_descriptor_fields(raw_fields)
         return _ok(result)
 
     return {"describe_resource_schema": _describe_resource_schema}
