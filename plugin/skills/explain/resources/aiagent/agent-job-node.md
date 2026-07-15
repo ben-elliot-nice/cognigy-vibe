@@ -1,7 +1,6 @@
 ---
 topic: agent-job-node
 description: aiAgentJob node — assumptions, resolution/insertion procedure, config schema, tool-node creation
-group: aiagent
 ---
 
 ## agent-job-node — Creating an AI Agent Job Node

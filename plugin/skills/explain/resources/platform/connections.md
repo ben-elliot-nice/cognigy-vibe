@@ -1,7 +1,6 @@
 ---
 topic: connections
 description: create/update body shape for the connections resource_type, verified via provision_webrtc_endpoint
-group: platform
 ---
 
 ## connections — Creating and Updating Connections

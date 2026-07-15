@@ -1,7 +1,6 @@
 ---
 topic: mcp-comparison
 description: when to use cognigy-vibe vs NiCE official MCP
-group: platform
 ---
 
 ## mcp-comparison — cognigy-vibe vs Official NiCE MCP

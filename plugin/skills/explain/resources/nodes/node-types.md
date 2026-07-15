@@ -1,7 +1,6 @@
 ---
 topic: node-types
 description: quick reference for all node type strings
-group: nodes
 ---
 
 ## node-types — Quick Reference

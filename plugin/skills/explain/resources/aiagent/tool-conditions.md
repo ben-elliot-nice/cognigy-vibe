@@ -1,7 +1,6 @@
 ---
 topic: tool-conditions
 description: CognigyScript condition field, hiding tools from LLM
-group: aiagent
 ---
 
 ## tool-conditions — Controlling Tool Visibility

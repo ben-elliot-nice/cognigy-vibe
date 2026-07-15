@@ -1,7 +1,6 @@
 ---
 topic: cognigyScript
 description: interpolation contexts, what works where
-group: code
 ---
 
 ## cognigyScript — CognigyScript Interpolation

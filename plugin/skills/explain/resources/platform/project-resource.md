@@ -1,7 +1,6 @@
 ---
 topic: project-resource
 description: no verified create/update body shape yet — discovery recipe for resource_type=project
-group: platform
 ---
 
 ## project-resource — No Verified Body Shape Yet

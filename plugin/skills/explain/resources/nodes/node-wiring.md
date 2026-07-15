@@ -1,7 +1,6 @@
 ---
 topic: node-wiring
 description: chart structure, relations array, sequential vs child chains
-group: nodes
 ---
 
 ## node-wiring — Understanding the Flow Chart Structure

@@ -1,7 +1,6 @@
 ---
 topic: two-pass-confirm
 description: inter-turn flag management, STOP gate wording
-group: aiagent
 ---
 
 ## two-pass-confirm — Staged Confirmation Pattern

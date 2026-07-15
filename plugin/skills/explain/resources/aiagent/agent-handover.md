@@ -1,7 +1,6 @@
 ---
 topic: agent-handover
 description: Escalation to human pattern and handover context artefact design (two-consumer model)
-group: aiagent
 ---
 
 ## agent-handover — Escalation and Handover Patterns

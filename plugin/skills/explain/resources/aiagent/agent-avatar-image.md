@@ -1,7 +1,6 @@
 ---
 topic: agent-avatar-image
 description: Custom avatar image on AI Agent — data URI pattern, imageOptimizedFormat, file spec, push_agent_avatar usage
-group: aiagent
 ---
 
 ## agent-avatar-image — Setting a Custom AI Agent Avatar

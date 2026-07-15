@@ -1,7 +1,6 @@
 ---
 topic: playbooks
 description: no verified create/update body shape yet — discovery recipe for resource_type=playbooks
-group: platform
 ---
 
 ## playbooks — No Verified Body Shape Yet

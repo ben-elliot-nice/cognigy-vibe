@@ -1,7 +1,6 @@
 ---
 topic: knowledge-store
 description: chunking, connector run, source management
-group: platform
 ---
 
 ## knowledge-store — Managing Knowledge Sources

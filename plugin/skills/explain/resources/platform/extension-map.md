@@ -1,7 +1,6 @@
 ---
 topic: extension-map
 description: complete type → extension lookup table
-group: platform
 ---
 
 ## extension-map — Node Type → Extension Reference

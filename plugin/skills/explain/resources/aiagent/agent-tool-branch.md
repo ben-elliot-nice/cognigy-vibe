@@ -1,7 +1,6 @@
 ---
 topic: agent-tool-branch
 description: aiAgentJobTool + code + toolAnswer assembly, tool args access
-group: aiagent
 ---
 
 ## agent-tool-branch — Building the AI Agent Tool Branch

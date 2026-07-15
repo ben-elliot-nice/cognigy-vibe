@@ -1,7 +1,6 @@
 ---
 topic: turn-structure
 description: Once/OnFirstTime/Afterwards, input.execution, context reset prevention, child branch API patterns
-group: aiagent
 ---
 
 ## turn-structure — Canonical Cognigy Turn Architecture

@@ -1,7 +1,6 @@
 ---
 topic: agent-behavioral-rules
 description: Silent tool execution, outcome-based framing, compliance rules in tool descriptions
-group: aiagent
 ---
 
 ## agent-behavioral-rules — AI Agent Behavioral Rules

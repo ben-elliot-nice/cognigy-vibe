@@ -1,7 +1,6 @@
 ---
 topic: say-node
 description: say node config schema: correct text field, required _cognigy/_data fields, generativeAI_customInputs
-group: platform
 ---
 
 ## say-node — Say Node Config Schema

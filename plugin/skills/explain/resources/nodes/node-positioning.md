@@ -1,7 +1,6 @@
 ---
 topic: node-positioning
 description: append vs appendChild modes, moving an existing node via cognigy_update, child branch population for Once, IF, ifThenElse nodes, lookup default branch
-group: nodes
 ---
 
 ## node-positioning — Inserting and Moving Nodes
