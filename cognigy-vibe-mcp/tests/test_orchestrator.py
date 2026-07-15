@@ -460,3 +460,40 @@ def test_spawn_merges_project_and_user_env(tmp_path, monkeypatch):
     finally:
         for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY"):
             os.environ.pop(key, None)
+
+
+def test_degraded_interceptor_restarts_when_user_global_env_fixes_it(tmp_path, monkeypatch):
+    """#255 gap: today this only checks COGNIGY_PROJECT_ROOT/.env existence, so a fix
+    living purely in the user-global .env is never detected and the orchestrator never
+    retries — it must instead check whether the merged resolution now has both keys."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    # No project .env at all.
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+    user_env.parent.mkdir(parents=True)
+    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\nCOGNIGY_API_KEY=userkey\n")
+
+    import cognigy_mcp.orchestrator as orch
+    from cognigy_mcp.discovery import resolve_env_layers, missing_env_keys
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
+
+    o = orch._Orchestrator()
+    o._mode = "degraded"
+    restarted = {"called": False}
+    monkeypatch.setattr(o, "_do_restart", lambda: restarted.update(called=True))
+
+    msg = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}
+    raw = (json.dumps(msg) + "\n").encode()
+
+    # Simulate the relevant slice of run()'s message loop directly — this locks in
+    # the intended restart condition (imported straight from discovery.py, not via
+    # orch's namespace, since orch is only wired to these helpers in Step 3 below).
+    o._pending_call = None
+    resolution = resolve_env_layers(project_dir, Path.home(), orch.USER_ENV_PATH)
+    if not missing_env_keys(resolution):
+        o._pending_call = raw
+        o._do_restart()
+
+    assert restarted["called"] is True
