@@ -138,9 +138,9 @@ def test_main_generates_python_and_skill_md_on_success(tmp_path, monkeypatch):
     generated_py = (tmp_path / "generated.py").read_text(encoding="utf-8")
     assert "'aiagent'" in generated_py
     assert "'leaf'" in generated_py
-    assert "```" in generated_py, "generated index must be fenced, renderable markdown"
+    assert "| Topic | Description |" in generated_py, "generated index must be a renderable markdown table"
 
     skill_md = (tmp_path / "SKILL.md").read_text(encoding="utf-8")
     assert "before" in skill_md and "after" in skill_md
     assert "aiagent" in skill_md
-    assert "```" in skill_md
+    assert "| Topic | Description |" in skill_md

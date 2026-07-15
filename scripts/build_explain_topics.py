@@ -123,16 +123,23 @@ def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
     )
 
 
+def _render_table(rows: list[tuple[str, str]]) -> str:
+    """Render (key, description) rows as a two-column markdown table."""
+    lines = ["| Topic | Description |", "| --- | --- |"]
+    for key, desc in rows:
+        safe_desc = desc.replace("|", "\\|")
+        lines.append(f"| `{key}` | {safe_desc} |")
+    return "\n".join(lines)
+
+
 def build_children_section(group: GroupIndex) -> str:
     """Auto-generated 'Topics in this group' listing, keyed by full callable path."""
     children = [(t.key, t.description) for t in group.leaf_topics]
     children += [(g.key, g.description or "") for g in group.subgroups]
     if not children:
         return ""
-    lines = ["### Topics in this group", "", "```"]
-    for key, desc in sorted(children):
-        lines.append(f"  {key:<26} {desc}")
-    lines.append("```")
+    lines = ["### Topics in this group", ""]
+    lines.append(_render_table(sorted(children)))
     return "\n".join(lines)
 
 
@@ -154,10 +161,8 @@ def flatten(group: GroupIndex) -> list[tuple[str, str, str]]:
 
 def build_top_level_index(root: GroupIndex) -> str:
     """Groups-only top-level index for SKILL.md and explain()'s no-arg response."""
-    lines = ["Topics and what they cover:", "", "```"]
-    for g in root.subgroups:
-        lines.append(f"  {g.key:<26} {g.description or ''}")
-    lines.append("```")
+    rows = [(g.key, g.description or "") for g in root.subgroups]
+    lines = ["Topics and what they cover:", "", _render_table(rows)]
     return "\n".join(lines)
 
 

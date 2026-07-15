@@ -13,14 +13,14 @@ Call `explain` before brute-forcing or web-searching for Cognigy implementation 
 
 Topics and what they cover:
 
-```
-  aiagent                    AI Agent Job node configuration, persona authoring, tool design, turn structure, and multi-agent architecture patterns
-  code                       Code node runtime objects, CognigyScript interpolation, async function execution, output formatting, and profile editing
-  nodes                      Flow chart structure, node type strings, node wiring/positioning, and the full node-type reference
-  platform                   Project-level platform resources — connections, endpoints, extensions, LLMs, locales, playbooks, knowledge store, and resource_type discovery recipes
-  voice                      Voice Gateway session configuration and silence-timeout handling
-  xapp                       xApp architecture overview, variant selection, and channel differences
-```
+| Topic | Description |
+| --- | --- |
+| `aiagent` | AI Agent Job node configuration, persona authoring, tool design, turn structure, and multi-agent architecture patterns |
+| `code` | Code node runtime objects, CognigyScript interpolation, async function execution, output formatting, and profile editing |
+| `nodes` | Flow chart structure, node type strings, node wiring/positioning, and the full node-type reference |
+| `platform` | Project-level platform resources — connections, endpoints, extensions, LLMs, locales, playbooks, knowledge store, and resource_type discovery recipes |
+| `voice` | Voice Gateway session configuration and silence-timeout handling |
+| `xapp` | xApp architecture overview, variant selection, and channel differences |
 
 ## How to Use
 
