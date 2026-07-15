@@ -7,3 +7,4 @@ node_modules/
 .claude/worktrees/
 docs/superpowers/
 docs/test-reports/
+openapi.json
