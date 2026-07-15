@@ -67,12 +67,29 @@ def parse_frontmatter(content: str, path: Path) -> tuple[dict[str, str], str]:
     body = content[match.end():]
     metadata: dict[str, str] = {}
     for line in fm_text.splitlines():
-        if ':' in line:
-            key, _, value = line.partition(':')
-            key = key.strip()
-            if key in metadata:
-                raise ValueError(f"Duplicate frontmatter key '{key}' in {path}")
-            metadata[key] = value.strip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if ':' not in line:
+            # A continuation line of a YAML block scalar ('description: >' followed by
+            # indented text with no colon) has no ':' — this simple line-based parser
+            # doesn't support block scalars, so fail loud instead of silently dropping
+            # the continuation content (issue found in PR #260 review, round 4).
+            raise ValueError(
+                f"{path}: invalid frontmatter line {line!r} — only single-line "
+                "'key: value' pairs are supported (YAML block scalars '>'/'|' are not)"
+            )
+        key, _, value = line.partition(':')
+        key = key.strip()
+        value = value.strip()
+        if value in (">", "|", ">-", ">+", "|-", "|+"):
+            raise ValueError(
+                f"{path}: frontmatter key '{key}' uses a YAML block scalar ('{value}') — "
+                "not supported by this simple parser; use a single-line value instead"
+            )
+        if key in metadata:
+            raise ValueError(f"Duplicate frontmatter key '{key}' in {path}")
+        metadata[key] = value
     return metadata, body
 
 
@@ -95,8 +112,21 @@ def _try_read_text(path: Path, errors: list[str]) -> str | None:
         return None
 
 
-def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
-    """Recursively scan a resources directory into a GroupIndex tree, collecting errors."""
+def scan_dir(
+    dir_path: Path, rel: str, errors: list[str], _ancestors: frozenset[str] = frozenset()
+) -> GroupIndex:
+    """Recursively scan a resources directory into a GroupIndex tree, collecting errors.
+
+    _ancestors tracks resolved realpaths of this call chain's own ancestors — a directory
+    symlink pointing back at one of them (a cycle) is caught here instead of recursing
+    until the OS's own symlink-depth limit kicks in (issue found in PR #260 review, round 4).
+    """
+    real = str(dir_path.resolve())
+    if real in _ancestors:
+        errors.append(f"{dir_path}: directory symlink cycle detected (points back to an ancestor) — not recursing into it")
+        return GroupIndex(key=rel, description=None, body=None, path=(f"{rel}/index.md" if rel else None))
+    _ancestors = _ancestors | {real}
+
     try:
         entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
     except OSError as e:
@@ -176,7 +206,7 @@ def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
     subgroups: list[GroupIndex] = []
     for subdir in subdirs:
         child_rel = f"{rel}/{subdir.name}" if rel else subdir.name
-        subgroups.append(scan_dir(subdir, child_rel, errors))
+        subgroups.append(scan_dir(subdir, child_rel, errors, _ancestors))
 
     return GroupIndex(
         key=rel,

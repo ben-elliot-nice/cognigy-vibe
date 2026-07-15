@@ -468,3 +468,62 @@ def test_main_fails_on_leaf_key_colliding_with_group_key(tmp_path, monkeypatch, 
         bet.main()
     captured = capsys.readouterr()
     assert "Duplicate topic/group key: 'code'" in captured.err
+
+
+def test_parse_frontmatter_rejects_block_scalar_value(tmp_path):
+    """Regression (PR #260 review, round 4): a YAML block scalar ('description: >'
+    followed by indented continuation lines with no ':') was silently truncated to a
+    one-character description ('>') instead of failing the build — this parser only
+    supports single-line key: value pairs and must say so loudly."""
+    content = (
+        "---\ntopic: leaf\ndescription: >\n  A long description\n  that spans multiple lines\n---\nbody\n"
+    )
+    with pytest.raises(ValueError, match="block scalar"):
+        bet.parse_frontmatter(content, tmp_path / "fake.md")
+
+
+def test_parse_frontmatter_rejects_continuation_line_with_no_colon(tmp_path):
+    """A block-scalar continuation line has no ':' at all — must also fail loud."""
+    content = "---\ntopic: leaf\ndescription: see below\nplain continuation with no colon\n---\nbody\n"
+    with pytest.raises(ValueError, match="invalid frontmatter line"):
+        bet.parse_frontmatter(content, tmp_path / "fake.md")
+
+
+def test_scan_dir_collects_block_scalar_as_build_error_not_silent_corruption(tmp_path):
+    resources = tmp_path / "resources"
+    _write(
+        resources / "aiagent" / "index.md",
+        "---\ndescription: >\n  multi\n  line\n---\nbody\n",
+    )
+    errors: list[str] = []
+    bet.scan_dir(resources, "", errors)
+    assert any("block scalar" in e for e in errors)
+
+
+def test_scan_dir_detects_directory_symlink_cycle_without_deep_recursion(tmp_path):
+    """Regression (PR #260 review, round 4): a directory symlink pointing back at an
+    ancestor is followed by Path.is_dir() (it returns True, symlinks are resolved), so
+    the round-3 broken-symlink guard (which only catches is_file()==is_dir()==False)
+    never caught this — it would recurse until the OS's own ELOOP limit. Must be
+    caught immediately via an ancestor-realpath check instead."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    (resources / "aiagent" / "loop").symlink_to(resources / "aiagent", target_is_directory=True)
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert any("symlink cycle" in e for e in errors)
+    # exactly one cycle error, not one per recursion level before an OS limit kicked in
+    assert sum("symlink cycle" in e for e in errors) == 1
+
+
+def test_scan_dir_against_real_resources_tree_has_no_errors():
+    """Smoke test (PR #260 review, round 4): every other test in this file builds a
+    synthetic tree under tmp_path, so a real-tree regression (e.g. a newly added
+    directory missing index.md) would pass local pytest and only be caught by the
+    separate CI build-and-diff workflow. This is the one test exercising the actual
+    checked-in plugin/skills/explain/resources/ tree."""
+    errors: list[str] = []
+    root = bet.scan_dir(bet.RESOURCES, "", errors)
+    assert errors == [], f"real resources/ tree has validation errors: {errors}"
+    entries = bet.flatten(root)
+    assert len(entries) > 0
