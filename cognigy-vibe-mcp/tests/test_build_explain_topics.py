@@ -110,6 +110,34 @@ def test_generate_python_escapes_triple_quote_in_description(tmp_path, monkeypat
     assert 'has a """ triple quote' in namespace["_TOPIC_INDEX"]
 
 
+def test_generate_python_escapes_triple_quote_in_leaf_topic_body(tmp_path, monkeypatch):
+    """Symmetry check for the fix above: generate_python embeds leaf topic bodies via the
+    same {k!r}: {b!r} pattern as _TOPIC_INDEX — confirm a leaf body containing a literal
+    '\"\"\"' also survives ast.parse + exec, not just group descriptions."""
+    import ast
+
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(
+        resources / "aiagent" / "leaf.md",
+        '---\ntopic: leaf\ndescription: d\n---\nBody with a """ triple quote inside.\n',
+    )
+    monkeypatch.setattr(bet, "RESOURCES", resources)
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert errors == []
+    entries = bet.flatten(root)
+
+    output_path = tmp_path / "generated.py"
+    bet.generate_python(entries, root, output_path)
+
+    source = output_path.read_text(encoding="utf-8")
+    ast.parse(source)
+    namespace: dict = {}
+    exec(compile(source, str(output_path), "exec"), namespace)
+    assert 'Body with a """ triple quote inside.' in namespace["_CONTENT"]["leaf"]
+
+
 def test_flatten_produces_leaf_and_group_entries_with_full_keys(tmp_path):
     resources = tmp_path / "resources"
     _write(resources / "aiagent" / "index.md", "---\ndescription: AI Agent group primer\n---\nPrimer text.\n")
@@ -147,6 +175,107 @@ def test_flatten_nested_subgroup_shows_full_path_key(tmp_path):
     assert "agent-tool-branch" in keys
     aiagent_body = next(b for k, _, b in entries if k == "aiagent")
     assert "aiagent/tools" in aiagent_body, "parent primer must show the full callable key of its sub-group"
+
+
+def test_flatten_and_skill_md_tree_support_three_tier_nesting(tmp_path):
+    """Regression (PR #260 review): only one level of subgroup nesting had coverage.
+    Exercises scan_dir's recursive path-building and _build_skill_md_section's
+    heading-level recursion two levels deep (aiagent/tools/scaffolding)."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: AI Agent group primer\n---\nPrimer.\n")
+    _write(resources / "aiagent" / "tools" / "index.md", "---\ndescription: Tool authoring sub-group\n---\nTools primer.\n")
+    _write(
+        resources / "aiagent" / "tools" / "scaffolding" / "index.md",
+        "---\ndescription: Scaffolding sub-sub-group\n---\nScaffolding primer.\n",
+    )
+    _write(
+        resources / "aiagent" / "tools" / "scaffolding" / "deep-topic.md",
+        "---\ntopic: deep-topic\ndescription: three tiers deep\n---\nDeep body.\n",
+    )
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert errors == []
+
+    entries = bet.flatten(root)
+    keys = {k for k, _, _ in entries}
+    assert "aiagent/tools/scaffolding" in keys
+    assert "deep-topic" in keys
+    tools_body = next(b for k, _, b in entries if k == "aiagent/tools")
+    assert "aiagent/tools/scaffolding" in tools_body, \
+        "the tools sub-group primer must list its own scaffolding sub-sub-group by full path"
+
+    tree_text = bet.build_full_topic_tree(root)
+    assert "### aiagent/tools/scaffolding" in tree_text or "aiagent/tools/scaffolding" in tree_text
+    assert "`aiagent/tools/scaffolding/deep-topic.md`" in tree_text, \
+        "SKILL.md tree must show the correct three-level-deep file path"
+
+
+def test_scan_dir_collects_unreadable_directory_as_error_not_crash(tmp_path, monkeypatch):
+    """Regression (PR #260 review): an unguarded dir_path.iterdir() could crash scan_dir
+    on a permission error or broken symlink, discarding already-collected errors."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "leaf.md", "---\ntopic: leaf\ndescription: d\n---\nbody\n")
+
+    real_iterdir = Path.iterdir
+
+    def fake_iterdir(self):
+        if self.name == "aiagent":
+            raise OSError("simulated permission error")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", fake_iterdir)
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert any("aiagent" in e and "simulated permission error" in e for e in errors)
+    keys = {k for k, _, _ in bet.flatten(root)}
+    assert "leaf" in keys, "scanning other directories must continue past the unreadable one"
+
+
+def test_scan_dir_collects_unreadable_file_as_error_not_crash(tmp_path, monkeypatch):
+    """Regression (PR #260 review): unguarded read_text() calls could crash scan_dir on
+    a non-UTF-8 file or I/O error."""
+    resources = tmp_path / "resources"
+    _write(resources / "aiagent" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "aiagent" / "unreadable.md", "---\ntopic: unreadable\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "code" / "leaf.md", "---\ntopic: leaf\ndescription: d\n---\nbody\n")
+
+    real_read_text = Path.read_text
+
+    def fake_read_text(self, *args, **kwargs):
+        if self.name == "unreadable.md":
+            raise OSError("simulated I/O error")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    errors: list[str] = []
+    root = bet.scan_dir(resources, "", errors)
+    assert any("unreadable.md" in e and "simulated I/O error" in e for e in errors)
+    keys = {k for k, _, _ in bet.flatten(root)}
+    assert "leaf" in keys, "scanning other files must continue past the unreadable one"
+
+
+def test_main_reports_duplicate_key_only_once_regardless_of_occurrence_count(tmp_path, monkeypatch, capsys):
+    """Regression (PR #260 review): a key duplicated 3+ times was reported N-1 times."""
+    resources = tmp_path / "resources"
+    _write(resources / "a" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "a" / "dup.md", "---\ntopic: dup\ndescription: d\n---\nbody\n")
+    _write(resources / "b" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "b" / "dup.md", "---\ntopic: dup\ndescription: d\n---\nbody\n")
+    _write(resources / "c" / "index.md", "---\ndescription: d\n---\nbody\n")
+    _write(resources / "c" / "dup.md", "---\ntopic: dup\ndescription: d\n---\nbody\n")
+    monkeypatch.setattr(bet, "RESOURCES", resources)
+    monkeypatch.setattr(bet, "TEMPLATE", tmp_path / "SKILL.md.template")
+    monkeypatch.setattr(bet, "GENERATED_PY", tmp_path / "generated.py")
+    monkeypatch.setattr(bet, "GENERATED_SKILL", tmp_path / "SKILL.md")
+    _write(tmp_path / "SKILL.md.template", "{{TOPIC_REGISTRY}}")
+    with pytest.raises(SystemExit):
+        bet.main()
+    captured = capsys.readouterr()
+    assert captured.err.count("Duplicate topic/group key: 'dup'") == 1, \
+        "a key duplicated 3 times must be reported exactly once, not twice"
 
 
 def test_build_top_level_index_lists_groups_only(tmp_path):

@@ -25,7 +25,7 @@ GENERATED_PY = REPO_ROOT / "cognigy-vibe-mcp" / "cognigy_mcp" / "tools" / "_expl
 GENERATED_SKILL = REPO_ROOT / "plugin" / "skills" / "explain" / "SKILL.md"
 
 
-@dataclass
+@dataclass(frozen=True)
 class LeafTopic:
     key: str
     description: str
@@ -33,7 +33,7 @@ class LeafTopic:
     path: str  # source file path, relative to resources/ — SKILL.md-only, never in MCP output
 
 
-@dataclass
+@dataclass(frozen=True)
 class GroupIndex:
     key: str  # "" for the virtual resources/ root, else e.g. "aiagent" or "aiagent/tools"
     description: str | None
@@ -75,9 +75,23 @@ def _try_parse_frontmatter(content: str, path: Path, errors: list[str]) -> tuple
         return None
 
 
+def _try_read_text(path: Path, errors: list[str]) -> str | None:
+    """Read a file as UTF-8, collecting I/O or decode failures into errors instead of raising —
+    a broken symlink, permission error, or non-UTF-8 file must not crash the whole scan."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        errors.append(f"{path}: cannot read file ({e})")
+        return None
+
+
 def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
     """Recursively scan a resources directory into a GroupIndex tree, collecting errors."""
-    entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
+    try:
+        entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
+    except OSError as e:
+        errors.append(f"{dir_path}: cannot list directory ({e})")
+        return GroupIndex(key=rel, description=None, body=None, path=(f"{rel}/index.md" if rel else None))
     md_files = [p for p in entries if p.is_file() and p.suffix == ".md"]
     subdirs = [p for p in entries if p.is_dir()]
 
@@ -103,22 +117,27 @@ def scan_dir(dir_path: Path, rel: str, errors: list[str]) -> GroupIndex:
             description, body = None, None
         else:
             index_path = index_candidates[0]
-            content = index_path.read_text(encoding="utf-8")
-            parsed = _try_parse_frontmatter(content, index_path, errors)
-            if parsed is None:
+            content = _try_read_text(index_path, errors)
+            if content is None:
                 description, body = None, None
             else:
-                metadata, raw_body = parsed
-                if "topic" in metadata:
-                    errors.append(f"{index_path}: index.md must not declare 'topic' — its key is derived from its directory path")
-                description = metadata.get("description", "").strip()
-                if not description:
-                    errors.append(f"{index_path}: missing 'description' in frontmatter")
-                body = raw_body.strip()
+                parsed = _try_parse_frontmatter(content, index_path, errors)
+                if parsed is None:
+                    description, body = None, None
+                else:
+                    metadata, raw_body = parsed
+                    if "topic" in metadata:
+                        errors.append(f"{index_path}: index.md must not declare 'topic' — its key is derived from its directory path")
+                    description = metadata.get("description", "").strip()
+                    if not description:
+                        errors.append(f"{index_path}: missing 'description' in frontmatter")
+                    body = raw_body.strip()
 
     leaf_topics: list[LeafTopic] = []
     for md_file in leaf_files:
-        content = md_file.read_text(encoding="utf-8")
+        content = _try_read_text(md_file, errors)
+        if content is None:
+            continue
         parsed = _try_parse_frontmatter(content, md_file, errors)
         if parsed is None:
             continue
@@ -286,9 +305,11 @@ def main() -> None:
     # namespace by design — two leaf topics in different groups cannot use
     # the same `topic:` value, and will fail the build here if they do.
     seen: set[str] = set()
+    reported: set[str] = set()
     for key, _, _ in entries:
-        if key in seen:
+        if key in seen and key not in reported:
             errors.append(f"Duplicate topic/group key: '{key}'")
+            reported.add(key)
         seen.add(key)
 
     if errors:

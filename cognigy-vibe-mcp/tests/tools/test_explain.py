@@ -47,6 +47,19 @@ def test_explain_xapp_group_still_works_after_frontmatter_simplification(mock_cl
     assert "xapp-event-handling" in text
 
 
+def test_explain_topic_with_empty_body_is_not_reported_unknown(mock_client, state, cache, monkeypatch):
+    """Regression (PR #260 review): `_CONTENT.get(topic)` used truthiness, so a real key
+    whose body happens to be empty (e.g. a childless group with a blank-bodied index.md)
+    was misreported as 'Unknown topic'. Lookup must be by key presence, not body truthiness."""
+    import cognigy_mcp.tools.explain as explain_module
+
+    monkeypatch.setitem(explain_module._CONTENT, "empty-body-topic", "")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "empty-body-topic"})
+    text = result[0].text
+    assert "Unknown topic" not in text
+
+
 def test_explain_known_topic_returns_content(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     for topic in TOPICS:
