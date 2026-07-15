@@ -34,7 +34,7 @@ After the first install, use `uvx cognigy-vibe-setup` directly for everything el
 | `uvx cognigy-vibe-setup install` | `--install-only`, `--client code\|desktop\|both`, `--scope user\|project\|local` | Fresh install — the wizard above (also the default when no subcommand is given) |
 | `uvx cognigy-vibe-setup status` | `--fix` | Report drift between the installed package, marketplace pin, plugin version, and Desktop config pin; `--fix` applies fixes without touching PyPI |
 | `uvx cognigy-vibe-setup update` | `--check` | Check PyPI for a newer version and upgrade if stale, then reconcile the same surfaces as `status --fix`; `--check` is a dry run |
-| `uvx cognigy-vibe-setup uninstall` | — | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials |
+| `uvx cognigy-vibe-setup uninstall` | `--scope user\|project\|local` | Remove the plugin, Desktop config entry, and (optionally, with a prompt) your credentials; `--scope` overrides the auto-detected plugin scope |
 
 Any subcommand also accepts `--verbose` (inline diagnostic output and a full traceback on failure) and `--help`.
 
@@ -79,7 +79,6 @@ The entry point is `cognigy-vibe:build-orchestrator` — a single-batch intervie
 | [`design-agent-jobs`](plugin/skills/design-agent-jobs/SKILL.md) | Specialist jobs, routing architecture, and context schema. |
 | [`design-agent-interfaces`](plugin/skills/design-agent-interfaces/SKILL.md) | Touchpoints outside the chat window — xApp scenes, webchat patterns, live-agent handover. |
 | [`design-agent-contracts`](plugin/skills/design-agent-contracts/SKILL.md) | Deterministic enforcement layer — guard sub-flows, obligation state, structured refusals. |
-| [`add-aiagent-job`](plugin/skills/add-aiagent-job/SKILL.md) | Add an AI Agent Job node (+ optional tool nodes) to an existing flow. |
 | [`init-cognigy-vibe`](plugin/skills/init-cognigy-vibe/SKILL.md) | **First-time setup wizard.** Captures every build variable once (API URL + key, LLM refs, TTS, STT, voice channel, voice preview, naming) → `.env` + `default-demo-config.json` at the `Demo Builds` workspace root. Run before your first build; `build-orchestrator` S0.0 loads it and binds projects with no restart. |
 | [`explain`](plugin/skills/explain/SKILL.md) | Retrieve implementation guidance for Cognigy topics before brute-forcing or web-searching. |
 | [`submit-issue`](plugin/skills/submit-issue/SKILL.md) | File a bug against this plugin (MCP server or a skill). |

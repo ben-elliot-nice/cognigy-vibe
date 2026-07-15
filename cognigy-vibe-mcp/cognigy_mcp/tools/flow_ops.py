@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel, Field
 from mcp.types import Tool, TextContent
-from cognigy_mcp.api import CognigyClient
+from cognigy_mcp.api import CognigyClient, ApiError
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState, _deep_merge
 from cognigy_mcp.filters import strip_response, BLOCKED_IN_CONFIG
@@ -81,19 +81,29 @@ class GetFlowChartArgs(BaseModel):
     )
 
 
+_DISCOVERY_POINTER = (
+    " For resource_types without an obvious body shape, call describe_resource_schema "
+    "(resource_type, operation) for the live OpenAPI-derived field list, or explain() for "
+    "the topic index — trial-and-error against live API errors is the fallback of last "
+    "resort, not the first move."
+)
+
 TOOLS: list[Tool] = [
     Tool(
         name="cognigy_get",
         description="GET any Cognigy resource by ID. Cache-first (5-min TTL). "
-                    "Response includes _source: 'cache' or 'api'.",
+                    "Response includes _source: 'cache' or 'api'." + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyGetArgs),
     ),
     Tool(
         name="cognigy_list",
         description="List Cognigy resources. Pass project_id for project-scoped resources, "
                     "agent_id for agent-scoped resources (e.g. listing jobs). "
-                    "resource_type accepts both singular ('flow') and plural ('flows'). "
-                    "Default: returns simplified {id, name} pairs. Use full_objects=true for complete objects.",
+                    "resource_type accepts both singular ('flow') and plural ('flows'), and also "
+                    "supports nested sub-resource paths, e.g. resource_type=\"knowledgestores/{id}/connectors\" "
+                    "lists a knowledge store's connectors. "
+                    "Default: returns simplified {id, name} pairs. Use full_objects=true for complete objects."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyListArgs),
     ),
     Tool(
@@ -106,26 +116,35 @@ TOOLS: list[Tool] = [
                     "target the branch marker _id, not the parent Once/IF node), "
                     "'insertAfter' or 'insertBefore' (may return 500 on AU1 — use append instead), "
                     "target (the _id of the reference node), "
-                    "and flowId (the flow _id).",
+                    "and flowId (the flow _id)."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyCreateArgs),
     ),
     Tool(
         name="cognigy_update",
         description="PATCH a Cognigy resource. WARNING: Cognigy PATCH is full-replace on 'config' — "
                     "set merge_config=true to deep-merge instead of overwriting. Always use merge_config=true "
-                    "for partial config updates.",
+                    "for partial config updates. "
+                    "NOTE: with return_full_object=false (default), the response reflects whatever the API "
+                    "actually returns — on some resource_types this can be a bare {} even on a successful write, "
+                    "not the documented minimal {_id, type, label}. If you need write confirmation, re-fetch via "
+                    "cognigy_get rather than relying on this response."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyUpdateArgs),
     ),
     Tool(
         name="cognigy_delete",
-        description="DELETE a Cognigy resource. For nodes, pass flow_id.",
+        description="DELETE a Cognigy resource. For nodes, pass flow_id." + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyDeleteArgs),
     ),
     Tool(
         name="cognigy_invoke",
         description="Run a named operation on a Cognigy resource. "
-                    "Operations: node/move, flow/clone, aiagent/train, "
-                    "knowledgestore/run, sessions/inject-context, sessions/inject-state.",
+                    "Operations: flow/clone, aiagent/train, "
+                    "knowledgestore/run, sessions/inject-context, sessions/inject-state. "
+                    "To reposition an existing node, use cognigy_update with body={mode, target} "
+                    "instead — there is no node/move operation."
+                    + _DISCOVERY_POINTER,
         inputSchema=make_schema(CognigyInvokeArgs),
     ),
     Tool(
@@ -240,6 +259,7 @@ _RESOURCE_TYPE_ALIASES: dict[str, str] = {
     "snapshot": "snapshots",
     "playbook": "playbooks",
     "node": "node",  # node stays singular — it routes to chart path
+    "nodes": "node",  # plural also routes to chart path, same as singular
 }
 
 
@@ -247,11 +267,8 @@ def _normalise_rtype(rtype: str) -> str:
     return _RESOURCE_TYPE_ALIASES.get(rtype.lower(), rtype)
 
 
-def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict, flow_id: str | None) -> str | None:
-    if resource_type == "node" and operation == "move" and not flow_id:
-        return None  # caller must check
+def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dict) -> str:
     mapping = {
-        ("node", "move"): f"/v2.0/flows/{flow_id}/chart/nodes/{resource_id}/move",
         ("flow", "clone"): f"/v2.0/flows/{resource_id}/clone",
         ("aiagent", "train"): f"/v2.0/aiagents/{resource_id}/train",
         ("sessions", "inject-context"): f"/v2.0/sessions/{resource_id}/context/inject",
@@ -268,7 +285,13 @@ def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dic
     )
 
 
-def _build_hierarchy(chart: dict) -> str:
+# Branch marker node types auto-created by once/if/ifThenElse/lookup: their branch
+# content is attached via `next`, not `children` (see explain("node-positioning")),
+# so it must render nested one level deeper than the marker rather than flattened to it.
+_BRANCH_MARKER_TYPES = frozenset({"onFirstExecution", "afterwards", "then", "else", "default", "case"})
+
+
+def _build_hierarchy(chart: dict, marker_types: frozenset[str] = _BRANCH_MARKER_TYPES) -> str:
     nodes = {n["_id"]: n for n in chart.get("nodes", [])}
 
     # Real Cognigy API format: {"node": "<nodeId>", "next": "<nextId>", "children": [...], "_id": "<relId>"}
@@ -292,7 +315,8 @@ def _build_hierarchy(chart: dict) -> str:
             lines += render(child_id, indent + 1, visited)
         next_id = rel.get("next")
         if next_id:
-            lines += render(next_id, indent, visited)
+            bump = 1 if ntype in marker_types else 0
+            lines += render(next_id, indent + bump, visited)
         return lines
 
     # Root nodes: not referenced as next or child by any other relation
@@ -321,6 +345,14 @@ def _resource_path(resource_type: str, resource_id: str, flow_id: str | None = N
     return f"/v2.0/{resource_type}/{resource_id}"
 
 
+def _api_error_response(exc: ApiError) -> list[TextContent]:
+    return _ok({"error": "api_error", "status": exc.status_code, "detail": str(exc)})
+
+
+def _unexpected_error_response(exc: Exception) -> list[TextContent]:
+    return _ok({"error": "unexpected_error", "detail": str(exc)})
+
+
 def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> dict:
 
     def _cognigy_get(args: dict) -> list[TextContent]:
@@ -337,11 +369,23 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             path = _resource_path(rtype, rid, m.flow_id)
             if path is None:
                 return _ok({"error": "flow_id required when resource_type is 'node'"})
-            data = client.get(path)
+            try:
+                data = client.get(path)
+            except ApiError as exc:
+                return _api_error_response(exc)
+            except Exception as exc:
+                return _unexpected_error_response(exc)
             cache.set(rtype, rid, data)
             source = "api"
         if m.fields:
-            data = {k: data[k] for k in m.fields if k in data}
+            stripped_view = strip_response(data)
+            if not any(k in stripped_view for k in m.fields):
+                return _ok({
+                    "error": "none of the requested fields exist on this resource",
+                    "requested_fields": m.fields,
+                    "available_fields": sorted(stripped_view.keys()),
+                })
+            data = {k: stripped_view[k] for k in m.fields if k in stripped_view}
         data = strip_response(data)
         return _ok({**data, "_source": source})
 
@@ -350,19 +394,24 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if err:
             return err
         rtype = _normalise_rtype(m.resource_type)
-        if rtype in ("node", "nodes"):
+        if rtype == "node":
             return _ok({
                 "error": (
                     "Nodes cannot be listed independently — they exist only within a flow chart. "
                     "Use get_flow_chart(flow_id=<flowId>) to list all nodes in a flow."
                 )
             })
-        if m.agent_id:
-            data = client.get(f"/v2.0/aiagents/{m.agent_id}/{rtype}", limit=m.limit)
-        elif m.project_id:
-            data = client.get(f"/v2.0/{rtype}", projectId=m.project_id, limit=m.limit)
-        else:
-            data = client.get(f"/v2.0/{rtype}", limit=m.limit)
+        try:
+            if m.agent_id:
+                data = client.get(f"/v2.0/aiagents/{m.agent_id}/{rtype}", limit=m.limit)
+            elif m.project_id:
+                data = client.get(f"/v2.0/{rtype}", projectId=m.project_id, limit=m.limit)
+            else:
+                data = client.get(f"/v2.0/{rtype}", limit=m.limit)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         raw_items = data if isinstance(data, list) else data.get("items", [])
         if not m.full_objects:
             simplified = []
@@ -378,7 +427,15 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             result_data = data if not isinstance(data, list) else {"items": data, "count": len(data)}
         if m.fields:
             items = result_data.get("items", [])
-            filtered = [{k: item[k] for k in m.fields if k in item} for item in items]
+            stripped_items = [strip_response(item) for item in items]
+            stripped_available = {k for item in stripped_items for k in item.keys()}
+            if items and not (set(m.fields) & stripped_available):
+                return _ok({
+                    "error": "none of the requested fields exist on any item in this list",
+                    "requested_fields": m.fields,
+                    "available_fields": sorted(stripped_available),
+                })
+            filtered = [{k: item[k] for k in m.fields if k in item} for item in stripped_items]
             result_data = {"items": filtered, "count": len(filtered)}
         if m.full_objects:
             items = result_data.get("items", [])
@@ -427,7 +484,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             path = f"/v2.0/flows/{m.flow_id}/chart/nodes"
         else:
             path = f"/v2.0/{rtype}"
-        result = client.post(path, body)
+        try:
+            result = client.post(path, body)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         resource_id = result.get("_id") or result.get("id")
         name = result.get("name") or result.get("label")
         if name and resource_id:
@@ -468,7 +530,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                         f'insertBefore (may return 500 on AU1 — prefer append).'
                     )
                 })
-        current = client.get(path)
+        try:
+            current = client.get(path)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         if rtype == "node" and current.get("type") == "code":
             return _ok({"error": (
                 "Code nodes must be updated via push_code_node "
@@ -483,7 +550,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             current_config = {k: v for k, v in current["config"].items() if k not in BLOCKED_IN_CONFIG}
             merged = _deep_merge(current_config, body["config"])
             body = {**body, "config": merged}
-        result = client.patch(path, body)
+        try:
+            result = client.patch(path, body)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         cache.set(rtype, m.resource_id, result)
         if m.return_full_object:
             return _ok(strip_response(result))
@@ -502,7 +574,12 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         path = _resource_path(rtype, m.resource_id, m.flow_id)
         if path is None:
             return _ok({"error": "flow_id required when resource_type is 'node'"})
-        result = client.delete(path)
+        try:
+            result = client.delete(path)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         cache.invalidate(rtype, m.resource_id)
         return _ok({"deleted": True, "resource_id": m.resource_id, **result})
 
@@ -510,21 +587,39 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         m, err = validate(CognigyInvokeArgs, args)
         if err:
             return err
-        path = _invoke_path(m.resource_type, m.resource_id, m.operation, m.body, m.flow_id)
-        if path is None:
-            return _ok({"error": f"flow_id required for {m.resource_type}/{m.operation}"})
-        result = client.post(path, m.body)
+        rtype = "node" if m.resource_type.lower() in ("node", "nodes") else m.resource_type
+        if rtype == "node" and m.operation == "move":
+            return _ok({"error": (
+                "node/move is not a supported operation — there is no dedicated move endpoint. "
+                "To reposition an existing node, use cognigy_update(resource_type=\"node\", "
+                "resource_id=..., flow_id=..., body={\"mode\": \"append\", \"target\": \"<node-to-move-after>\"}). "
+                'See explain("node-positioning") for mode/target semantics.'
+            )})
+        path = _invoke_path(rtype, m.resource_id, m.operation, m.body)
+        try:
+            result = client.post(path, m.body)
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
         return _ok(strip_response(result))
 
     def _get_flow_chart(args: dict) -> list[TextContent]:
         m, err = validate(GetFlowChartArgs, args)
         if err:
             return err
-        chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
+        try:
+            chart = client.get(f"/v2.0/flows/{m.flow_id}/chart")
+        except ApiError as exc:
+            return _api_error_response(exc)
+        except Exception as exc:
+            return _unexpected_error_response(exc)
+        cached_marker_types = state.get("branch_marker_types") or []
+        marker_types = frozenset(cached_marker_types) | _BRANCH_MARKER_TYPES
         stripped_nodes = [strip_response(n) for n in chart.get("nodes", [])]
         if m.format == "hierarchy":
             stripped_chart = {**chart, "nodes": stripped_nodes}
-            hierarchy = _build_hierarchy(stripped_chart)
+            hierarchy = _build_hierarchy(stripped_chart, marker_types)
             return _ok({"hierarchy": hierarchy})
         elif m.format == "raw":
             return _ok({
@@ -533,7 +628,7 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             })
         else:
             stripped_chart = {**chart, "nodes": stripped_nodes}
-            hierarchy = _build_hierarchy(stripped_chart)
+            hierarchy = _build_hierarchy(stripped_chart, marker_types)
             return _ok({
                 "relations": chart.get("relations", []),
                 "nodes": stripped_nodes,

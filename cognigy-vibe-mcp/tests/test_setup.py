@@ -295,6 +295,23 @@ def test_parse_args_uninstall(monkeypatch):
     monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall"])
     args = _parse_args()
     assert args.command == "uninstall"
+    assert args.scope is None
+
+
+def test_parse_args_uninstall_scope_flag(monkeypatch):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall", "--scope", "project"])
+    args = _parse_args()
+    assert args.command == "uninstall"
+    assert args.scope == "project"
+
+
+def test_parse_args_uninstall_scope_rejects_invalid_choice(monkeypatch, capsys):
+    from cognigy_mcp.setup import _parse_args
+    monkeypatch.setattr("sys.argv", ["cognigy-vibe-setup", "uninstall", "--scope", "bogus"])
+    with pytest.raises(SystemExit):
+        _parse_args()
+    assert "invalid choice" in capsys.readouterr().err
 
 
 def test_parse_args_bare_help_shows_top_level_subcommands(monkeypatch, capsys):
@@ -496,7 +513,7 @@ def test_run_update_applies_fixes_when_drift_found_and_not_check():
 
 def test_run_uninstall_noop_when_not_installed(tmp_path, capsys):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
          patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
@@ -508,7 +525,7 @@ def test_run_uninstall_noop_when_not_installed(tmp_path, capsys):
 
 def test_run_uninstall_removes_plugin_and_desktop_entry(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
     env_path = tmp_path / ".env"  # does not exist -> no credential prompt
@@ -532,7 +549,7 @@ def test_run_uninstall_removes_plugin_and_desktop_entry(tmp_path):
 @pytest.mark.skipif(sys.platform == "win32", reason="chmod not meaningful on Windows")
 def test_run_uninstall_retightens_desktop_config_permissions(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
     desktop_path.chmod(0o644)
@@ -551,7 +568,7 @@ def test_run_uninstall_retightens_desktop_config_permissions(tmp_path):
 
 def test_run_uninstall_prompts_before_deleting_credentials(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     env_path = tmp_path / ".env"
     env_path.write_text("COGNIGY_API_KEY=secret\n")
     desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
@@ -568,7 +585,7 @@ def test_run_uninstall_prompts_before_deleting_credentials(tmp_path):
 
 def test_run_uninstall_deletes_credentials_on_confirmation(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     env_path = tmp_path / ".env"
     env_path.write_text("COGNIGY_API_KEY=secret\n")
     desktop_path = tmp_path / "claude_desktop_config.json"
@@ -591,7 +608,7 @@ def test_run_uninstall_prints_credential_confirmation_before_later_step_failure(
     """
     from cognigy_mcp.setup import _run_uninstall
     from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     env_path = tmp_path / ".env"
     env_path.write_text("COGNIGY_API_KEY=secret\n")
     desktop_path = tmp_path / "claude_desktop_config.json"
@@ -619,7 +636,7 @@ def test_run_uninstall_prints_credential_confirmation_before_later_step_failure(
 
 def test_run_uninstall_prints_header(tmp_path, capsys):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
 
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
@@ -632,7 +649,7 @@ def test_run_uninstall_prints_header(tmp_path, capsys):
 
 def test_run_uninstall_does_not_remove_marketplace_by_default(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     env_path = tmp_path / ".env"
 
@@ -664,7 +681,7 @@ def test_run_uninstall_prompts_for_project_scope_credentials(tmp_path, monkeypat
     user_env_path = tmp_path / "user-home" / ".env"  # does not exist
     desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
 
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="project")), \
          patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
          patch("cognigy_mcp.setup.USER_ENV_PATH", user_env_path), \
@@ -685,7 +702,7 @@ def test_run_uninstall_desktop_only_removes_entry_without_plugin_call(tmp_path):
     Regression guard for issue #185 fix 1.
     """
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
     env_path = tmp_path / ".env"  # does not exist -> no credential prompt
@@ -712,7 +729,7 @@ def test_run_uninstall_degrades_gracefully_on_malformed_desktop_config(tmp_path,
     on the same file. Regression guard for PR #186 review finding 3.
     """
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     desktop_path.write_text("not json")
     env_path = tmp_path / ".env"  # does not exist -> no credential prompt
@@ -736,7 +753,7 @@ def test_run_uninstall_degrades_gracefully_on_malformed_desktop_config(tmp_path,
 
 def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
 
     with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
@@ -748,9 +765,300 @@ def test_run_uninstall_noop_when_no_plugin_and_no_desktop_entry(tmp_path, capsys
     assert "not installed" in capsys.readouterr().out.lower()
 
 
+def test_run_uninstall_scope_flag_overrides_detected_scope(tmp_path, monkeypatch):
+    """--scope must override the auto-detected scope, not just be ignored.
+    Regression guard for issue #199 (no way to override uninstall scope).
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    args = type("Args", (), {"verbose": False, "scope": "project"})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "project"],
+        "Uninstalling plugin",
+        verbose=False,
+    )
+
+
+def test_run_uninstall_scope_flag_overrides_when_nothing_auto_detected(tmp_path, monkeypatch):
+    """--scope must force an uninstall attempt even when auto-detection found no
+    plugin at all (state.plugin_scope=None) — the exact case issue #199 needs
+    covered: detection finds nothing, user forces an attempt via the flag.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    args = type("Args", (), {"verbose": False, "scope": "local"})()
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "local"],
+        "Uninstalling plugin",
+        verbose=False,
+    )
+
+
+def test_run_uninstall_scope_flag_with_desktop_entry_and_successful_uninstall(tmp_path, monkeypatch):
+    """End-to-end 'everything present' scenario for the new flag: a --scope
+    override, a live Desktop config entry, and a plugin uninstall that
+    succeeds — all in one run. The other scope-override tests use a
+    non-existent desktop_path; this exercises both branches together.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    args = type("Args", (), {"verbose": False, "scope": "project"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess") as mock_run:
+        _run_uninstall(args)
+
+    mock_run.assert_any_call(
+        ["claude", "plugin", "uninstall", "cognigy-vibe@cognigy-vibe", "--scope", "project"],
+        "Uninstalling plugin",
+        verbose=False,
+    )
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+
+
+def test_run_uninstall_scope_flag_governs_credential_path_selection(tmp_path, monkeypatch):
+    """The project/local credential-path check must key off the effective
+    (possibly overridden) scope, not the auto-detected one. A regression that
+    left this keyed on state.plugin_scope would pass silently otherwise.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    project_env_path = tmp_path / ".env"
+    project_env_path.write_text("COGNIGY_API_KEY=secret\n")
+    user_env_path = tmp_path / "user-home" / ".env"  # does not exist
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    # Auto-detected scope is "project" (would prompt for cwd/.env), but the
+    # user overrides to "user" — the cwd/.env credential prompt must NOT fire.
+    args = type("Args", (), {"verbose": False, "scope": "user"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="project")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", user_env_path), \
+         patch("builtins.input", return_value="n") as mock_input, \
+         patch("cognigy_mcp.setup.run_subprocess"):
+        _run_uninstall(args)
+
+    prompted_paths = [str(call.args[0]) for call in mock_input.call_args_list]
+    assert not any(str(project_env_path) in p for p in prompted_paths)
+    assert project_env_path.exists()  # untouched, never prompted
+
+
+def test_run_uninstall_scope_flag_governs_credential_path_selection_when_overridden_up(tmp_path, monkeypatch):
+    """Mirror of the test above in the other direction: auto-detected 'user'
+    overridden up to 'project' must add the cwd/.env credential prompt that
+    auto-detection alone would have missed. Regression guard for issue #199 —
+    this is the direction the override exists for (forcing project/local
+    cleanup auto-detection didn't find).
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    project_env_path = tmp_path / ".env"
+    project_env_path.write_text("COGNIGY_API_KEY=secret\n")
+    user_env_path = tmp_path / "user-home" / ".env"  # does not exist
+    desktop_path = tmp_path / "claude_desktop_config.json"  # does not exist
+
+    args = type("Args", (), {"verbose": False, "scope": "project"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", user_env_path), \
+         patch("builtins.input", return_value="n") as mock_input, \
+         patch("cognigy_mcp.setup.run_subprocess"):
+        _run_uninstall(args)
+
+    prompted_paths = [str(call.args[0]) for call in mock_input.call_args_list]
+    assert any(str(project_env_path) in p for p in prompted_paths)
+
+
+def test_run_uninstall_plugin_failure_does_not_block_desktop_and_credential_cleanup(tmp_path, monkeypatch):
+    """A forced --scope guess with nothing installed there makes the CLI's
+    `claude plugin uninstall` call exit nonzero (verified against the real
+    CLI). That must not abort Desktop-entry removal or the credential
+    prompt — both must still run; the failure surfaces only after cleanup.
+    Regression guard for issue #199 follow-up review finding.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / "user-home" / ".env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("COGNIGY_API_KEY=secret\n")
+
+    failure = StepFailure("Uninstalling plugin", SubprocessResult(returncode=1, stdout="", stderr="not installed"))
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "uninstall"]:
+            raise failure
+        return None
+
+    args = type("Args", (), {"verbose": False, "scope": "local"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="y") as mock_input, \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+        with pytest.raises(StepFailure):
+            _run_uninstall(args)
+
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+    assert not env_path.exists()  # credential prompt fired and was actioned
+    assert mock_input.call_count >= 2  # credential prompt + marketplace prompt, not short-circuited
+
+
+def test_run_uninstall_plugin_failure_on_auto_detected_scope_does_not_block_cleanup(tmp_path, monkeypatch, capsys):
+    """The failure-deferral behavior is intentionally broad: it also covers a
+    genuine plugin-uninstall failure on the auto-detected scope (no --scope
+    override at all), not just a forced-scope guess. Locks in that broader,
+    intentional behavior per the follow-up review on issue #199, and asserts
+    the failure is printed immediately (queued for the final summary too,
+    but visible even before print_summary runs).
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / "user-home" / ".env"
+    env_path.parent.mkdir(parents=True)
+    env_path.write_text("COGNIGY_API_KEY=secret\n")
+
+    failure = StepFailure("Uninstalling plugin", SubprocessResult(returncode=1, stdout="", stderr="permission denied"))
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "uninstall"]:
+            raise failure
+        return None
+
+    args = type("Args", (), {"verbose": False, "scope": None})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope="user")), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="y"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+        with pytest.raises(StepFailure):
+            _run_uninstall(args)
+
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})
+    assert not env_path.exists()  # credential prompt fired and was actioned
+    out = capsys.readouterr().out
+    assert "uninstalling plugin" in out.lower()
+    assert "permission denied" in out.lower()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod not meaningful on Windows")
+def test_run_uninstall_double_failure_reports_both_and_raises_the_first(tmp_path, monkeypatch, capsys):
+    """When the plugin-uninstall step AND a later step (Desktop config write)
+    both fail, neither failure should be silently dropped: both must be
+    printed immediately, and the first (plugin) failure — not the later,
+    unrelated one — is what ultimately propagates to main()'s error panel.
+    Regression guard: three independent reviewers flagged that a later
+    exception could previously overwrite/swallow an earlier deferred one.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    from cognigy_mcp.wizard_ui import StepFailure, SubprocessResult
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    desktop_path.chmod(0o400)  # read-only: the removal step's write_text() will raise
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    plugin_failure = StepFailure("Uninstalling plugin", SubprocessResult(returncode=1, stdout="", stderr="not installed"))
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "uninstall"]:
+            raise plugin_failure
+        return None
+
+    args = type("Args", (), {"verbose": False, "scope": "local"})()
+    try:
+        with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+             patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+             patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+             patch("builtins.input", return_value="n"), \
+             patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+            with pytest.raises(StepFailure) as exc_info:
+                _run_uninstall(args)
+    finally:
+        desktop_path.chmod(0o600)  # restore so tmp_path cleanup can remove it
+
+    assert exc_info.value is plugin_failure  # the first failure wins, not the desktop write error
+    out = capsys.readouterr().out
+    assert "uninstalling plugin" in out.lower()
+    assert "removing desktop config entry" in out.lower()
+    assert "Plugin" in out and "failed to uninstall" in out
+    assert "Desktop config" in out and "failed to remove entry" in out
+
+
+def test_run_uninstall_plugin_uninstall_missing_claude_cli_does_not_block_cleanup(tmp_path, monkeypatch, capsys):
+    """A forced --scope makes has_plugin True even when claude plugin list
+    never ran successfully (state.plugin_scope=None) — so the plugin-uninstall
+    step can now be reached on a machine where the claude CLI isn't on PATH.
+    subprocess.run raises a raw FileNotFoundError in that case (run_subprocess
+    only converts a nonzero exit into StepFailure), which the plugin-uninstall
+    and marketplace-removal try blocks must also catch — not just StepFailure —
+    so a missing CLI defers like any other step failure instead of aborting
+    Desktop/credential cleanup outright.
+    """
+    from cognigy_mcp.setup import _run_uninstall
+    monkeypatch.chdir(tmp_path)
+    desktop_path = tmp_path / "claude_desktop_config.json"
+    desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
+    env_path = tmp_path / "user-home" / ".env"  # does not exist -> no credential prompt
+
+    def fake_run_subprocess(cmd, description, verbose=False):
+        if cmd[:3] == ["claude", "plugin", "uninstall"]:
+            raise FileNotFoundError(2, "No such file or directory", "claude")
+        return None
+
+    args = type("Args", (), {"verbose": False, "scope": "local"})()
+    with patch("cognigy_mcp.reconcile.gather_state", return_value=_state(plugin_scope=None)), \
+         patch("cognigy_mcp.setup.get_desktop_config_path", return_value=desktop_path), \
+         patch("cognigy_mcp.setup.USER_ENV_PATH", env_path), \
+         patch("builtins.input", return_value="n"), \
+         patch("cognigy_mcp.setup.run_subprocess", side_effect=fake_run_subprocess):
+        with pytest.raises(FileNotFoundError):
+            _run_uninstall(args)
+
+    data = json.loads(desktop_path.read_text())
+    assert "cognigy-vibe" not in data.get("mcpServers", {})  # cleanup still ran
+    out = capsys.readouterr().out
+    assert "uninstalling plugin" in out.lower()
+    assert "no such file or directory" in out.lower()
+
+
 def test_run_uninstall_removes_marketplace_with_run_subprocess(tmp_path):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     env_path = tmp_path / ".env"
 
@@ -770,7 +1078,7 @@ def test_run_uninstall_removes_marketplace_with_run_subprocess(tmp_path):
 
 def test_run_uninstall_prints_summary_of_actions(tmp_path, capsys):
     from cognigy_mcp.setup import _run_uninstall
-    args = type("Args", (), {"verbose": False})()
+    args = type("Args", (), {"verbose": False, "scope": None})()
     desktop_path = tmp_path / "claude_desktop_config.json"
     desktop_path.write_text(json.dumps({"mcpServers": {"cognigy-vibe": {"command": "uvx"}}}))
     env_path = tmp_path / ".env"
@@ -824,6 +1132,7 @@ def test_main_renders_error_panel_for_status_command():
     mock_panel.assert_called_once()
     assert mock_panel.call_args.args[0] == "Status failed."
     assert isinstance(mock_panel.call_args.args[1], RuntimeError)
+    assert mock_panel.call_args.kwargs["title"] == "Status failed"
 
 
 def test_main_renders_error_panel_for_update_command():
@@ -836,6 +1145,7 @@ def test_main_renders_error_panel_for_update_command():
         main()
     assert exc_info.value.code == 1
     assert mock_panel.call_args.args[0] == "Update failed."
+    assert mock_panel.call_args.kwargs["title"] == "Update failed"
 
 
 def test_main_renders_error_panel_for_uninstall_command():
@@ -848,6 +1158,7 @@ def test_main_renders_error_panel_for_uninstall_command():
         main()
     assert exc_info.value.code == 1
     assert mock_panel.call_args.args[0] == "Uninstall failed."
+    assert mock_panel.call_args.kwargs["title"] == "Uninstall failed"
 
 
 def test_main_status_command_propagates_system_exit_unchanged():

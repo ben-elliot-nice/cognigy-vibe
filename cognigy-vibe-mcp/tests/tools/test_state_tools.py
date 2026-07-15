@@ -38,7 +38,8 @@ def test_sync_remote_state_calls_api(mock_client, state, cache):
     project_id = state.project_id
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},                                     # GET /v2.0/flows?projectId=...
-        {"_embedded": {"extensions": []}},                                                        # GET /v2.0/extensions?projectId=...
+        {"items": []},                                                                            # GET /v2.0/extensions?projectId=...
+        {"items": []},                                                                            # GET /v2.0/flows/flow-1/chart/descriptors
         {"nodes": []},                                                                            # chart (tool discovery)
         {"items": [{"_id": "agent-1", "name": "My Agent"}]},                                     # chart/nodes/aiagents
         {"_id": "agent-1", "name": "My Agent", "speakingStyle": "formal"},                       # GET /v2.0/aiagents/agent-1
@@ -76,7 +77,8 @@ def test_sync_remote_state_caches_canonical_aiagent_resource(mock_client, state,
     }
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
-        {"_embedded": {"extensions": []}},                      # extensions
+        {"items": []},                                          # extensions
+        {"items": []},                                          # chart/descriptors
         {"nodes": []},                                          # chart (tool discovery)
         {"items": [chart_node_data]},                           # chart/nodes/aiagents
         canonical_resource,                                     # /v2.0/aiagents/agent-1
@@ -155,7 +157,8 @@ def test_sync_remote_state_binds_project_in_session(mock_client, cache, tmp_path
 
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
-        {"_embedded": {"extensions": []}},                      # extensions (empty)
+        {"items": []},                                          # extensions (empty)
+        {"items": []},                                          # chart/descriptors
         {"nodes": []},                                          # chart (tool discovery)
         {"items": []},                                          # chart/nodes/aiagents
         {"items": []},                                          # endpoints
@@ -174,7 +177,8 @@ def test_sync_stores_endpoint_token_from_URLToken_field(mock_client, state, cach
     project_id = state.project_id
     mock_client.get.side_effect = [
         {"items": [{"_id": "flow-1", "name": "Main Flow"}]},
-        {"_embedded": {"extensions": []}},
+        {"items": []},                                          # extensions
+        {"items": []},                                          # chart/descriptors
         {"nodes": []},
         {"items": []},
         {"items": [{"_id": "ep-1", "name": "REST Endpoint", "URLToken": "real-token-abc", "flowId": "flow-ref-1"}]},
@@ -229,13 +233,18 @@ def test_get_build_state_filtered_includes_config_fields(mock_client, state, cac
 
 
 def test_sync_remote_state_builds_extension_map(mock_client, state, cache, monkeypatch):
-    """sync_remote_state must fetch installed extensions and store type→name index in state."""
+    """sync_remote_state must fetch installed extensions and store type→name index in state.
+
+    Uses the real flat {"items": [...]} shape returned by /v2.0/extensions — confirmed against
+    both the live OpenAPI spec and a real AU1 call (issue #263). Each item's extension ID is
+    directly on `_id`, not nested under `_links.self.href` as an earlier stale HAL assumption had it.
+    """
     monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
     mock_client.get.side_effect = [
         {"items": []},                                                   # GET /v2.0/flows
-        {"_embedded": {"extensions": [                                   # GET /v2.0/extensions
-            {"name": "my-ext", "_links": {"self": {"href": "https://api/v2.0/extensions/ext-1"}}}
-        ]}},
+        {"items": [                                                      # GET /v2.0/extensions
+            {"_id": "ext-1", "name": "my-ext"}
+        ], "total": 1, "previousCursor": None, "nextCursor": None},
         {"_id": "ext-1", "name": "my-ext",                              # GET /v2.0/extensions/ext-1
          "nodes": [{"type": "myNode"}, {"type": "anotherNode"}]},
         {"items": []},                                                   # GET /v2.0/endpoints
@@ -246,6 +255,106 @@ def test_sync_remote_state_builds_extension_map(mock_client, state, cache, monke
     assert ext_map is not None, "extension_map should be written to state"
     assert ext_map["myNode"] == "my-ext"
     assert ext_map["anotherNode"] == "my-ext"
+
+
+def test_sync_remote_state_builds_branch_marker_types_from_descriptors(mock_client, state, cache, monkeypatch):
+    """sync_remote_state must fetch chart node descriptors for the project's first flow and
+    derive branch-marker types (any type whose parentType is truthy) into state, so
+    get_flow_chart's hierarchy nesting isn't limited to the hardcoded core-type list.
+    parentType may be a plain string or a list of strings — both count as a marker type.
+    A descriptor with parentType but no type key must be skipped, not raise KeyError.
+    """
+    monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},        # GET /v2.0/flows
+        {"items": []},                                                # GET /v2.0/extensions
+        {"items": [                                                    # GET /v2.0/flows/flow-1/chart/descriptors
+            {"type": "once", "parentType": None},
+            {"type": "afterwards", "parentType": "once"},
+            {"type": "success", "parentType": "airtable-getoneorfail"},
+            {"type": "executeWorkflowTool", "parentType": ["aiAgentJob", "llmPromptV2"]},
+            {"parentType": "malformedParent"},
+        ]},
+        {"nodes": []},                                                # chart (tool discovery)
+        {"items": []},                                                # chart/nodes/aiagents
+        {"items": []},                                                # endpoints
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["sync_remote_state"]({"project_id": state.project_id})
+
+    marker_types = state.get("branch_marker_types")
+    assert marker_types is not None, "branch_marker_types should be written to state"
+    assert set(marker_types) == {"afterwards", "success", "executeWorkflowTool"}
+    assert "once" not in marker_types, "a type with no parentType is not itself a marker"
+
+
+def test_sync_remote_state_self_heals_branch_marker_types_to_empty_list(mock_client, state, cache, monkeypatch):
+    """A successful descriptors fetch that yields zero marker-bearing items must still write
+    an empty list to state (self-healing), mirroring extension_map's unconditional-write
+    pattern, so a stale set from a prior sync doesn't persist forever if all marker-bearing
+    extensions are later removed. get_flow_chart's `cached_marker_types if cached_marker_types
+    else _BRANCH_MARKER_TYPES` check still falls back correctly since [] is falsy.
+    """
+    monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # GET /v2.0/flows
+        {"_embedded": {"extensions": []}},                      # GET /v2.0/extensions
+        {"items": [                                              # GET /v2.0/flows/flow-1/chart/descriptors
+            {"type": "once", "parentType": None},
+            {"type": "start", "parentType": None},
+        ]},
+        {"nodes": []},                                          # chart (tool discovery)
+        {"items": []},                                          # chart/nodes/aiagents
+        {"items": []},                                          # endpoints
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["sync_remote_state"]({"project_id": state.project_id})
+
+    assert state.get("branch_marker_types") == [], (
+        "branch_marker_types should self-heal to [] rather than stay unset"
+    )
+
+
+def test_sync_remote_state_descriptors_failure_appends_error_and_leaves_state_unset(mock_client, state, cache, monkeypatch):
+    """A failure fetching chart/descriptors must not raise or block the rest of sync — it
+    appends to the errors list (same pattern as flows/extensions/endpoints failures) and
+    leaves branch_marker_types unset so get_flow_chart falls back to the hardcoded set.
+    """
+    monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
+    mock_client.get.side_effect = [
+        {"items": [{"_id": "flow-1", "name": "Main Flow"}]},  # flows
+        {"items": []},                                          # extensions
+        Exception("descriptors unavailable"),                   # chart/descriptors FAILS
+        {"nodes": []},                                          # chart (tool discovery)
+        {"items": []},                                          # chart/nodes/aiagents
+        {"items": []},                                          # endpoints
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["sync_remote_state"]({"project_id": state.project_id})
+    data = json.loads(result[0].text)
+
+    assert data["synced"] is True
+    assert any("chart_descriptors" in e for e in data.get("errors", [])), \
+        f"expected a chart_descriptors error, got: {data.get('errors')}"
+    assert state.get("branch_marker_types") is None
+
+
+def test_sync_remote_state_zero_flows_skips_descriptors_fetch(mock_client, state, cache, monkeypatch):
+    """A project with no flows has no flowId to anchor the descriptors call — skip fetching
+    it entirely (no error appended) rather than erroring."""
+    monkeypatch.setattr("cognigy_mcp.tools.state_tools._write_to_dotenv", lambda *a: None)
+    mock_client.get.side_effect = [
+        {"items": []},                       # flows: none
+        {"items": []},                       # extensions
+        {"items": []},                       # endpoints
+    ]
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["sync_remote_state"]({"project_id": state.project_id})
+    data = json.loads(result[0].text)
+
+    assert data["synced"] is True
+    assert not any("chart_descriptors" in e for e in data.get("errors", []))
+    assert state.get("branch_marker_types") is None
 
 
 def test_assign_org_llm_already_assigned(mock_client, state, cache):
@@ -362,3 +471,97 @@ def test_assign_org_llm_missing_project_id_returns_validation_error(mock_client,
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "project_id" for d in data["details"])
+
+
+def test_set_project_generative_ai_settings_success(mock_client, state, cache):
+    mock_client.patch.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"aiAgent": "llm-1", "gptPromptNode": "llm-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["updated"] is True
+    assert data["project_id"] == "proj-1"
+    assert sorted(data["use_cases"]) == ["aiAgent", "gptPromptNode"]
+    call_args = mock_client.patch.call_args[0]
+    assert call_args[0] == "/v2.0/projects/proj-1/settings"
+    assert call_args[1] == {
+        "generativeAISettings": {
+            "useCasesSettings": {
+                "aiAgent": {"largeLanguageModelId": "llm-1"},
+                "gptPromptNode": {"largeLanguageModelId": "llm-1"},
+            }
+        }
+    }
+
+
+def test_set_project_generative_ai_settings_patch_failed_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.patch.side_effect = ApiError(403, "Forbidden")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"knowledgeSearch": "llm-embed-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "patch_failed"
+    assert data["status"] == 403
+
+
+def test_set_project_generative_ai_settings_generic_exception(mock_client, state, cache):
+    mock_client.patch.side_effect = ConnectionError("timeout")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"knowledgeSearch": "llm-embed-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "patch_failed"
+    assert "timeout" in data["detail"]
+
+
+def test_set_project_generative_ai_settings_missing_required_returns_validation_error(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({"project_id": "proj-1"})
+    assert result.isError is True
+    data = json.loads(result.content[0].text)
+    assert data["error"] == "Invalid tool arguments"
+    assert any(d["field"] == "use_case_settings" for d in data["details"])
+
+
+def test_set_project_generative_ai_settings_in_tools_list():
+    names = [t.name for t in TOOLS]
+    assert "set_project_generative_ai_settings" in names
+
+
+def test_generation_use_cases_constant():
+    from cognigy_mcp.tools.state_tools import GENERATION_USE_CASES, KNOWLEDGE_USE_CASE
+    assert GENERATION_USE_CASES == [
+        "aiAgent", "gptPromptNode", "aiEnhancedOutputs", "sentimentAnalysis",
+        "designTimeGeneration", "answerExtraction", "conversationAnalyzer",
+    ]
+    assert KNOWLEDGE_USE_CASE == "knowledgeSearch"
+
+
+def test_set_project_generative_ai_settings_unknown_use_case_key(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {"aiAgent": "llm-1", "knowledgesearch": "llm-embed-1"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "unknown_use_case"
+    assert data["unknown_keys"] == ["knowledgesearch"]
+    mock_client.patch.assert_not_called()
+
+
+def test_set_project_generative_ai_settings_empty_use_case_settings(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["set_project_generative_ai_settings"]({
+        "project_id": "proj-1",
+        "use_case_settings": {},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "empty_use_case_settings"
+    mock_client.patch.assert_not_called()

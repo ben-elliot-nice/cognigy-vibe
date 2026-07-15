@@ -32,24 +32,25 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `llm.options[].label` | string | required | Human-readable LLM name | `"Azure GPT-4o"` |
 | `llm.options[].referenceId` | string (uuid) | required | Cognigy LLM `referenceId` — must exist in the target project | populated by `cognigy-vibe:init-cognigy-vibe` from live discovery — do not hand-edit |
 | `llm.options[].id` | string | required | MongoDB `_id` of the LLM — used by `assign_org_llm` without re-lookup | `"699ed916..."` |
-| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives §1.1 Step 2 assignment branch | `"organisation"` |
-| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (§0.5 / §1.8) | `{ "label": "...", "referenceId": "" }` |
+| `llm.options[].resourceLevel` | string | required | `"organisation"` or `"project"` — drives S1.1 Step 2 assignment branch | `"organisation"` |
+| `llm.embedding` | object | optional | Embedding LLM for Knowledge AI (S0.5 / S1.8) | `{ "label": "...", "referenceId": "", "id": "" }` |
 | `llm.embedding.label` | string | optional | Human-readable embedding model name | `"text-embedding-3-large"` |
 | `llm.embedding.referenceId` | string (uuid) | optional | Cognigy referenceId for the embedding model | `"..."` |
+| `llm.embedding.id` | string | optional | MongoDB `_id` of the embedding LLM — used by `set_project_generative_ai_settings` and `assign_org_llm` without re-lookup | `"699ed916..."` |
 | `llm.temperatureVoice` | number | optional | Temperature for voice/transactional builds | `0.2` |
 | `llm.temperatureChat` | number | optional | Temperature for chat-primary builds | `0.5` |
 | `llm.maxTokens` | integer | optional | Max tokens for generation | `400` |
 | `llm.toolChoice` | string | optional | Tool selection mode | `"auto"` |
 | `locale` | string | required | BCP-47 locale for the agent and endpoint | `"en-AU"` |
-| `tts.vendor` | string | required | TTS provider name | `"ElevenLabs"` |
+| `tts.vendor` | string | required | TTS provider — **lowercase API slug, not the Cognigy UI display name** (`aws`, `deepgram`, `elevenlabs`, `google`, `microsoft`, `nuance` — see `explain("voice-gateway")` for the full enum and why case matters) | `"elevenlabs"` |
 | `tts.model` | string | required | TTS model identifier | enter from Cognigy UI → Connections |
 | `tts.language` | string | required | TTS language code | `"en"` |
-| `tts.voiceType` | string | required | TTS voice type | `"Custom"` |
 | `tts.voiceId` | string | required | Provider-specific voice ID | enter from Cognigy UI → Connections |
-| `tts.label` | string | required | Cognigy synthesizer connection label | enter from Cognigy UI → Connections |
-| `stt.vendor` | string | required | STT provider name | `"Microsoft"` |
+| `tts.label` | string | required | Cognigy TTS connection label | enter from Cognigy UI → Connections |
+| `stt.vendor` | string | required | STT provider — **lowercase API slug, not the Cognigy UI display name** (same enum as `tts.vendor`, plus STT-only `deepgramflux`, `speechmatics` — see `explain("voice-gateway")`) | `"microsoft"` |
+| `stt.model` | string | required | STT model identifier | enter from Cognigy UI → Connections |
 | `stt.language` | string | required | STT language/locale code | `"en-AU"` |
-| `stt.label` | string | required | Cognigy recognizer connection label | enter from Cognigy UI → Connections |
+| `stt.label` | string | required | Cognigy STT connection label | enter from Cognigy UI → Connections |
 | `stt.hints` | array | optional | Static STT hint phrases | `[]` |
 | `stt.dynamicHints.enabled` | boolean | optional | Enable dynamic STT hints | `true` |
 | `channel.type` | string | required | Channel type identifier | `"voice-webrtc"` |
@@ -58,9 +59,22 @@ Every field in `default-demo-config.json` at `$schemaVersion: 2`.
 | `channel.voiceGateway.bindFlow` | boolean | required | Whether to bind this endpoint to the flow | `true` |
 | `voicePreview.speechProvider` | string | required | In-UI preview speech provider name | `"Microsoft Azure Speech Services"` |
 | `voicePreview.connectionName` | string | required | Cognigy connection label for preview | `"Test"` |
-| `voicePreview.region` | string | required | Azure region for preview | `"australiaeast"` |
+| `voicePreview.connectionType` | string | required | Cognigy connection `type` for the preview speech provider | `"MicrosoftSpeechProvider"` |
+| `voicePreview.connectionFields` | object | optional | Non-credential connection fields, vendor-specific shape. Omit to get `{"region": "australiaeast"}` when `connectionType` is also left at its Azure default, or `{}` otherwise | `{"region": "australiaeast"}` |
 | `voiceBehaviour.bargeIn` | boolean | optional | Enable barge-in (caller interrupts agent) | `false` |
 | `voiceBehaviour.vad` | boolean | optional | Enable voice activity detection | `false` |
+
+> **Why preview differs from the runtime VoiceGateway endpoint.** Voice
+> *preview* (the in-browser Click-to-Call widget) uses a single speech
+> connection for one vendor — `voicePreview.connectionType` /
+> `voicePreview.connectionFields` describe that one connection.
+> `voicePreview.speechProvider` is a human-readable label only (e.g.
+> "Microsoft Azure Speech Services") — it is descriptive metadata and is
+> not consumed by any tool. The runtime VoiceGateway endpoint's
+> `tts.*`/`stt.*` config (see the "Voice — TTS/STT" wizard group) is a
+> separate pairing of two vendors — one for synthesis, one for
+> recognition — because it serves live telephony calls. Do not model
+> `voicePreview` as a TTS/STT split — it isn't one.
 
 ### 2. Cascade discovery order
 
@@ -77,22 +91,23 @@ See `explain("session-workspace")` — "Config cascade" section — for the auth
 | Field | Consumed by | How |
 |---|---|---|
 | `llm.default` | S0.0 preflight | Shown in config summary; user may switch to another from `llm.options` |
-| `llm.options` | S1.1 Step 3 | `update_ai_agent.jobConfig.llmProviderReferenceId` — default selected, alternates offered |
-| `llm.embedding` | S0.5 / S1.8 | Knowledge AI connector — gated, only wired if knowledge is enabled |
-| `llm.temperatureVoice` | S1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is voice/transactional |
-| `llm.temperatureChat` | S1.1 Step 3 | `update_ai_agent.jobConfig.temperature` — used when channel is primarily chat |
-| `llm.maxTokens` | S1.1 Step 3 | `update_ai_agent.jobConfig.maxTokens` |
-| `llm.toolChoice` | S1.2 | Node patch for `toolChoice` (not reachable via `update_ai_agent`) |
+| `llm.options` | S1.1 Step 4 | `aiAgentJob` node `config.llmProviderReferenceId` — default selected, alternates offered (see `explain("agent-job-node")`) |
+| `llm.options[].id` (selected) | S1.1 Step 3b | `set_project_generative_ai_settings` — activates the generation model for `aiAgent`, `gptPromptNode`, and other non-knowledge use-cases at the project level |
+| `llm.embedding` | S1.8 (Step 2) | Activated via `assign_org_llm` + `set_project_generative_ai_settings` (`knowledgeSearch` use-case) — gated, only wired if S0.5 knowledge gate opened |
+| `llm.temperatureVoice` | S1.1 Step 4 | `aiAgentJob` node `config.temperature` — used when channel is voice/transactional |
+| `llm.temperatureChat` | S1.1 Step 4 | `aiAgentJob` node `config.temperature` — used when channel is primarily chat |
+| `llm.maxTokens` | S1.1 Step 4 | `aiAgentJob` node `config.maxTokens` |
+| `llm.toolChoice` | S1.1 Step 4 | `aiAgentJob` node `config.toolChoice` — set at creation; re-verified in S1.2 |
 | `locale` | S1.5(c) | Set Session Config `locale`; also endpoint locale binding |
-| `tts.*` | S1.5(c) | Set Session Config synthesizer fields (vendor, model, language, voiceType, voiceId, connection label) |
-| `stt.*` | S1.5(c) | Set Session Config recognizer fields (vendor, language, connection label, hints, dynamicHints) |
+| `tts.*` | S1.5(c) | Set Session Config TTS fields (vendor, model, language, voiceId, connection label) — see `explain("voice-gateway")` for the real flat shape |
+| `stt.*` | S1.5(c) | Set Session Config STT fields (vendor, model, language, connection label, hints, dynamicHints) — see `explain("voice-gateway")` for the real flat shape |
 | `channel.voiceGateway.endpointName` | S1.5(d) | Endpoint binding — matches or creates the named VoiceGateway endpoint |
 | `channel.voiceGateway.mode` | S1.5(d) | VoiceGateway transport mode for the endpoint (e.g. `webrtc`) |
 | `channel.voiceGateway.bindFlow` | S1.5(d) | Whether to bind this endpoint to the demo flow |
 | `connection.baseUrl` | MCP auth + as-built doc | API host for all Cognigy API calls in this session |
 | `connection.endpointBase` | As-built doc / baseline | Endpoint host recorded in `[customer]-baseline.md` |
 | `connection.region` | S0.0 summary display | Shown in config confirmation table |
-| `voicePreview.*` | S1.5(c) | In-UI voice preview connection (Azure Speech Services) |
+| `voicePreview.*` | S1.5(g) | In-UI voice preview connection (`provision_webrtc_endpoint`) |
 | `voiceBehaviour.bargeIn` | S1.5(c) | Set Session Config `bargeIn` |
 | `voiceBehaviour.vad` | S1.5(c) | Set Session Config `enableVoiceActivityDetection` |
 | `owner.initials` | S1.1 | Build artefact naming prefix |

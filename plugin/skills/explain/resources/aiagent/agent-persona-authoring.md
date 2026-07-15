@@ -1,7 +1,6 @@
 ---
 topic: agent-persona-authoring
 description: AI Agent description and instructions field authoring — structure, constraints, speaking style
-group: aiagent
 ---
 
 ## agent-persona-authoring — Authoring AI Agent Fields

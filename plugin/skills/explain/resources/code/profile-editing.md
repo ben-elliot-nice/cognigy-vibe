@@ -1,7 +1,6 @@
 ---
 topic: profile-editing
 description: Writing to the Cognigy contact profile — why direct mutation doesn't persist, api.updateProfile behaviour, and getProfileVar/setProfileVar/mergeProfileVar utility functions
-group: code
 ---
 
 ## profile-editing — Writing to the Contact Profile

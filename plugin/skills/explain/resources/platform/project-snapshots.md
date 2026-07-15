@@ -1,7 +1,6 @@
 ---
 topic: project-snapshots
 description: create project snapshots for versioning (flow-level versioning does not exist in the API)
-group: platform
 ---
 
 ## project-snapshots — Project Versioning via Snapshots
@@ -48,7 +47,7 @@ Use at task completion milestones during multi-agent builds:
 Snapshots capture project state server-side; for a portable offline zip use `export_package`:
   export_package {
     project_id: "<projectId>",
-    output_path: "Demo Builds/<customer>-demo/<customer>-package.zip"
+    output_path: "$DEMO_DIR/<customer>-package.zip"  // $DEMO_DIR is build-orchestrator's resolved absolute build directory — see its S0.0 Step 0
   }
 The tool posts an async export job, polls a task endpoint until the task reaches a terminal
 status, resolves the resulting package ID, fetches a pre-signed download link, and writes the

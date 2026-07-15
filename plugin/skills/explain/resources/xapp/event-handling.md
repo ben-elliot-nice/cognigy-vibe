@@ -1,7 +1,6 @@
 ---
 topic: xapp-event-handling
 description: non-blocking xApp pattern: flow structure, ephemeral data capture, SDK.submit vs webhook inject variants
-group: xapp
 ---
 
 ## xapp-event-handling — Non-Blocking xApp with Async Event Loop

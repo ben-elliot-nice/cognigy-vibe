@@ -9,7 +9,7 @@ description: Orchestrate the full Cognigy AI agent design workflow — runs desi
 
 Use this skill when you want to run the full agent design workflow in one session, or when you want to pick and choose which design stages to run.
 
-Requires a demo plan from `cognigy-vibe:scope-demo`. If an `output_dir` argument was supplied (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`), the demo plan is in that directory. Otherwise look in the user's working directory.
+Requires a demo plan from `cognigy-vibe:scope-demo`. If an `output_dir` argument was supplied (e.g. `cognigy-vibe:build-orchestrator` passes its resolved `$DEMO_DIR` — an absolute path, e.g. `"/Users/.../Demo Builds/acme-demo"`), the demo plan is in that directory. Otherwise look in the user's working directory.
 
 ## Design Skills
 
@@ -96,6 +96,6 @@ Design complete. Files produced:
 ## Notes
 
 - This skill does not create or modify any Cognigy resources
-- Output files are written to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise written to the user's working directory. Pass `output_dir` through to each sub-skill invocation. Never write into the plugin directory.
+- Output files are written to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes its resolved `$DEMO_DIR` — an absolute path, e.g. `"/Users/.../Demo Builds/acme-demo"`); otherwise written to the user's working directory. Pass `output_dir` through to each sub-skill invocation. Never write into the plugin directory.
 - Each sub-skill can also be invoked directly without going through this orchestrator
-- To build after designing → use `cognigy-vibe:add-aiagent-job` (creates nodes via MCP tools)
+- To build after designing → see `explain("agent-job-node")` for the aiAgentJob node creation sequence

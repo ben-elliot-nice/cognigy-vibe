@@ -22,8 +22,9 @@ TOOLS: list[Tool] = [
         description=(
             "Retrieve implementation guidance before brute-forcing or web-searching.\n\n"
             "Topics: " + " | ".join(TOPICS) + "\n\n"
-            "Call explain() for orientation and topic descriptions.\n"
-            "Call explain(\"topic\") for full reference on that topic."
+            "Call explain() for orientation — lists top-level topic groups.\n"
+            "Call explain(\"group\") for that group's primer plus an index of its topics.\n"
+            "Call explain(\"topic\") for full reference on that specific topic."
         ),
         inputSchema=make_schema(ExplainArgs),
     ),
@@ -43,9 +44,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         topic = m.topic.strip()
         if not topic:
             return _ok("# cognigy-vibe-mcp Reference Library\n\n" + _TOPIC_INDEX)
-        content = _CONTENT.get(topic)
-        if content:
-            return _ok(content.strip())
+        if topic in _CONTENT:
+            return _ok(_CONTENT[topic].strip())
         return _ok(
             f"Unknown topic: '{topic}'\n\n"
             f"Available Topics:\n{_TOPIC_INDEX}"

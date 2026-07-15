@@ -7,6 +7,7 @@ import sys
 import time
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -90,52 +91,6 @@ def test_env_keys_excludes_dev_vars():
     from cognigy_mcp.orchestrator import _ENV_KEYS
     assert "COGNIGY_VIBE_DEV" not in _ENV_KEYS
     assert "COGNIGY_VIBE_SOURCE_DIR" not in _ENV_KEYS
-
-
-from cognigy_mcp.orchestrator import _find_env_file
-
-
-def test_find_env_file_in_start_dir(tmp_path):
-    env = tmp_path / ".env"
-    env.write_text("COGNIGY_BASE_URL=https://example.com\n")
-    result = _find_env_file(tmp_path, tmp_path.parent)
-    assert result == env
-
-
-def test_find_env_file_in_parent(tmp_path):
-    child = tmp_path / "project"
-    child.mkdir()
-    env = tmp_path / ".env"
-    env.write_text("COGNIGY_BASE_URL=https://example.com\n")
-    result = _find_env_file(child, tmp_path.parent)
-    assert result == env
-
-
-def test_find_env_file_stops_at_boundary(tmp_path):
-    # boundary is tmp_path itself — .env is above it (in tmp_path.parent), should not be found
-    child = tmp_path / "project"
-    child.mkdir()
-    env = tmp_path.parent / ".env"
-    env.write_text("COGNIGY_BASE_URL=https://example.com\n")
-    result = _find_env_file(child, tmp_path)  # stop at tmp_path, not tmp_path.parent
-    assert result is None
-    env.unlink()  # cleanup — tmp_path.parent is shared
-
-
-def test_find_env_file_not_found(tmp_path):
-    child = tmp_path / "deep" / "project"
-    child.mkdir(parents=True)
-    result = _find_env_file(child, tmp_path)
-    assert result is None
-
-
-def test_find_env_file_grandparent(tmp_path):
-    grandchild = tmp_path / "a" / "b"
-    grandchild.mkdir(parents=True)
-    env = tmp_path / ".env"
-    env.write_text("COGNIGY_API_KEY=key\n")
-    result = _find_env_file(grandchild, tmp_path.parent)
-    assert result == env
 
 
 # ---------------------------------------------------------------------------
@@ -362,52 +317,6 @@ def test_write_to_child_broken_pipe_notification_no_response(monkeypatch):
     assert not forwarded, "Notifications have no id — must not send a response"
 
 
-# ---------------------------------------------------------------------------
-# Task 4 — user-scope .env fallback
-# ---------------------------------------------------------------------------
-
-def test_resolve_env_file_finds_project_env(tmp_path):
-    """Project .env takes priority over user-scope fallback."""
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-    project_env = project_dir / ".env"
-    project_env.write_text("COGNIGY_BASE_URL=https://project.example.com\n")
-
-    user_config = tmp_path / ".config" / "cognigy-vibe"
-    user_config.mkdir(parents=True)
-    (user_config / ".env").write_text("COGNIGY_BASE_URL=https://user.example.com\n")
-
-    from cognigy_mcp.orchestrator import _resolve_env_file
-    result = _resolve_env_file(project_dir, tmp_path)
-    assert result == project_env
-
-
-def test_resolve_env_file_falls_back_to_user_scope(tmp_path, monkeypatch):
-    """With no project .env, falls back to ~/.config/cognigy-vibe/.env."""
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-
-    user_env = tmp_path / ".config" / "cognigy-vibe" / ".env"
-    user_env.parent.mkdir(parents=True)
-    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\n")
-
-    import cognigy_mcp.orchestrator as orch
-    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
-    result = orch._resolve_env_file(project_dir, tmp_path)
-    assert result == user_env
-
-
-def test_resolve_env_file_returns_none_when_neither_exists(tmp_path, monkeypatch):
-    """Returns None when no .env found anywhere."""
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-
-    import cognigy_mcp.orchestrator as orch
-    monkeypatch.setattr(orch, "USER_ENV_PATH", tmp_path / ".config" / "cognigy-vibe" / ".env")
-    result = orch._resolve_env_file(project_dir, tmp_path)
-    assert result is None
-
-
 def test_migrate_flat_logs_moves_stray_log_file(tmp_path):
     from cognigy_mcp.orchestrator import _migrate_flat_logs
     config_base = tmp_path / "cognigy-vibe"
@@ -483,3 +392,154 @@ def test_migrate_flat_logs_ignores_non_log_files(tmp_path):
 
     assert (config_base / "config.json").exists()
     assert (config_base / ".env").exists()
+
+
+def test_main_merges_project_and_user_env(tmp_path, monkeypatch):
+    """#255 regression: project .env has only the project id, user .env has credentials —
+    main() must end up with both in os.environ, not just whichever file it found first."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / ".env").write_text("COGNIGY_PROJECT_ID=proj-123\n")
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+    user_env.parent.mkdir(parents=True)
+    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\nCOGNIGY_API_KEY=userkey\n")
+
+    monkeypatch.chdir(project_dir)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY", "COGNIGY_PROJECT_ROOT"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(orch._Orchestrator, "run", lambda self: None)
+    monkeypatch.setattr("truststore.inject_into_ssl", lambda: None)
+
+    # main() writes directly to os.environ via setdefault(), which monkeypatch's
+    # setenv/delenv-based teardown does not track — reset these keys afterward so
+    # this test doesn't leak COGNIGY_PROJECT_ROOT (etc.) into later tests in the
+    # same session (e.g. test_server.py's _find_config_file cascade).
+    try:
+        orch.main()
+
+        assert os.environ["COGNIGY_PROJECT_ID"] == "proj-123"
+        assert os.environ["COGNIGY_BASE_URL"] == "https://user.example.com"
+        assert os.environ["COGNIGY_API_KEY"] == "userkey"
+        assert os.environ["COGNIGY_PROJECT_ROOT"] == str(project_dir)
+    finally:
+        for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY", "COGNIGY_PROJECT_ROOT"):
+            os.environ.pop(key, None)
+
+
+def test_spawn_merges_project_and_user_env(tmp_path, monkeypatch):
+    """Hot-reload path (_spawn, invoked by reload_mcp) must merge just like main()."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / ".env").write_text("COGNIGY_PROJECT_ID=proj-123\n")
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+    user_env.parent.mkdir(parents=True)
+    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\nCOGNIGY_API_KEY=userkey\n")
+
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
+    for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(orch.subprocess, "Popen", lambda *a, **k: SimpleNamespace(pid=1234))
+
+    # _spawn() writes directly to os.environ via os.environ.update(), which
+    # monkeypatch's setenv/delenv-based teardown does not track — reset these keys
+    # afterward so this test doesn't leak COGNIGY_PROJECT_ID (etc.) into later tests
+    # in the same session.
+    try:
+        o = orch._Orchestrator()
+        o._spawn()
+
+        assert os.environ["COGNIGY_PROJECT_ID"] == "proj-123"
+        assert os.environ["COGNIGY_BASE_URL"] == "https://user.example.com"
+        assert os.environ["COGNIGY_API_KEY"] == "userkey"
+    finally:
+        for key in ("COGNIGY_PROJECT_ID", "COGNIGY_BASE_URL", "COGNIGY_API_KEY"):
+            os.environ.pop(key, None)
+
+
+def test_degraded_interceptor_restarts_when_user_global_env_fixes_it(tmp_path, monkeypatch):
+    """#255 gap: today this only checks COGNIGY_PROJECT_ROOT/.env existence, so a fix
+    living purely in the user-global .env is never detected and the orchestrator never
+    retries — it must instead check whether the merged resolution now has both keys."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    # No project .env at all.
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+    user_env.parent.mkdir(parents=True)
+    user_env.write_text("COGNIGY_BASE_URL=https://user.example.com\nCOGNIGY_API_KEY=userkey\n")
+
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
+
+    o = orch._Orchestrator()
+    o._mode = "degraded"
+    restarted = {"called": False}
+    monkeypatch.setattr(o, "_do_restart", lambda: restarted.update(called=True))
+
+    msg = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {}}
+    raw = (json.dumps(msg) + "\n").encode()
+
+    # PR #266 CI review finding: drive the real code path (_handle_degraded_tool_call,
+    # extracted from run()'s tools/call branch) instead of reimplementing its logic
+    # inline — a bug in the real method would now actually fail this test.
+    o._pending_call = None
+    o._handle_degraded_tool_call(msg, raw)
+
+    assert restarted["called"] is True
+    assert o._pending_call == raw
+
+
+def test_degraded_interceptor_writes_guidance_and_does_not_restart_when_still_missing(tmp_path, monkeypatch):
+    """PR #266 CI review finding: the 'still missing' branch (the common case a real
+    user hits on every tool call before fixing their config) had no test asserting
+    guidance is written and no restart happens."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    # Neither project nor user-global .env exists — credentials remain missing.
+    user_env = tmp_path / "userhome" / ".config" / "cognigy-vibe" / ".env"
+
+    import cognigy_mcp.orchestrator as orch
+    monkeypatch.setattr(orch, "USER_ENV_PATH", user_env)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "userhome")
+    monkeypatch.setenv("COGNIGY_PROJECT_ROOT", str(project_dir))
+
+    o = orch._Orchestrator()
+    o._mode = "degraded"
+    restarted = {"called": False}
+    monkeypatch.setattr(o, "_do_restart", lambda: restarted.update(called=True))
+
+    written = []
+
+    class _FakeBuffer:
+        def write(self, data):
+            written.append(data)
+
+        def flush(self):
+            pass
+
+    class _FakeStdout:
+        buffer = _FakeBuffer()
+
+    monkeypatch.setattr(orch.sys, "stdout", _FakeStdout())
+
+    msg = {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {}}
+    raw = (json.dumps(msg) + "\n").encode()
+
+    o._pending_call = None
+    o._handle_degraded_tool_call(msg, raw)
+
+    assert restarted["called"] is False
+    assert o._pending_call is None
+    assert len(written) == 1
+    payload = json.loads(written[0])
+    assert payload["id"] == 7
+    text = payload["result"]["content"][0]["text"]
+    assert "COGNIGY_BASE_URL" in text
+    assert "COGNIGY_API_KEY" in text

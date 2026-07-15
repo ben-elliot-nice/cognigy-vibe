@@ -1,7 +1,6 @@
 ---
 topic: agent-tool-patterns
 description: Tool granularity options (granular/consolidated/action-parameterized) and context.toolResponse channel
-group: aiagent
 ---
 
 ## agent-tool-patterns — AI Agent Tool Design Patterns

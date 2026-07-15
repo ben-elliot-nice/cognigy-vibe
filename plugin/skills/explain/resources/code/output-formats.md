@@ -1,7 +1,6 @@
 ---
 topic: output-formats
 description: api.say() channel output shapes — quick replies, buttons, gallery, image, audio, adaptive card
-group: code
 ---
 
 ## output-formats — Code Node Channel Output Formats

@@ -1,7 +1,6 @@
 ---
 topic: agent-tool-json
 description: .tool.json convention — field reference, toolType selection, toolId uniqueness rule
-group: aiagent
 ---
 
 ## agent-tool-json — Local Tool Definition File

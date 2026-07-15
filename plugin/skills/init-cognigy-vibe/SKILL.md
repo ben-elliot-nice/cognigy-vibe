@@ -49,9 +49,9 @@ Collect the schema. Group into ≤3 batches:
 | Group | Captures |
 |---|---|
 | **Identity & tenant** | owner initials; `connection.region` (known NICE CXone regions only — see table below); **API key** (→ `.env`) |
-| **LLM** | Discovered live — see below (no manual UUID entry) |
-| **Voice — TTS/STT** | TTS vendor/model/voiceType/voiceId/label/language; STT vendor/label/language — **plaintext entry only, never a picklist.** There is no discovery mechanism for these values — any `AskUserQuestion` options list would be fabricated. Ask the user to type each value as shown in Cognigy UI → Settings → Connections. No defaults provided. |
-| **Channel & preview** | channel type (default voice-webRTC); VoiceGateway endpoint name (default `Click-to-Call`); voice-preview speech provider + connection name/region |
+| **LLM** | Discovered live — generation model (required) and embedding model (optional, for Knowledge AI) — see below (no manual UUID entry) |
+| **Voice — TTS/STT** | TTS vendor/model/voiceId/label/language; STT vendor/model/label/language — **plaintext entry only, never a picklist.** There is no discovery mechanism for these values — any `AskUserQuestion` options list would be fabricated. For `tts.vendor`/`stt.vendor` specifically: do **not** ask the user to copy the Cognigy UI display name — that's proper-case (e.g. "ElevenLabs") and will silently render as `"custom"` in the built flow. Instead, ask for the vendor, then map it yourself to the canonical lowercase slug from `explain("voice-gateway")` — `aws`, `deepgram`, `elevenlabs`, `google`, `microsoft`, `nuance` for `tts.vendor`; same list for `stt.vendor`, plus STT-only `deepgramflux`, `speechmatics` — before writing the config. For all other fields (`model`, `voiceId`, `label`, `language`), ask the user to type the value as shown in Cognigy UI → Settings → Connections. No defaults provided. |
+| **Channel & preview** | channel type (default voice-webRTC); VoiceGateway endpoint name (default `Click-to-Call`); voice-preview speech provider label, connection name, connection type, and connection fields — **plaintext entry only, same as TTS/STT** (no discovery mechanism exists for non-Azure vendors). Defaults to Azure (`MicrosoftSpeechProvider`, `{"region": "australiaeast"}`) unless the user specifies a different vendor. Preview is single-vendor, not a TTS/STT split — see `build-config/SKILL.md`'s "Why preview differs from the runtime VoiceGateway endpoint" note. |
 
 `temperatureVoice` (0.2), `temperatureChat` (0.5), `maxTokens` (400), `toolChoice` (auto), `voiceBehaviour` (barge-in/VAD off) are written at defaults without a question unless the user asks.
 
@@ -71,8 +71,9 @@ If the user's region is not one of the above (e.g. a self-hosted or EU tenant), 
 1. `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType", "provider"] }`
 2. Filter: keep `resourceLevel == "organisation"` AND `modelType` does not contain `"embedding"` (case-insensitive).
 3. If the filtered list is empty → **hard stop:** *"No organisation-level LLMs found on this tenant. Ask your Cognigy admin to configure at least one org-level generation LLM, then re-run setup."*
-4. Present as `AskUserQuestion` — one option per model. Label: `"<name> (<modelType>)"`. Description: provider name.
-5. Write the selected model to config as `llm.options[0]`:
+4. If the filtered list has exactly 1 item → **auto-select it, no question.** Tell the user: *"Only one organisation-level LLM is configured on this tenant — using `<name> (<modelType>)`."* Skip straight to step 6.
+5. Otherwise (2+ items) → present as `AskUserQuestion` — one option per model. Label: `"<name> (<modelType>)"`. Description: provider name.
+6. Write the selected model to config as `llm.options[0]`:
    ```json
    {
      "label": "<name>",
@@ -84,6 +85,27 @@ If the user's region is not one of the above (e.g. a self-hosted or EU tenant), 
    Also set `llm.default` to the selected model's `label`.
 
 Do not present a pre-selected default. Do not ask the user to type or paste a UUID.
+
+#### Live embedding model discovery (optional — runs after generation LLM selection)
+
+1. Reuse the `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType", "provider"] }` response from the generation-LLM discovery step above (no second API call needed).
+2. Filter: keep `resourceLevel == "organisation"` AND `modelType` **contains** `"embedding"` (case-insensitive) — the inverse of the generation-model filter.
+3. If the filtered list is empty → **skip silently.** Do not hard-stop like the generation-LLM step does. Leave `llm.embedding` unset in config and do not mention it to the user unless they ask — Knowledge AI is optional per-build (`build-orchestrator` S0.5 gate), so an unconfigured embedding model is not a setup failure.
+4. If the filtered list has exactly 1 item → **auto-select it, no question.** Tell the user: *"Only one organisation-level embedding model is configured on this tenant — using `<name>`."*
+5. Otherwise (2+ items) → present as `AskUserQuestion` — one option per model. Label: `"<name> (<modelType>)"`. Description: provider name.
+6. Write the selected model to config as:
+   ```json
+   "llm": {
+     "embedding": {
+       "label": "<name>",
+       "referenceId": "<referenceId>",
+       "id": "<_id>"
+     }
+   }
+   ```
+   `id` (the MongoDB `_id`) is required alongside `referenceId` — `build-orchestrator` S1.8 needs the `_id` to call `set_project_generative_ai_settings`, mirroring the `id`/`referenceId` duality already present in `llm.options[]`.
+
+Do not ask the user to type or paste a UUID for the embedding model either — same no-fabrication rule as generation-LLM selection.
 
 > **Note:** TTS/STT connection discovery is not yet supported — enter connection labels and voice IDs as shown in Cognigy UI → Settings → Connections, via plaintext prompt only. Automated discovery via the VoiceGateway API is tracked in [issue #172](https://github.com/ben-elliot-nice/cognigy-vibe/issues/172) (targeted for 2.0.0).
 

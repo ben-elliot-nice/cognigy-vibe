@@ -5,12 +5,18 @@ import json
 import struct
 import time
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from mcp.types import Tool, TextContent
 from cognigy_mcp.api import CognigyClient
 from cognigy_mcp.cache import Cache
 from cognigy_mcp.state import ProjectState
 from cognigy_mcp.validation import _ok, validate, make_schema
+
+_KNOWLEDGE_SOURCE_CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "txt": "text/plain",
+    "ctxt": "text/plain",  # Cognigy's chunked-text source format; also plain text on the wire
+}
 
 
 class PushCodeNodeArgs(BaseModel):
@@ -26,7 +32,7 @@ class PushCodeNodeArgs(BaseModel):
     )
     target: str | None = Field(
         None,
-        description="Required when creating: ID of the reference node for positioning",
+        description="Required when creating: ID of the reference node for positioning (see node-positioning)",
     )
     label: str | None = Field(None, description="Node label when creating (default: 'Code')")
 
@@ -53,6 +59,26 @@ class PushAgentToolArgs(BaseModel):
 class PushAgentAvatarArgs(BaseModel):
     image_file: str = Field(description="Absolute path to a 136×184px PNG file")
     agent_id: str = Field(description="Agent _id or referenceId")
+
+
+class PushKnowledgeSourceFileArgs(BaseModel):
+    file_path: str = Field(description="Absolute path to a .pdf, .txt, or .ctxt file")
+    knowledge_store_id: str = Field(description="ID of the Knowledge Store to upload into")
+    tags: list[str] | None = Field(
+        None,
+        description="Optional tags applied to the created Knowledge Source",
+    )
+
+    @field_validator("tags")
+    @classmethod
+    def _tags_must_be_well_formed(cls, value: list[str] | None) -> list[str] | None:
+        if not value:
+            return value
+        if any("," in tag for tag in value):
+            raise ValueError("Tags must not contain commas (the API joins tags with a comma delimiter)")
+        if any(not tag.strip() for tag in value):
+            raise ValueError("Tags must not be empty or whitespace-only strings")
+        return value
 
 
 class ExportPackageArgs(BaseModel):
@@ -112,6 +138,19 @@ TOOLS: list[Tool] = [
             "See explain('agent-avatar-image') for the full avatar spec."
         ),
         inputSchema=make_schema(PushAgentAvatarArgs),
+    ),
+    Tool(
+        name="push_knowledge_source_file",
+        description=(
+            "Upload a local .pdf/.txt/.ctxt file into a Cognigy Knowledge Store as a new "
+            "Knowledge Source. Performs the real multipart/form-data upload — cognigy_invoke "
+            "cannot do this (it only accepts JSON bodies). Ingestion runs asynchronously; the "
+            "response is a Task (queued/active/done/error), not the finished Knowledge Source. "
+            "The whole file is buffered into memory — fine for typical demo-build documents, "
+            "avoid for very large files. "
+            "See explain('knowledge-store') for the full ingestion workflow."
+        ),
+        inputSchema=make_schema(PushKnowledgeSourceFileArgs),
     ),
     Tool(
         name="export_package",
@@ -334,6 +373,59 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
 
         return _ok({"success": True, "agent_id": agent_id, "bytes": len(data)})
 
+    def _push_knowledge_source_file(args: dict) -> list[TextContent]:
+        m, err = validate(PushKnowledgeSourceFileArgs, args)
+        if err:
+            return err
+        path = Path(m.file_path)
+
+        if not path.exists():
+            return _ok({"error": f"File not found: {path}"})
+
+        ext = path.suffix.lstrip(".").lower()
+        content_type = _KNOWLEDGE_SOURCE_CONTENT_TYPES.get(ext)
+        if content_type is None:
+            supported = ', '.join('.' + e for e in _KNOWLEDGE_SOURCE_CONTENT_TYPES)
+            found = f".{ext}" if ext else "no file extension"
+            return _ok({"error": f"Unsupported file type: {found}. Supported formats: {supported}"})
+
+        try:
+            data = path.read_bytes()
+        except OSError as e:
+            return _ok({"error": f"Failed to read file: {e}"})
+
+        files = {"file": (path.name, data, content_type)}
+        form_data = {"tags": ",".join(m.tags)} if m.tags else None
+
+        try:
+            result = client.post_multipart(
+                f"/v2.0/knowledgestores/{m.knowledge_store_id}/sources/upload",
+                files=files,
+                data=form_data,
+            )
+        except Exception as e:
+            return _ok({"error": f"Failed to upload knowledge source file: {e}"})
+
+        if not isinstance(result, dict):
+            return _ok({"error": f"Unexpected response from upload endpoint: {result!r}"})
+
+        if result.get("status") == "error":
+            return _ok({
+                "error": f"Upload task failed: {result.get('failReason', 'unknown error')}",
+                "task_id": result.get("_id"),
+            })
+
+        task_id = result.get("_id")
+        if not task_id:
+            return _ok({"error": f"Upload response missing _id: {result}"})
+
+        return _ok({
+            "success": True,
+            "task_id": task_id,
+            "status": result.get("status"),
+            "bytes": len(data),
+        })
+
     def _export_package(args: dict) -> list[TextContent]:
         m, err = validate(ExportPackageArgs, args)
         if err:
@@ -459,5 +551,6 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         "push_html_node": _push_html_node,
         "push_agent_tool": _push_agent_tool,
         "push_agent_avatar": _push_agent_avatar,
+        "push_knowledge_source_file": _push_knowledge_source_file,
         "export_package": _export_package,
     }

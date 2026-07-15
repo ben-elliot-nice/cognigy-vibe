@@ -1,7 +1,5 @@
 ---
-topic: xapp
 description: xApp architecture overview, variant selection, and channel differences
-group: xapp
 ---
 
 ## xapp — xApp Overview
@@ -36,8 +34,3 @@ The xApp page POSTs to an external API. That API injects the outcome into Cognig
 ### Key constraint
 
 `api.setAppState()` in code nodes cannot push HTML — use the `setHTMLAppState` node. For conditional xApp pushes from code: set a context flag in code, branch on it with an IF node, then call `setHTMLAppState` in the true branch.
-
-### Specialist topics
-
-- `xapp-delivery` — full delivery pattern: initAppSession, setHTMLAppState, code node, SMS, aiAgentToolAnswer
-- `xapp-event-handling` — non-blocking event loop: how the flow intercepts submit/inject turns before the AI Agent Job runs

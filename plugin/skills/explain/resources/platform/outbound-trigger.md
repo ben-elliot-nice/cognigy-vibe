@@ -1,7 +1,6 @@
 ---
 topic: outbound-trigger
 description: 6-step CXone trigger, Accept-Encoding: identity requirement
-group: platform
 ---
 
 ## outbound-trigger — CXone Outbound Call Trigger

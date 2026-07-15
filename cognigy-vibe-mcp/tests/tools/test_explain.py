@@ -14,13 +14,50 @@ def test_tool_description_contains_all_topic_names():
         assert topic in tool.description, f"Topic '{topic}' missing from explain description"
 
 
+_TOP_LEVEL_GROUPS = ["aiagent", "code", "nodes", "platform", "voice", "xapp"]
+
+
 def test_explain_no_args_returns_orientation(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["explain"]({})
     text = result[0].text
     assert "Topics" in text
-    for topic in TOPICS:
-        assert topic in text
+    for group in _TOP_LEVEL_GROUPS:
+        assert group in text
+    assert "agent-avatar-image" not in text, \
+        "top-level orientation must list groups only, not individual leaf topics"
+
+
+def test_explain_group_returns_primer_and_children_index(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "aiagent"})
+    text = result[0].text
+    assert "Unknown topic" not in text
+    assert "agent-avatar-image" in text, \
+        "group primer must list its child topics via the auto-generated children section"
+    assert "Topics in this group" in text
+
+
+def test_explain_xapp_group_still_works_after_frontmatter_simplification(mock_client, state, cache):
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp"})
+    text = result[0].text
+    assert "Unknown topic" not in text
+    assert "xapp-delivery" in text
+    assert "xapp-event-handling" in text
+
+
+def test_explain_topic_with_empty_body_is_not_reported_unknown(mock_client, state, cache, monkeypatch):
+    """Regression (PR #260 review): `_CONTENT.get(topic)` used truthiness, so a real key
+    whose body happens to be empty (e.g. a childless group with a blank-bodied index.md)
+    was misreported as 'Unknown topic'. Lookup must be by key presence, not body truthiness."""
+    import cognigy_mcp.tools.explain as explain_module
+
+    monkeypatch.setitem(explain_module._CONTENT, "empty-body-topic", "")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "empty-body-topic"})
+    text = result[0].text
+    assert "Unknown topic" not in text
 
 
 def test_explain_known_topic_returns_content(mock_client, state, cache):
@@ -575,3 +612,123 @@ def test_explain_topic_wrong_type_returns_validation_error(mock_client, state, c
     result = handlers["explain"]({"topic": 123})
     assert result.isError is True
     assert len(result.content) == 1
+
+
+def test_voice_gateway_documents_vendor_enum_and_real_flat_shape(mock_client, state, cache):
+    """Regression #211: voice-gateway must document the real flat setSessionConfig
+    shape and the lowercase vendor-slug enum — not a nested synthesizer/recognizer
+    shape, and not vendor casing that silently falls back to Cognigy's "custom"."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "voice-gateway"})
+    text = result[0].text
+
+    # Canonical lowercase vendor slugs must be documented
+    for slug in ["aws", "deepgram", "deepgramflux", "elevenlabs", "google", "microsoft", "nuance", "speechmatics"]:
+        assert slug in text, f"voice-gateway must document vendor slug '{slug}'"
+
+    # Must explicitly warn that these are lowercase API slugs, not Cognigy UI display names
+    assert "custom" in text.lower(), "Must explain the 'custom' fallback that gave issue #211 its symptom"
+
+    # Must NOT present the old fictional nested synthesizer/recognizer/bargeIn shape
+    assert '"synthesizer"' not in text, "Must not document the fictional nested synthesizer shape"
+    assert '"recognizer"' not in text, "Must not document the fictional nested recognizer shape"
+    assert '"bargeIn"' not in text, "Must not document the fictional nested bargeIn shape"
+
+    # Must document the real flat shape's vendor fields
+    assert "ttsVendor" in text and "sttVendor" in text, "Must document the real flat ttsVendor/sttVendor keys"
+
+
+# ── Issue #207: node-positioning already documents mode/target semantics ────
+
+def test_node_positioning_documents_mode_target_semantics_for_code_nodes(mock_client, state, cache):
+    """Regression guard: node-positioning must keep documenting append/appendChild and that target is a node ID.
+
+    Confirmed already correct during #207 planning — this locks it in so it can't silently regress."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "node-positioning"})
+    text = result[0].text
+    assert '"append"' in text
+    assert '"appendChild"' in text
+    assert "Target = node you want to insert AFTER" in text or "target" in text.lower()
+
+
+# ── Issue #207: connections resource_type topic ─────────────────────────────
+
+def test_connections_topic_documents_create_body(mock_client, state, cache):
+    """connections topic must document a real, verified create body shape."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "connections"})
+    text = result[0].text
+    assert "Unknown topic" not in text, "connections must be a known topic"
+    assert '"extension"' in text, "Must document the extension field"
+    assert '"resourceLevel"' in text, "Must document the resourceLevel field"
+    assert "MicrosoftSpeechProvider" in text, "Must show a real, verified connection type example"
+
+
+# ── Issue #207: endpoint-config channel-type field divergence ───────────────
+
+def test_endpoint_config_documents_rest_channel_field_divergence(mock_client, state, cache):
+    """endpoint-config must document that 'rest' channel reverses the flowId/flowReferenceId convention."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "endpoint-config"})
+    text = result[0].text
+    assert "rest" in text.lower()
+    normalized = " ".join(text.split())
+    assert "Field 'flowReferenceId' is not allowed" in normalized, \
+        "Must document the exact API rejection message for the rest channel"
+    assert "voiceGateway2" in text
+
+
+# ── Issue #207: functions create-body-shape gap admission ───────────────────
+
+def test_function_execution_admits_create_body_gap(mock_client, state, cache):
+    """function-execution must admit no verified create-body shape exists and give a discovery recipe."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "function-execution"})
+    text = result[0].text
+    assert "Creating a Function" in text
+    assert "full_objects=true" in text, "Must give the cognigy_list discovery recipe"
+    assert "describe_resource_schema" in text, "Must point to describe_resource_schema as the fallback"
+
+
+# ── Issue #207: sendMetadata documentation ───────────────────────────────────
+
+def test_voice_gateway_documents_sendmetadata(mock_client, state, cache):
+    """voice-gateway must document the sendMetadata node: purpose, flat-only constraint, xApp alternative."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "voice-gateway"})
+    text = result[0].text
+    assert "sendMetadata" in text
+    assert "setHTMLAppState" in text, "Must cross-reference the xApp alternative it replaces for voice"
+    assert "flat" in text.lower(), "Must document the flat-object-only constraint"
+
+
+def test_xapp_delivery_cross_references_sendmetadata(mock_client, state, cache):
+    """xapp-delivery must point to sendMetadata as the VG-native alternative to setHTMLAppState."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["explain"]({"topic": "xapp-delivery"})
+    text = result[0].text
+    assert "sendMetadata" in text
+
+
+# ── Issue #207: stub topics for zero-coverage resource_types ────────────────
+
+_STUB_TOPICS = ["lexicons", "playbooks", "locales", "extensions-resource", "project-resource", "flow-resource"]
+
+
+def test_stub_topics_exist_and_admit_no_verified_shape(mock_client, state, cache):
+    """Each zero-coverage resource_type stub must exist, be non-empty, and give the discovery recipe.
+
+    Since describe_resource_schema (added by #240) is now wired into an MCP tool and reads
+    the live OpenAPI spec without needing a session cookie, the discovery recipe's fallback
+    step points callers at that tool directly rather than the (now-stale) manual
+    openapi.json/session-cookie workaround."""
+    handlers = make_handlers(mock_client, state, cache)
+    for topic in _STUB_TOPICS:
+        result = handlers["explain"]({"topic": topic})
+        text = result[0].text
+        assert "Unknown topic" not in text, f"{topic} must be a known topic"
+        assert len(text) > 100, f"{topic} stub must have real recipe content, not a one-liner"
+        assert "full_objects=true" in text, f"{topic} must give the cognigy_list discovery recipe"
+        assert "describe_resource_schema" in text, f"{topic} must point to describe_resource_schema as the fallback"
+        assert "no verified" in text.lower(), f"{topic} must honestly admit no verified body shape exists"

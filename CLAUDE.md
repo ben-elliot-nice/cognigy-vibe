@@ -6,6 +6,12 @@ Read `docs/architecture.md` at the start of every new session. **Note: architect
 
 Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude Code location — do not create worktrees under `.worktrees/`.
 
+**`EnterWorktree` defaults to branching from `main`, not `dev`.** With no `worktree.baseRef` override in `.claude/settings.json`, its `fresh` default branches from `origin/<default-branch>`, and this repo's default branch is `main` — even if you just ran `git fetch origin dev` first. This repo's workflow requires feature branches off `origin/dev` (see step 3 below), so `EnterWorktree` alone is **not** sufficient here. After creating a worktree this way, verify the base before doing any work:
+```bash
+git merge-base --is-ancestor origin/dev HEAD && echo "OK: based on dev" || echo "WRONG BASE — recreate from origin/dev"
+```
+If it's on the wrong base, don't try to salvage it — remove the worktree/branch and recreate explicitly from `origin/dev` (`git worktree add <path> -b <branch> origin/dev`, or rebase the branch onto `origin/dev` if work has already been committed to it).
+
 ## Development Workflow
 
 1. **Feature arrives** — if there is a GitHub issue, read it first: `gh issue view <number>`. Clarify scope if ambiguous before any code work.
@@ -34,7 +40,7 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
    - The skill presents 4 options. **Always choose option 2 (Push and create PR).**
    - The skill will `git push -u origin <branch>` and run `gh pr create`.
    - **PRs target `dev`**, not `main`. The `dev → main` promotion (cutting a stable release) is the maintainer's responsibility and happens separately.
-   - If the branch tracks a GitHub issue, include `Closes #<number>` in the PR body — GitHub will auto-close the issue on merge.
+   - If the branch tracks a GitHub issue, include `Closes #<number>` in the PR body for traceability. This does **not** auto-close the issue — `main`, not `dev`, is the repo's default branch, and GitHub only auto-closes on merges to the default branch.
 
 8. **Verify PR and check for conflicts**
    ```bash
@@ -67,10 +73,11 @@ Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude 
 
 11. **Report to user** — final CI status (`success` / `failure`), PR URL, and any actions taken (rebases, force-pushes, re-runs).
 
-12. **Close the issue** — once the PR is merged, verify the related GitHub issue is closed. If `Closes #<number>` was in the PR body it will have auto-closed; otherwise close it manually:
+12. **Label, don't close** — once the PR is merged to `dev`, add the `pending release` label to the issue and remove `wip` if present (check current labels first: `gh issue view <number> --json labels`):
     ```bash
-    gh issue close <number> --comment "Resolved in PR #<pr-number>"
+    gh issue edit <number> --add-label "pending release" --remove-label wip
     ```
+    Do **not** close the issue here — merging to `dev` is not a release, and `dev` isn't the default branch so GitHub's `Closes #` auto-close never fires on this merge anyway. Closing only happens when the fix actually ships to `main` (the `dev → main` promotion), which is the maintainer's responsibility.
 
 ## Hotfix Workflow
 
@@ -109,15 +116,19 @@ The "PRs target `dev`" rule applies to feature work. Hotfixes go straight to `ma
 
 ## OpenAPI Spec
 
-A local copy lives at `./openapi.json` in the repo root — check there first before fetching.
+Exposed live to any session via the `describe_resource_schema` MCP tool
+(`cognigy_mcp/tools/schema_tools.py`), which fetches and caches (24h TTL) the spec using the same
+`X-API-Key` auth the MCP server already uses for every other API call — **no session cookie is
+required** (this contradicts an earlier version of this doc; verified directly against a live AU1
+environment, see #240).
 
-The spec is also available per environment. It requires a session cookie (`_0710c`) from a logged-in browser session — a plain unauthenticated GET returns an empty or truncated response:
+To fetch a copy manually for human inspection, the same header works from the shell:
 
 ```bash
-# AU1 — replace the cookie value with one from your browser session
+# AU1 — replace with your COGNIGY_API_KEY / COGNIGY_BASE_URL
 curl 'https://cognigy-api-au1.nicecxone.com/openapi/openapi-viewer.json' \
   -H 'accept: application/json' \
-  -b '_0710c=<your-session-cookie>' \
+  -H 'X-API-Key: <your-api-key>' \
   -o openapi.json
 ```
 
@@ -149,6 +160,12 @@ First time in a new clone, trust the mise config:
 
 ```bash
 mise trust
+```
+
+Install dev dependencies (test tooling lives in an optional-dependencies group, so plain `uv sync` skips it):
+
+```bash
+cd cognigy-vibe-mcp && uv sync --extra dev
 ```
 
 Copy `.env.example` to `.env` and fill in your Cognigy credentials — `mise` auto-sources it when you enter the directory. If you skip filling in `.env`, the server starts in degraded mode — all tools are visible but calls return setup guidance until credentials are in place.

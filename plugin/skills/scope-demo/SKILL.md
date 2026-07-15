@@ -92,7 +92,7 @@ After all seven areas are agreed, ask explicitly:
 Generate the demo plan using `references/scope-demo-output-template.md` as the structure.
 
 **Filename:** `{CustomerName}-{DemoType}-demo-plan.md`
-**Location:** If an `output_dir` argument was passed by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`), write the file there. Otherwise write to cwd — the directory from which the user launched Claude Code, not the plugin root. If the correct path is unclear, ask. Do NOT write files into the plugin directory.
+**Location:** If an `output_dir` argument was passed by the caller (e.g. `cognigy-vibe:build-orchestrator` passes its resolved `$DEMO_DIR` — an absolute path, e.g. `"/Users/.../Demo Builds/acme-demo"`), write the file there. Otherwise write to cwd — the directory from which the user launched Claude Code, not the plugin root. If the correct path is unclear, ask. Do NOT write files into the plugin directory.
 
 Populate every section. If something is unknown, state the assumption explicitly — never leave a section blank.
 

@@ -1,7 +1,6 @@
 ---
 topic: node-wiring
 description: chart structure, relations array, sequential vs child chains
-group: nodes
 ---
 
 ## node-wiring — Understanding the Flow Chart Structure
@@ -36,3 +35,6 @@ To read a node's config: cognigy_get(resource_type="node", resource_id=nodeId, f
   {"type": "aiAgentJob", "extension": "@cognigy/basic-nodes"}
   {"type": "aiAgentJobTool", "extension": "@cognigy/basic-nodes"}
   {"type": "aiAgentToolAnswer", "extension": "@cognigy/basic-nodes"}
+
+See explain("agent-job-node") for the full node body (config schema) and creation call —
+this snippet shows only the extension-injection shape.

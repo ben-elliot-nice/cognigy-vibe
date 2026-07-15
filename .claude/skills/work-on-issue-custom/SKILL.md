@@ -18,7 +18,13 @@ description: Use when asked to work an issue by number in ben-elliot-nice/cognig
 3. Create a worktree tracking the issue, branched from `origin/dev` (not local `dev`):
    - Branch name: `feat/<ID>-<slug>` (per this repo's CLAUDE.md convention).
    - Use `superpowers:using-git-worktrees` for the mechanics, but override its directory-selection step: **this project's worktrees live at `.claude/worktrees/`** (already gitignored), not `.worktrees/`. Don't ask the user about location — CLAUDE.md already specifies it.
-   - Concretely: `git worktree add .claude/worktrees/feat/<ID>-<slug> -b feat/<ID>-<slug> origin/dev`, or use `EnterWorktree` with `name: feat/<ID>-<slug>` if using the native tool (it defaults to branching from `origin/dev`, matching CLAUDE.md's `baseRef: fresh`).
+   - Concretely: `git worktree add .claude/worktrees/feat/<ID>-<slug> -b feat/<ID>-<slug> origin/dev`.
+   - **Do not rely on `EnterWorktree`'s default branching alone** — its `fresh` baseRef branches from `origin/<default-branch>`, and this repo's default branch is `main`, not `dev`. There is no `worktree.baseRef` override in `.claude/settings.json`, so `EnterWorktree name: feat/<ID>-<slug>` with no further action will silently create the branch from `origin/main` — even right after `git fetch origin dev`. Confirmed empirically on issue #256's worktree setup.
+   - If you use `EnterWorktree`, verify the base immediately after, before any work:
+     ```bash
+     git merge-base --is-ancestor origin/dev HEAD && echo "OK: based on dev" || echo "WRONG BASE"
+     ```
+     If it reports the wrong base, rename/discard that branch and recreate via the explicit `git worktree add ... origin/dev` command above rather than continuing on it.
 4. Enter the worktree (`EnterWorktree` with the created path, or `cd` if working via raw git).
 
 ## 2. Research

@@ -113,19 +113,131 @@ def test_cognigy_delete_regular_resource(mock_client, state, cache):
     mock_client.delete.assert_called_once_with("/v2.0/flows/flow-1")
 
 
-def test_cognigy_invoke_move_node(mock_client, state, cache):
-    mock_client.post.return_value = {}
+def test_cognigy_get_plural_nodes_uses_chart_path(mock_client, state, cache):
+    """Regression guard for issue #213: resource_type='nodes' (plural) must route
+    to the chart-nested path, same as singular 'node', instead of falling through
+    to the nonexistent /v2.0/nodes/{id} endpoint."""
+    mock_client.get.return_value = {"_id": "node-1", "type": "say"}
     handlers = make_handlers(mock_client, state, cache)
-    handlers["cognigy_invoke"]({
+    result = handlers["cognigy_get"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    mock_client.get.assert_called_once_with("/v2.0/flows/flow-1/chart/nodes/node-1")
+    assert data["_id"] == "node-1"
+
+
+def test_cognigy_get_cache_key_parity_singular_plural(mock_client, state, cache):
+    """A cache entry written under the normalised 'node' key must be readable back
+    via resource_type='nodes' — same regression class as #22 (cache-key mismatch)."""
+    cache.set("node", "n1", {"_id": "n1", "type": "say"})
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "nodes",
+        "resource_id": "n1",
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert data["_source"] == "cache"
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_get_plural_nodes_missing_flow_id_returns_error(mock_client, state, cache):
+    """resource_type='nodes' without flow_id must return the same guidance error as
+    singular 'node', not build a malformed path."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "nodes", "resource_id": "n1"})
+    data = json.loads(result[0].text)
+    assert "flow_id required" in data["error"]
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_update_plural_nodes_uses_chart_path(mock_client, state, cache):
+    mock_client.get.return_value = {"_id": "node-1", "type": "say"}
+    mock_client.patch.return_value = {"_id": "node-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_update"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+        "body": {"label": "Updated"},
+    })
+    assert mock_client.get.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes/node-1"
+    assert mock_client.patch.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes/node-1"
+
+
+def test_cognigy_delete_plural_nodes_uses_chart_path(mock_client, state, cache):
+    mock_client.delete.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_delete"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "flow_id": "flow-1",
+    })
+    mock_client.delete.assert_called_once_with(
+        "/v2.0/flows/flow-1/chart/nodes/node-1"
+    )
+
+
+def test_cognigy_create_plural_nodes_routes_to_chart(mock_client, state, cache):
+    mock_client.post.return_value = {"_id": "node-1", "type": "say"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "nodes",
+        "flow_id": "flow-1",
+        "body": {"type": "say"},
+    })
+    assert mock_client.post.call_args[0][0] == "/v2.0/flows/flow-1/chart/nodes"
+
+
+def test_cognigy_invoke_node_move_is_unsupported(mock_client, state, cache):
+    """node/move is not a real API endpoint — issue #237: it 404s against every
+    tried resource shape. cognigy_invoke must reject it with guidance toward
+    cognigy_update's mode/target mechanism instead of POSTing to a fake path."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
         "resource_type": "node",
         "resource_id": "node-1",
         "operation": "move",
         "body": {"mode": "append", "target": "node-0"},
         "flow_id": "flow-1",
     })
+    data = json.loads(result[0].text)
+    assert "cognigy_update" in data["error"]
+    mock_client.post.assert_not_called()
+
+
+def test_cognigy_invoke_node_move_plural_resource_type_is_unsupported(mock_client, state, cache):
+    """resource_type='nodes' must be rejected the same way as 'node'."""
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "nodes",
+        "resource_id": "node-1",
+        "operation": "move",
+        "body": {"mode": "append", "target": "node-0"},
+        "flow_id": "flow-1",
+    })
+    data = json.loads(result[0].text)
+    assert "cognigy_update" in data["error"]
+    mock_client.post.assert_not_called()
+
+
+def test_cognigy_invoke_knowledgestore_run_hits_connector_path(mock_client, state, cache):
+    """resource_type='knowledgestore' + operation='run' must keep the /connectors/{id}/run
+    special-case path — normalising to the plural 'knowledgestores' must not break it."""
+    mock_client.post.return_value = {}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_invoke"]({
+        "resource_type": "knowledgestore",
+        "resource_id": "ks123",
+        "operation": "run",
+        "body": {"connector_id": "conn-1"},
+    })
     mock_client.post.assert_called_once_with(
-        "/v2.0/flows/flow-1/chart/nodes/node-1/move",
-        {"mode": "append", "target": "node-0"},
+        "/v2.0/knowledgestores/ks123/connectors/conn-1/run",
+        {"connector_id": "conn-1"},
     )
 
 
@@ -401,6 +513,264 @@ def test_get_flow_chart_hierarchy_is_structured(mock_client, state, cache):
     assert sum(1 for l in lines if not l.startswith("  ")) == 1
 
 
+def test_get_flow_chart_hierarchy_nests_branch_marker_content(mock_client, state, cache):
+    """Content chained via `next` off a branch marker (onFirstExecution/afterwards/then/else)
+    must be indented one level deeper than the marker itself, not flattened to its level.
+
+    Regression guard for issue #256: Once/if branch content rendered as siblings of the
+    branch marker instead of nested inside it.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "once-id", "type": "once", "label": "Once"},
+            {"_id": "onfirst-id", "type": "onFirstExecution", "label": "On First Time"},
+            {"_id": "setcfg-id", "type": "setSessionConfig", "label": "Set Session Config"},
+            {"_id": "say-id", "type": "say", "label": "Say"},
+            {"_id": "after-id", "type": "afterwards", "label": "Afterwards"},
+            {"_id": "job-id", "type": "aiAgentJob", "label": "AI Agent"},
+        ],
+        "relations": [
+            {"node": "once-id", "next": None, "children": ["onfirst-id", "after-id"], "_id": "rel-once"},
+            {"node": "onfirst-id", "next": "setcfg-id", "children": [], "_id": "rel-onfirst"},
+            {"node": "setcfg-id", "next": "say-id", "children": [], "_id": "rel-setcfg"},
+            {"node": "say-id", "next": None, "children": [], "_id": "rel-say"},
+            {"node": "after-id", "next": "job-id", "children": [], "_id": "rel-after"},
+            {"node": "job-id", "next": None, "children": [], "_id": "rel-job"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    once_depth = depth("Once")
+    onfirst_depth = depth("On First Time")
+    after_depth = depth("Afterwards")
+    setcfg_depth = depth("Set Session Config")
+    say_depth = depth("Say")
+    job_depth = depth("AI Agent")
+
+    # markers are one level deeper than Once itself, and siblings of each other
+    assert onfirst_depth == once_depth + 2
+    assert after_depth == onfirst_depth
+
+    # content chained off a marker via `next` nests one level deeper than the marker
+    assert setcfg_depth == onfirst_depth + 2
+    assert say_depth == setcfg_depth
+    assert job_depth == after_depth + 2
+
+
+def test_get_flow_chart_hierarchy_uses_cached_branch_marker_types_for_extension_outcomes(mock_client, state, cache):
+    """An extension-defined outcome branch (e.g. Airtable's 'success'/'notFound') is not in
+    the hardcoded _BRANCH_MARKER_TYPES, but must still nest correctly once sync_remote_state
+    has cached it into state (issue #261)."""
+    state.set("branch_marker_types", value=["success", "notFound"])
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "airtable-id", "type": "airtable-getoneorfail", "label": "Get Record"},
+            {"_id": "success-id", "type": "success", "label": "Success"},
+            {"_id": "say-id", "type": "say", "label": "Say Found"},
+            {"_id": "notfound-id", "type": "notFound", "label": "Not Found"},
+            {"_id": "sayerr-id", "type": "say", "label": "Say Missing"},
+        ],
+        "relations": [
+            {"node": "airtable-id", "next": None, "children": ["success-id", "notfound-id"], "_id": "rel-airtable"},
+            {"node": "success-id", "next": "say-id", "children": [], "_id": "rel-success"},
+            {"node": "say-id", "next": None, "children": [], "_id": "rel-say"},
+            {"node": "notfound-id", "next": "sayerr-id", "children": [], "_id": "rel-notfound"},
+            {"node": "sayerr-id", "next": None, "children": [], "_id": "rel-sayerr"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    airtable_depth = depth("Get Record")
+    success_depth = depth("Success")
+    say_depth = depth("Say Found")
+
+    assert success_depth == airtable_depth + 2
+    assert say_depth == success_depth + 2, \
+        "content chained off an extension-defined marker via `next` must nest one level deeper"
+
+
+def test_get_flow_chart_hierarchy_unions_cached_marker_types_with_hardcoded_core_set(mock_client, state, cache):
+    """Cached branch_marker_types must be UNIONED with _BRANCH_MARKER_TYPES, not replace it.
+
+    Per PR #268 review: /v2.0/flows/{id}/chart/descriptors is geared toward describing
+    extension-defined outcome branches. If a cached set ever omitted a structural core type
+    (e.g. `then`/`else`, auto-created by every `if` node), every get_flow_chart hierarchy
+    render would silently mis-nest core if/once/lookup branches project-wide, with no error
+    and no test catching it — since the old code did
+    `frozenset(cached_marker_types) if cached_marker_types else _BRANCH_MARKER_TYPES`,
+    which substitutes rather than merges. This test caches a set containing ONLY an
+    extension-defined type (deliberately omitting every core type) and asserts that an
+    `if`/`then`/`else` chart still nests correctly in the same render.
+    """
+    state.set("branch_marker_types", value=["success"])
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "if-id", "type": "if", "label": "Check Trigger"},
+            {"_id": "then-id", "type": "then", "label": "Then"},
+            {"_id": "sayyes-id", "type": "say", "label": "Say Yes"},
+            {"_id": "else-id", "type": "else", "label": "Else"},
+            {"_id": "sayno-id", "type": "say", "label": "Say No"},
+        ],
+        "relations": [
+            {"node": "if-id", "next": None, "children": ["then-id", "else-id"], "_id": "rel-if"},
+            {"node": "then-id", "next": "sayyes-id", "children": [], "_id": "rel-then"},
+            {"node": "sayyes-id", "next": None, "children": [], "_id": "rel-sayyes"},
+            {"node": "else-id", "next": "sayno-id", "children": [], "_id": "rel-else"},
+            {"node": "sayno-id", "next": None, "children": [], "_id": "rel-sayno"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    if_depth = depth("Check Trigger")
+    then_depth = depth("Then")
+    else_depth = depth("Else")
+    yes_depth = depth("Say Yes")
+    no_depth = depth("Say No")
+
+    assert then_depth == if_depth + 2, \
+        "core type 'then' must still nest even though it's absent from the cached set"
+    assert else_depth == then_depth
+    assert yes_depth == then_depth + 2
+    assert no_depth == else_depth + 2
+
+
+def test_get_flow_chart_hierarchy_falls_back_to_hardcoded_marker_types_when_uncached(mock_client, state, cache):
+    """When sync_remote_state has never run (branch_marker_types unset in state), hierarchy
+    rendering must still work for core types via the hardcoded fallback — regression guard
+    so Task 1 landing doesn't break behavior for sessions that haven't synced yet."""
+    assert state.get("branch_marker_types") is None
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "once-id", "type": "once", "label": "Once"},
+            {"_id": "after-id", "type": "afterwards", "label": "Afterwards"},
+            {"_id": "job-id", "type": "aiAgentJob", "label": "AI Agent"},
+        ],
+        "relations": [
+            {"node": "once-id", "next": None, "children": ["after-id"], "_id": "rel-once"},
+            {"node": "after-id", "next": "job-id", "children": [], "_id": "rel-after"},
+            {"node": "job-id", "next": None, "children": [], "_id": "rel-job"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    assert depth("Afterwards") == depth("Once") + 2
+    assert depth("AI Agent") == depth("Afterwards") + 2
+
+
+def test_get_flow_chart_hierarchy_nests_if_then_else_content(mock_client, state, cache):
+    """Same marker+next nesting rule applied to an `if` node's `then`/`else` branch markers.
+
+    Per issue #257 review: only once/onFirstExecution/afterwards was covered by a test;
+    this guards the if/then/else marker types in _BRANCH_MARKER_TYPES against regression.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "if-id", "type": "if", "label": "Check Trigger"},
+            {"_id": "then-id", "type": "then", "label": "Then"},
+            {"_id": "sayyes-id", "type": "say", "label": "Say Yes"},
+            {"_id": "else-id", "type": "else", "label": "Else"},
+            {"_id": "sayno-id", "type": "say", "label": "Say No"},
+        ],
+        "relations": [
+            {"node": "if-id", "next": None, "children": ["then-id", "else-id"], "_id": "rel-if"},
+            {"node": "then-id", "next": "sayyes-id", "children": [], "_id": "rel-then"},
+            {"node": "sayyes-id", "next": None, "children": [], "_id": "rel-sayyes"},
+            {"node": "else-id", "next": "sayno-id", "children": [], "_id": "rel-else"},
+            {"node": "sayno-id", "next": None, "children": [], "_id": "rel-sayno"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    if_depth = depth("Check Trigger")
+    then_depth = depth("Then")
+    else_depth = depth("Else")
+    yes_depth = depth("Say Yes")
+    no_depth = depth("Say No")
+
+    assert then_depth == if_depth + 2
+    assert else_depth == then_depth
+    assert yes_depth == then_depth + 2
+    assert no_depth == else_depth + 2
+
+
+def test_get_flow_chart_hierarchy_nests_lookup_default_case_content(mock_client, state, cache):
+    """Same marker+next nesting rule applied to a `lookup` node's `default`/`case` branch markers.
+
+    Per issue #257 review: guards the lookup marker types in _BRANCH_MARKER_TYPES against
+    regression, since no prior test constructed a lookup chart.
+    """
+    mock_client.get.return_value = {
+        "nodes": [
+            {"_id": "lookup-id", "type": "lookup", "label": "Route Intent"},
+            {"_id": "case-id", "type": "case", "label": "Case: refund"},
+            {"_id": "sayrefund-id", "type": "say", "label": "Say Refund"},
+            {"_id": "default-id", "type": "default", "label": "Default"},
+            {"_id": "saydefault-id", "type": "say", "label": "Say Default"},
+        ],
+        "relations": [
+            {"node": "lookup-id", "next": None, "children": ["case-id", "default-id"], "_id": "rel-lookup"},
+            {"node": "case-id", "next": "sayrefund-id", "children": [], "_id": "rel-case"},
+            {"node": "sayrefund-id", "next": None, "children": [], "_id": "rel-sayrefund"},
+            {"node": "default-id", "next": "saydefault-id", "children": [], "_id": "rel-default"},
+            {"node": "saydefault-id", "next": None, "children": [], "_id": "rel-saydefault"},
+        ],
+    }
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    hierarchy = json.loads(result[0].text)["hierarchy"]
+    lines = hierarchy.splitlines()
+
+    def depth(label):
+        line = next(l for l in lines if label in l)
+        return len(line) - len(line.lstrip())
+
+    lookup_depth = depth("Route Intent")
+    case_depth = depth("Case: refund")
+    default_depth = depth("Default")
+    refund_depth = depth("Say Refund")
+    saydefault_depth = depth("Say Default")
+
+    assert case_depth == lookup_depth + 2
+    assert default_depth == case_depth
+    assert refund_depth == case_depth + 2
+    assert saydefault_depth == default_depth + 2
+
+
 def test_cognigy_create_knowledge_source_without_id_field(mock_client, state, cache):
     """cognigy_create must not raise KeyError when API response lacks _id.
     Repro: creating a knowledge source returns a response without _id.
@@ -523,6 +893,41 @@ def test_cognigy_create_description_documents_branch_marker_pattern():
     tool = next(t for t in TOOLS if t.name == "cognigy_create")
     assert "branch marker" in tool.description, \
         "cognigy_create description must mention 'branch marker' pattern for Once/IF branch insertion"
+
+
+# ── Issue #207: discovery pointer + nested-path + return-shape doc fixes ────
+
+def test_all_primitive_descriptions_point_to_explain():
+    """Every generic primitive must tell the LLM to call explain() before guessing a body shape."""
+    for name in ("cognigy_get", "cognigy_list", "cognigy_create", "cognigy_update", "cognigy_delete", "cognigy_invoke"):
+        tool = next(t for t in TOOLS if t.name == name)
+        assert "explain()" in tool.description, \
+            f"{name} description must point to explain() as the discovery mechanism"
+
+
+def test_cognigy_list_documents_nested_subresource_paths():
+    """cognigy_list description must document nested resource_type paths like 'knowledgestores/{id}/connectors'."""
+    tool = next(t for t in TOOLS if t.name == "cognigy_list")
+    assert "knowledgestores/{id}/connectors" in tool.description or "nested" in tool.description.lower(), \
+        "cognigy_list must document that nested sub-resource resource_type paths are supported"
+
+
+def test_cognigy_update_documents_variable_return_shape():
+    """cognigy_update description must warn that the API can return {} on success even with return_full_object=false."""
+    tool = next(t for t in TOOLS if t.name == "cognigy_update")
+    assert "{}" in tool.description, \
+        "cognigy_update must document that the API may return an empty object on some resource_types"
+    assert "cognigy_get" in tool.description, \
+        "cognigy_update must recommend re-fetching via cognigy_get to confirm a write"
+
+
+def test_push_code_node_field_descriptions_reference_node_positioning():
+    """push_code_node's mode/target Field descriptions must point to node-positioning (regression guard)."""
+    from cognigy_mcp.tools.file_push import TOOLS as FILE_PUSH_TOOLS
+    tool = next(t for t in FILE_PUSH_TOOLS if t.name == "push_code_node")
+    props = tool.inputSchema["properties"]
+    assert "node-positioning" in props["mode"]["description"]
+    assert "node-positioning" in props["target"]["description"]
 
 
 def test_cognigy_create_aiagentjobtool_blocked(mock_client, state, cache):
@@ -730,6 +1135,216 @@ def test_cognigy_get_fields_wrong_type_returns_validation_error(mock_client, sta
     assert any(d["field"] == "fields" for d in data["details"])
 
 
+def test_cognigy_get_fields_all_missing_returns_error(mock_client, state, cache):
+    """Regression guard for #238: an entirely-wrong `fields` list must error, not
+    silently succeed with a near-empty object."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    assert data["requested_fields"] == ["nodes"]
+    assert "_id" in data["available_fields"]
+    assert "name" in data["available_fields"]
+
+
+def test_cognigy_get_fields_all_missing_excludes_blocked_fields_from_available(mock_client, state, cache):
+    """available_fields must reflect the stripped response, not raw internal fields —
+    __v shouldn't be advertised as a valid field to request."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "__v": 3}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    assert "__v" not in data["available_fields"]
+
+
+def test_cognigy_get_fields_only_blocked_field_returns_error_not_near_empty_success(mock_client, state, cache):
+    """Regression guard: requesting ONLY a blocked field (e.g. __v) must hit the same
+    error path as requesting a genuinely nonexistent field — not match on raw data,
+    then get silently emptied by strip_response into a near-empty success."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "__v": 3}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["__v"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    assert data["requested_fields"] == ["__v"]
+
+
+def test_cognigy_get_cache_hit_fields_all_missing_returns_error(mock_client, state, cache):
+    """The fields-all-missing error path must also apply on a cache hit, not just
+    the API-fetch branch — cache.get() populates `data` before the fields check runs."""
+    cache.set("flows", "flow-1", {"_id": "flow-1", "name": "Main"})
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on this resource"
+    mock_client.get.assert_not_called()
+
+
+def test_cognigy_get_fields_partial_match_still_filters(mock_client, state, cache):
+    """At least one valid field must still filter normally, no error."""
+    mock_client.get.return_value = {"_id": "flow-1", "name": "Main", "description": "x"}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({
+        "resource_type": "flows",
+        "resource_id": "flow-1",
+        "fields": ["name", "nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["name"] == "Main"
+    assert "description" not in data
+
+
+def test_cognigy_list_fields_all_missing_returns_error(mock_client, state, cache):
+    """Regression guard for #238: same silent-filter bug in cognigy_list's fields param."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1"},
+        {"_id": "f2", "name": "Flow 2"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert data["requested_fields"] == ["nodes"]
+    assert "id" in data["available_fields"]
+    assert "name" in data["available_fields"]
+
+
+def test_cognigy_list_fields_partial_match_still_filters(mock_client, state, cache):
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["name", "nodes"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"][0] == {"name": "Flow 1"}
+
+
+def test_cognigy_list_full_objects_fields_all_missing_returns_error(mock_client, state, cache):
+    """full_objects=True holds raw API items (keyed _id, not id) — the fields-all-missing
+    error path must operate on that raw shape, not the simplified {id, name} projection."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "createdAt": "2026-01-01"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert "_id" in data["available_fields"]
+    assert "createdAt" in data["available_fields"]
+
+
+def test_cognigy_list_full_objects_fields_all_missing_excludes_blocked_fields(mock_client, state, cache):
+    """available_fields for the full_objects list path must also reflect stripped
+    items — __v shouldn't be advertised as a valid field to request."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "__v": 2},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert "__v" not in data["available_fields"]
+
+
+def test_cognigy_list_full_objects_only_blocked_field_returns_error_not_near_empty_success(mock_client, state, cache):
+    """Regression guard: requesting ONLY a blocked field across full_objects items must
+    hit the error path, not silently produce a nonzero-count list of empty dicts."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "__v": 2},
+        {"_id": "f2", "name": "Flow 2", "__v": 3},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["__v"],
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "none of the requested fields exist on any item in this list"
+    assert data["requested_fields"] == ["__v"]
+
+
+def test_cognigy_list_full_objects_fields_partial_match_still_filters(mock_client, state, cache):
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "createdAt": "2026-01-01"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "full_objects": True,
+        "fields": ["createdAt", "nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"][0] == {"createdAt": "2026-01-01"}
+
+
+def test_cognigy_list_fields_matches_at_least_one_item_not_all(mock_client, state, cache):
+    """available_fields is a union across items — a field present on only ONE of several
+    heterogeneous items must still count as matched, not require presence on every item."""
+    mock_client.get.return_value = {"items": [
+        {"_id": "f1", "name": "Flow 1", "description": "has a description"},
+        {"_id": "f2", "name": "Flow 2"},
+    ]}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["description"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"] == [{"description": "has a description"}, {}]
+
+
+def test_cognigy_list_fields_with_empty_items_does_not_error(mock_client, state, cache):
+    """An empty result list has nothing to validate `fields` against — must not error
+    just because there's nothing to match."""
+    mock_client.get.return_value = {"items": []}
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({
+        "resource_type": "flows",
+        "fields": ["nonexistent"],
+    })
+    data = json.loads(result[0].text)
+    assert "error" not in data
+    assert data["items"] == []
+    assert data["count"] == 0
+
+
 def test_cognigy_list_missing_required_returns_validation_error(mock_client, state, cache):
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["cognigy_list"]({})
@@ -746,3 +1361,136 @@ def test_cognigy_create_missing_body_returns_validation_error(mock_client, state
     data = json.loads(result.content[0].text)
     assert data["error"] == "Invalid tool arguments"
     assert any(d["field"] == "body" for d in data["details"])
+
+
+def test_cognigy_get_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(400, "Invalid value for field 'sourceType'")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_get"]({"resource_type": "flows", "resource_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "Invalid value for field 'sourceType'" in data["detail"]
+
+
+def test_cognigy_list_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(403, "Forbidden")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_list"]({"resource_type": "flows", "project_id": "proj-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 403
+    assert "Forbidden" in data["detail"]
+
+
+def test_cognigy_create_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.post.side_effect = ApiError(400, "Invalid value for field 'sourceType'")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_create"]({"resource_type": "knowledgestores", "body": {"sourceType": "bogus"}})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "sourceType" in data["detail"]
+
+
+def test_cognigy_update_get_current_propagates_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(404, "Not found")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_update"]({
+        "resource_type": "flows", "resource_id": "flow-1", "body": {"name": "New Name"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 404
+    assert "Not found" in data["detail"]
+
+
+def test_cognigy_update_patch_propagates_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.return_value = {"_id": "flow-1", "type": "flow"}
+    mock_client.patch.side_effect = ApiError(500, "Encountered an unknown error")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_update"]({
+        "resource_type": "flows", "resource_id": "flow-1", "body": {"name": "New Name"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 500
+    assert "Encountered an unknown error" in data["detail"]
+
+
+def test_cognigy_delete_propagates_api_error(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.delete.side_effect = ApiError(400, "Cannot delete: in use")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_delete"]({"resource_type": "flows", "resource_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "Cannot delete: in use" in data["detail"]
+
+
+def test_cognigy_invoke_propagates_api_error_as_structured_response(mock_client, state, cache):
+    """Regression test for #216: cognigy_invoke must surface the upstream status/detail
+    instead of letting ApiError propagate into an opaque unstructured MCP error."""
+    from cognigy_mcp.api import ApiError
+    mock_client.post.side_effect = ApiError(400, "Invalid value for field 'sourceType'")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "knowledgestore",
+        "resource_id": "ks123",
+        "operation": "run",
+        "body": {"connector_id": "conn-1", "sourceType": "bogus"},
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 400
+    assert "sourceType" in data["detail"]
+
+
+def test_get_flow_chart_propagates_api_error_as_structured_response(mock_client, state, cache):
+    from cognigy_mcp.api import ApiError
+    mock_client.get.side_effect = ApiError(404, "Flow not found")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["get_flow_chart"]({"flow_id": "flow-1"})
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 404
+    assert "Flow not found" in data["detail"]
+
+
+def test_cognigy_invoke_propagates_retriable_api_error_as_structured_response(mock_client, state, cache):
+    """RetriableApiError is a subclass of ApiError — confirm it's caught by the same
+    except ApiError block rather than falling through to the generic exception handler."""
+    from cognigy_mcp.api import RetriableApiError
+    mock_client.post.side_effect = RetriableApiError(503, "Service Unavailable")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "aiagent",
+        "resource_id": "agent-1",
+        "operation": "train",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "api_error"
+    assert data["status"] == 503
+    assert "Service Unavailable" in data["detail"]
+
+
+def test_cognigy_invoke_propagates_unexpected_non_api_error_as_structured_response(mock_client, state, cache):
+    """Network/decode failures (e.g. httpx timeouts, malformed JSON) are not ApiError —
+    they must still be caught and surfaced as structured errors, not left to propagate
+    into the MCP SDK's opaque unstructured error (the original #216 symptom)."""
+    mock_client.post.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["cognigy_invoke"]({
+        "resource_type": "aiagent",
+        "resource_id": "agent-1",
+        "operation": "train",
+    })
+    data = json.loads(result[0].text)
+    assert data["error"] == "unexpected_error"
+    assert "Expecting value" in data["detail"]

@@ -1,5 +1,6 @@
 .DS_Store
 node_modules/
+__pycache__/
 .env
 .env.bak
 .mcp.*.json
@@ -7,3 +8,4 @@ node_modules/
 .claude/worktrees/
 docs/superpowers/
 docs/test-reports/
+openapi.json

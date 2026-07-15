@@ -87,9 +87,9 @@ Generate `{CustomerName}-agent-persona.md`. If an `output_dir` argument was supp
 ## Notes
 
 - This skill produces a design document only — no Cognigy resources are created
-- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes `"Demo Builds/<customer>-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
+- Write output to the `output_dir` argument if supplied by the caller (e.g. `cognigy-vibe:build-orchestrator` passes its resolved `$DEMO_DIR` — an absolute path, e.g. `"/Users/.../Demo Builds/acme-demo"`); otherwise write to the user's working directory. Never write into the plugin directory.
 - For jobs, routing, and context schema → `cognigy-vibe:design-agent-jobs`
 - For xApp, bidirectional webchat, and handover context → `cognigy-vibe:design-agent-interfaces`
 - For deterministic contract enforcement → `cognigy-vibe:design-agent-contracts`
 - For the full design workflow in one go → `cognigy-vibe:design-agent`
-- To build after designing → use `cognigy-vibe:add-aiagent-job` (creates nodes via MCP tools)
+- To build after designing → see `explain("agent-job-node")` for the aiAgentJob node creation sequence

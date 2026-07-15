@@ -38,6 +38,37 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
 ## S0.0 — Load build config (BLOCKING preflight — runs before the interview)
 
+**Step 0 — Workspace anchor detection.** Before anything else, determine whether cwd is already inside an existing `Demo Builds/<brand>-demo/` directory. Every later phase that writes build artifacts — including SA, SB, S0.6 brand research, S1.3 tools, S1.4 xApp, S1.5 code-nodes, S1.8 knowledge, S2.5 empathy export, S3 Initialize Session Code, S6 tool recipes, and package export — writes relative to a single resolved anchor, `$DEMO_DIR` — this step computes it once so nothing downstream nests a second `Demo Builds/` folder inside an existing one.
+
+Run:
+
+```bash
+ANCHOR=""
+IN_CONTAINER=""
+if [ "$(basename "$PWD")" = "Demo Builds" ]; then
+  IN_CONTAINER="$PWD"
+fi
+CHECK="$PWD"
+while [ "$CHECK" != "/" ] && [ "$CHECK" != "$HOME" ]; do
+  PARENT="$(dirname "$CHECK")"
+  if [ "$(basename "$PARENT")" = "Demo Builds" ]; then
+    ANCHOR="$CHECK"
+    break
+  fi
+  CHECK="$PARENT"
+done
+echo "ANCHOR=$ANCHOR"
+echo "IN_CONTAINER=$IN_CONTAINER"
+```
+
+- **`ANCHOR` is non-empty** → cwd (or an ancestor) is already an existing build directory. Hold `ANCHOR` (already absolute, since it was derived from `$PWD` in the walk-up above). Once S0 Q1 (customer name) is collected, apply the S11 "Folder name" rule (`[customer]-demo`, lowercase) to get the expected slug, and compare it against `basename "$ANCHOR"`:
+  - **Match** → this is a continuation of the same build. Set `$DEMO_DIR="$ANCHOR"`. It already exists — do not create or nest a new `Demo Builds/` folder inside it; skip the `mkdir -p` in SA.
+  - **Mismatch** → cwd is inside a *different* customer's build directory. STOP before SA and ask the user directly: *"You're currently inside `<ANCHOR>`, which looks like an existing build for `<basename slug>`, but this build is for `<new customer>`. I don't want to nest a new build folder inside another customer's directory. Do you want to `cd` back to the session workspace root first, or is `<ANCHOR>` actually intended for this build?"* Do not silently proceed either way — this is a BLOCKING confirmation, not a warning.
+- **`ANCHOR` is empty and `IN_CONTAINER` is non-empty** → cwd is the `Demo Builds` container itself (not a specific `<brand>-demo` subdirectory) — e.g. the user `cd`'d in to look around and never `cd`'d back out. Do **not** fall through to the workspace-root branch below — that would compute `$DEMO_DIR` as `$PWD/Demo Builds/<customer-slug>-demo`, i.e. `.../Demo Builds/Demo Builds/<customer-slug>-demo`, the exact nesting bug this step exists to prevent, one level shallower. Instead set `$DEMO_DIR="$IN_CONTAINER/<customer-slug>-demo"` (no extra `Demo Builds/` segment, since `$PWD` already IS that folder) once the customer name is known from S0 Q1, and create it fresh in SA.
+- **`ANCHOR` is empty and `IN_CONTAINER` is empty** → cwd is the session workspace root (the common case, per `explain("session-workspace")`). Hold this result; `$DEMO_DIR` will be computed as `$PWD/Demo Builds/<customer-slug>-demo` (absolute — `$PWD` is cwd at this point, captured before any directory changes) once the customer name is known from S0 Q1, and created fresh in SA.
+
+Once resolved, `$DEMO_DIR` is the single anchor substituted in wherever the rest of this document (including the S10 hand-back template) says `$DEMO_DIR`. `$DEMO_DIR` is **always an absolute path** in all three branches above — never combine it with a separate `<ABS PATH>/` prefix elsewhere in this document; `$DEMO_DIR` alone is already the full absolute path.
+
 **Step 1 — Load build config.** Call `get_build_state`. Store the result in `buildConfig`. If the call fails or returns no config, stop and ask the user to run `cognigy-vibe:init-cognigy-vibe` to initialise the tenant config before proceeding.
 
 **Step 2 — Interview.** Run the S0 interview (below) to collect customer and build details.
@@ -56,7 +87,9 @@ If the user doesn't name a customer, still load — the interview in S0 gets the
 
   1. Call `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType"] }`. Filter: `resourceLevel == "organisation"` AND `modelType` does not contain `"embedding"`.
   2. Match `buildConfig.llm.default` against live list by label — confirm the `referenceId` is present.
-  3. If the config default `referenceId` is not found in the live list → warn and require the user to select a valid option from the live list before proceeding.
+  3. If the config default `referenceId` is not found in the live list:
+     - If the filtered live list has exactly 1 item → **auto-select it, no question.** Tell the user: *"Your configured default LLM is no longer available. Only one organisation-level LLM is configured on this tenant — using `<name> (<modelType>)` instead."*
+     - Otherwise (2+ items) → warn and require the user to select a valid option from the live list before proceeding.
 
 In the recap that follows S0.6, show a compact table:
 
@@ -71,7 +104,7 @@ In the recap that follows S0.6, show a compact table:
 
 Ask: *"Proceed with these defaults, switch LLM to a listed alternate, or override a field for this build only?"*
 
-Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 2 reads; it is always set before S1 runs.
+Store the confirmed or overridden LLM selection in `buildConfig.llm.selected` — the full `llm.options[]` entry: `{ label, referenceId, id, resourceLevel }`. This in-memory field is what S1.1 Step 3 reads; it is always set before S1 runs.
 
 Per-build overrides update `buildConfig` in memory for this run only — they do not rewrite the config file. To permanently change defaults, the user re-runs `cognigy-vibe:init-cognigy-vibe`.
 
@@ -164,7 +197,7 @@ The persona must reflect the customer's actual brand, not a generic Australian-f
 
    **Run these 3–5 WebFetch calls in parallel** — issue them in a single message with multiple tool calls. Sequential fetches add ~30–60s per URL and burn cache cycles unnecessarily.
 
-2. **Extract into a structured brand-research snapshot.** Write to `Demo Builds/<customer>-demo/brand-research.md`:
+2. **Extract into a structured brand-research snapshot.** Write to `$DEMO_DIR/brand-research.md`:
 
 ```markdown
 # <Customer> — Brand Research Snapshot
@@ -215,15 +248,17 @@ e.g. "AMP sounds warmer and more human than Colonial First State (institutional)
 
 The build skill keeps the interview UX. Scoping the demo — the 12 facts + design conversation — is delegated to the purpose-built sub-skill.
 
-**Output directory:** create the demo folder before invoking `cognigy-vibe:scope-demo`, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default, which is always the session workspace root):
+**Output directory:** Use `$DEMO_DIR` resolved in S0.0 Step 0, then pass `output_dir` explicitly so the sub-skill writes its Phase 4 output to the correct location (the sub-skill writes to cwd by default):
 
 ```bash
-mkdir -p "Demo Builds/<customer>-demo"
+# Only create it if ANCHOR was empty (i.e. it doesn't already exist).
+# If ANCHOR matched in S0.0 Step 0, $DEMO_DIR already exists — skip this.
+mkdir -p "$DEMO_DIR"
 ```
 
-Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
+Pass `output_dir: "$DEMO_DIR"` when invoking `cognigy-vibe:scope-demo`. The sub-skill will write `{Customer}-{DemoType}-demo-plan.md` to that path, not to cwd.
 
-> **Note:** Claude's cwd remains the session workspace root throughout — it does not change when the demo folder is created. See `explain("session-workspace")` for the directory model.
+> **Note:** When `ANCHOR` was empty (the common case), Claude's cwd is the session workspace root and does not change when the demo folder is created — `$DEMO_DIR` is a fresh subdirectory of cwd. When `ANCHOR` matched, cwd is already inside `$DEMO_DIR` — subsequent relative paths below still resolve correctly either way because every phase reads from `$DEMO_DIR`, not from a re-derived literal path. See `explain("session-workspace")` for the directory model and S0.0 Step 0 for anchor detection.
 
 **Invoke in context-provided mode.** Pass the interview answers verbatim so Phase 1 has nothing to ask about. Mapping (interview Q → scope-demo Fact):
 
@@ -249,7 +284,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 **Phase 3 design conversation:** This is where genuine value-add happens — narrative arc, scenario design, out-of-chat moments, irreversible actions, auth architecture. Run this collaboratively with the user. Do NOT default-fill these from the interview; the conversation is the point.
 
-**Phase 4 output:** `{Customer}-{DemoType}-demo-plan.md` lands in `Demo Builds/<customer>-demo/`. Capture the exact filename — `SB` and later phases will read it.
+**Phase 4 output:** `{Customer}-{DemoType}-demo-plan.md` lands in `$DEMO_DIR/`. Capture the exact filename — `SB` and later phases will read it.
 
 **Hard rule:** Do not proceed to SB until the demo plan file exists on disk. If `scope-demo` fails to write the file, STOP and surface the error.
 
@@ -259,7 +294,7 @@ If `scope-demo` *still* has a real gap after this mapping, allow a **single** fo
 
 With `{Customer}-{DemoType}-demo-plan.md` and `brand-research.md` in the demo folder, invoke the design orchestrator.
 
-**Output directory:** `Demo Builds/<customer>-demo/`. Pass `output_dir: "Demo Builds/<customer>-demo"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. Claude's cwd remains the session workspace root throughout. See `explain("session-workspace")` for the directory model.
+**Output directory:** `$DEMO_DIR` (resolved in S0.0 Step 0). Pass `output_dir: "$DEMO_DIR"` when invoking `cognigy-vibe:design-agent` — it will forward this to each of the four sub-skills, which write to cwd by default but honour an explicit `output_dir`. See `explain("session-workspace")` for the directory model and S0.0 Step 0 for anchor detection.
 
 **Invoke in Mode A (full workflow).** Persona → Jobs → Interfaces → Contracts. The orchestrator runs each in sequence; each reads the prior outputs from disk.
 
@@ -307,7 +342,7 @@ When the fork sub-skill ships, this lane will: clone the source project, audit a
 
 All build defaults come from `buildConfig` (loaded via `get_build_state`). `buildConfig` is populated from live tenant discovery by `cognigy-vibe:init-cognigy-vibe` — there are no hardcoded defaults in this skill. Read `cognigy-vibe:build-config` for the full schema reference.
 
-> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 3 / S1.2 `cognigy_update`.
+> **Temperature is the one channel-derived value.** Default `0.2` (voice / transactional — the common case). Set `0.5` only when interview **Q10 channel mix is primarily conversational chat** (webchat / WhatsApp), where a slightly warmer register reads better. This is derived once from Q10 and applied at S1.1 Step 4 / S1.2 `cognigy_update`.
 
 ---
 
@@ -320,7 +355,7 @@ All build defaults come from `buildConfig` (loaded via `get_build_state`). `buil
 | `cognigy_create` | POST resource or node; extension auto-injected, Say config auto-normalised. Required for node types not otherwise reachable: `once`, `onFirstExecution`, `afterwards`, `setSessionConfig`, `hangup`, AI-agent nodes. |
 | `cognigy_update` | PATCH with always-fresh GET + optional deep merge — use `merge_config: true` and patch deltas only |
 | `cognigy_delete` | DELETE any resource including nodes — use for S8 collision cleanup |
-| `cognigy_invoke` | Named operations: **move, clone, train, inject, search** — fork lane (S1.0), knowledge wiring (S1.8), asset discovery |
+| `cognigy_invoke` | Named operations: **clone, train, inject, search** — fork lane (S1.0), knowledge wiring (S1.8), asset discovery. To reposition an existing node, use `cognigy_update` with `body={mode, target}` instead — there is no `node/move` operation. |
 | `get_flow_chart` | Chart with relations array + readable hierarchy string — primary source for as-built (S1.6) |
 | `push_code_node` | Push local `.js`/`.ts` to a Code node with conflict detection. Also CREATEs+positions the node in one call when `node_id` is omitted (`mode`+`target` provided). |
 | `push_html_node` | Push local `.html` to a `setHTMLAppState` node — xApp moments (S1.4b) |
@@ -331,7 +366,7 @@ All build defaults come from `buildConfig` (loaded via `get_build_state`). `buil
 
 ## S1 — Build sequence
 
-**Inputs (all must exist in `Demo Builds/<customer>-demo/` before S1 starts):**
+**Inputs (all must exist in `$DEMO_DIR/` before S1 starts):**
 - `brand-research.md` (from S0.6)
 - `{Customer}-{DemoType}-demo-plan.md` (from SA)
 - `{Customer}-agent-persona.md` (from SB) — **four H2 sections** per S2 ladder: `## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`. S2.5 empathy library verbatim inside `## Job Instructions`.
@@ -343,7 +378,7 @@ S1 reads these artifacts as the spec. The S0 interview answers are no longer the
 
 ### S1 entry gate — mandatory design-doc read (BLOCKING)
 
-Before any MCP call in S1, read all four design docs from `Demo Builds/<customer>-demo/` and assert:
+Before any MCP call in S1, read all four design docs from `$DEMO_DIR/` and assert:
 
 - `{Customer}-agent-persona.md` exists AND has four H2 sections (`## Persona`, `## Special Instructions`, `## Job Description`, `## Job Instructions`). Assert `## Job Instructions` contains the S2.5 empathy library (check for "transfer_to_care" or "Lifeline").
 - `{Customer}-context-schema.md` exists AND contains `{{context.customer.` placeholders (the `memoryContextInjection` template).
@@ -363,64 +398,108 @@ Do not proceed on stale in-memory facts from a prior session. The design docs on
 
 **Extraction rule (per S2 — each block to its OWN field, NOT concatenated):**
 - agent `description` = `## Persona` block (1A) — **≤ 1000 chars**
-- agent `instructions` = `## Special Instructions` block (1B) — **≤ 1000 chars**; set via `update_ai_agent` in S1.1 Step 3
-- `jobDescription` = `## Job Description` block (2A, H2 stripped) — set via `cognigy_update` on the `aiAgentJob` node (S1.2)
-- `jobInstructions` = `## Job Instructions` block (2B, H2 stripped, S2.5 empathy library verbatim) — set via `cognigy_update` on the `aiAgentJob` node (S1.2)
+- agent `instructions` = `## Special Instructions` block (1B) — **≤ 1000 chars**; set via `cognigy_update(resource_type="aiagents", ...)` in Step 4
+- `jobDescription` = `## Job Description` block (2A, H2 stripped) — set on the `aiAgentJob` node in Step 4
+- `jobInstructions` = `## Job Instructions` block (2B, H2 stripped, S2.5 empathy library verbatim) — set on the `aiAgentJob` node in Step 4
 
 **🔴 Pre-flight character gate (BLOCKING).** Before the agent-creation calls, count the characters of BOTH the `## Persona` block and the `## Special Instructions` block. If EITHER exceeds **1000**, condense it (the persona sub-skill should already keep both under budget — see S2) and re-count. Do NOT make the call with an over-length field — Cognigy throws a save error the agent silently survives, and reconciling that mid-build is exactly the friction this gate removes.
 
-> **Re-count required on any subsequent patch.** If `cognigy_update` is called later in the session to update the agent `description` or `instructions` fields (e.g. after a persona edit), re-run the ≤1000-char count on the new value **before** sending the call. The pre-flight gate runs once before S1.1 Steps 1–3; it does not automatically re-run on later patches. A post-patch over-length field silently fails on save and survives undetected until S1.7 Phase A assertion 12.
+> **Re-count required on any subsequent patch.** If `cognigy_update` is called later in the session to update the agent `description` or `instructions` fields (e.g. after a persona edit), re-run the ≤1000-char count on the new value **before** sending the call. The pre-flight gate runs once before S1.1 Steps 1–4; it does not automatically re-run on later patches.
 
-**The agent-creation surface is two NiCE calls, not one.** `create_ai_agent` accepts ONLY `{ name, description, projectId?, knowledgeStoreReferenceId? }` — every other field (job fields, LLM, temperature, locale) is set by `update_ai_agent` or a S1.2 node patch. Build it in three steps.
+**Build the agent + job node in four steps, all with cognigy-vibe — no other MCP required.**
 
-**Step 1 — Create project + agent + flow + endpoint (`create_ai_agent`).**
+**Step 1 — Create project + flow + endpoint.**
 
-```
-create_ai_agent {
-  name: "<Customer>_Demo_BH",
-  description: "<## Persona block (1A) ONLY — ≤1000 chars, brand voice included, NO Special Instructions concatenated>"
-}
-```
-
-Returns: `projectId`, `agent.id`, `agent.referenceId`, `flow.id` (mongo), `flow.referenceId`, `endpoint.URLToken`, `endpoint.endpointUrl`. **Capture all IDs immediately.**
+Create the project, flow, and endpoint via the standard `cognigy_create` primitive calls
+already used elsewhere in this doc for these resource types (`resource_type="projects"`,
+`"flows"`, `"endpoints"`). Capture `projectId`, `flow.id` (mongo), `flow.referenceId`,
+`endpoint.URLToken`, `endpoint.endpointUrl` from the responses.
 
 > ⚠️ Returned `endpointUrl` uses host `cognigy-api-au1.nicecxone.com` — that 401s. Use `cognigy-endpoint-au1.nicecxone.com/<same token>` in the as-built doc.
 
-**Step 2 — LLM gate.** Confirm the selected LLM is available in the new project before relying on generation.
+**Step 2 — Create the agent resource.**
+
+```
+cognigy_create(resource_type="aiagents", body={
+  "name": "<Customer>_Demo_BH",
+  "description": "<## Persona block (1A) ONLY — ≤1000 chars, brand voice included, NO Special Instructions concatenated>",
+  "projectId": "<projectId from Step 1>"
+})
+```
+
+Capture `agent.id` (mongo `_id`) and `agent.referenceId` (UUID — required by the Job node's `aiAgent` config field, see Step 4).
+
+> **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
+
+**Step 3 — LLM gate.** Confirm the selected LLM is available in the new project before relying on generation.
 
 1. `cognigy_list { resource_type: "largelanguagemodels", project_id: "<new projectId>" }` — check if `buildConfig.llm.selected.referenceId` appears in the result.
-2. **If present** → proceed to Step 3.
-3. **If absent AND `buildConfig.llm.selected.resourceLevel == "organisation"`** → call `assign_org_llm { project_id: "<new projectId>", llm_id: "<buildConfig.llm.selected.id>" }`. On `already_assigned` or `assigned` → proceed. On any error → surface to user and stop.
+2. **If present** → proceed to Step 3b below.
+3. **If absent AND `buildConfig.llm.selected.resourceLevel == "organisation"`** → call `assign_org_llm { project_id: "<new projectId>", llm_id: "<buildConfig.llm.selected.id>" }`. On `already_assigned` or `assigned` → proceed to Step 3b. On any error → surface to user and stop.
 4. **If absent AND `resourceLevel == "project"`** → **hard stop:** *"The selected LLM is project-scoped and not available in this new project. Re-run `cognigy-vibe:init-cognigy-vibe` to select an org-level LLM, or import it manually via `manage_packages` (see `explain("llm-resources")`)."*
 
 > **Note:** Do not use `manage_packages` export/import as the primary LLM wiring path — it is a fallback for project-scoped LLMs only. `assign_org_llm` is the correct path for org-level LLMs (the default for any config populated by `init-cognigy-vibe`).
-**Step 3 — rename agent + set ALL remaining fields (`update_ai_agent`).** This one call writes BOTH the agent resource AND the AI Agent Job Node, so the persona-rename, agent guardrails (1B), and every job field belong here. It is a NiCE tool, so it runs in the SAME session as Step 1 — before the S1.1.5 MCP wire-up step.
+
+**Step 3b — Activate the generation model at the project level.** `assign_org_llm` only appends the project to the LLM's `assignedToProjects` array — it does not make the project actually *use* that model for Cognigy's Generative AI features. Call:
 
 ```
-update_ai_agent {
-  aiAgentId: "<agent.id>",
-  name: "<personaName from persona.md>",        // renames the AGENT; project keeps <Customer>_Demo_BH
-  instructions: "<## Special Instructions block (1B) — ≤ 1000 chars>",
-  jobConfig: {
-    jobName: "<Customer> Concierge — <Persona>",
-    jobDescription: "<## Job Description block (2A) from {Customer}-agent-persona.md>",
-    jobInstructions: "<## Job Instructions block (2B) — INCLUDING the S2.5 empathy library verbatim>",
-    llmProviderReferenceId: "<buildConfig.llm.selected.referenceId — confirmed available in this project by Step 2>",
-    temperature: "<buildConfig.llm.temperatureVoice>",   // voice/transactional default; use buildConfig.llm.temperatureChat for primarily conversational chat channels (webchat/WhatsApp)
-    maxTokens: "<buildConfig.llm.maxTokens>"
+set_project_generative_ai_settings {
+  project_id: "<new projectId>",
+  use_case_settings: {
+    "aiAgent": "<buildConfig.llm.selected.id>",
+    "gptPromptNode": "<buildConfig.llm.selected.id>",
+    "aiEnhancedOutputs": "<buildConfig.llm.selected.id>",
+    "sentimentAnalysis": "<buildConfig.llm.selected.id>",
+    "designTimeGeneration": "<buildConfig.llm.selected.id>",
+    "answerExtraction": "<buildConfig.llm.selected.id>",
+    "conversationAnalyzer": "<buildConfig.llm.selected.id>"
   }
 }
 ```
 
-The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Step 1) and `instructions` (Step 3) first. The agent `instructions` field (1B) is distinct from the job-node `jobInstructions` (2B) — different levels, both set in this one call.
+Runs on every build, unconditionally — independent of whether Knowledge AI (S0.5) is used. On `{"error": ...}` → surface to user and stop (same treatment as an `assign_org_llm` failure in Step 3).
 
-> **Always bundle `jobConfig` (or another job field) with a `name` change.** A *name-only* `update_ai_agent` returns a misleading `404 "node to update does not exist for the specified locale"` even though the agent rename commits — because the job-node patch has nothing to write. The Step 3 call above already bundles `jobConfig`, so it is safe; never issue a bare `update_ai_agent { aiAgentId, name }`.
+**Step 4 — Rename agent + set remaining agent fields, then create the Job node.**
 
-> **Naming conflict rule.** If `[CUSTOMER]_Demo_[initials]` already exists on the tenant, append `_2` to produce `[CUSTOMER]_Demo_[initials]_2`. Never insert the persona name, never silently change the initials suffix. If `_2` also exists, increment (`_3`, etc.) or prompt the user — but the suffix convention must be preserved.
+First, the agent-level rename and guardrails:
+
+```
+cognigy_update(resource_type="aiagents", resource_id="<agent.id>", body={
+  "name": "<personaName from persona.md>",
+  "instructions": "<## Special Instructions block (1B) — ≤ 1000 chars>"
+})
+```
+
+This renames the AGENT; the project keeps `<Customer>_Demo_BH`. The pre-flight ≤1000 gate (above) must have passed for BOTH `description` (Step 2) and `instructions` (Step 4) first. The agent `instructions` field (1B) is distinct from the job-node `jobInstructions` (2B) — different levels, set by different calls.
+
+Then create the `aiAgentJob` node — see `explain("agent-job-node")` for the full schema, insertion procedure, and gotchas. This build's field mapping:
+
+```
+cognigy_create(resource_type="node", flow_id="<flow.id from Step 1>", body={
+  "type": "aiAgentJob",
+  "label": "<Customer> Concierge — <Persona>",
+  "target": "<Start node ID, from get_flow_chart>",
+  "mode": "append",
+  "config": {
+    "aiAgent": "<agent.referenceId from Step 2>",
+    "name": "<Customer> Concierge — <Persona>",
+    "description": "<## Job Description block (2A) from {Customer}-agent-persona.md>",
+    "instructions": "<## Job Instructions block (2B) — INCLUDING the S2.5 empathy library verbatim>",
+    "llmProviderReferenceId": "<buildConfig.llm.selected.referenceId — confirmed available in this project by Step 3>",
+    "temperature": "<buildConfig.llm.temperatureVoice>",
+    "maxTokens": "<buildConfig.llm.maxTokens>",
+    "toolChoice": "auto",
+    "memoryType": "inherit",
+    "knowledgeSearchBehavior": "onDemand"
+  }
+})
+```
+
+Use `buildConfig.llm.temperatureChat` instead of `temperatureVoice` for primarily conversational chat channels (webchat/WhatsApp). Capture the response `_id` as `<aiAgentJobNodeId>` — S1.2 patches the two fields not set here (`memoryContextInjection`, `toolChoice` overrides if needed) and verifies the write.
 
 ### 1.1.5 — Bind cognigy-vibe to the new project (in-session, no restart)
 
-All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 3:
+All S1.1 steps use cognigy-vibe directly — there is no session boundary. After S1.1 Step 4:
 
 1. Confirm `cognigy-vibe` is live: `cognigy_list { resource_type: "projects" }` should succeed.
 2. Bind the new project: `sync_remote_state({ project_id: "<projectId from S1.1 Step 1>" })`.
@@ -432,7 +511,7 @@ If step 1 fails with a "not loaded" / missing-credentials error, `cognigy-vibe` 
 
 ### 1.2 Patch the AI Agent Job Node — all job config fields (cognigy-vibe)
 
-`create_ai_agent` (S1.1 Step 1) creates the `aiAgentJob` node. `update_ai_agent` (S1.1 Step 3) already sets the key job fields — this step patches the remaining node-level config that `update_ai_agent` does not cover: `memoryContextInjection` and `toolChoice`. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
+S1.1 Step 4 creates the `aiAgentJob` node with its core persona/LLM fields already set, including `toolChoice`. This step patches `memoryContextInjection` (not set at creation) and re-asserts `toolChoice` as a safety check, then verifies both took effect. Fetch the `aiAgentJob` node ID via `get_flow_chart` if not already captured.
 **This step is mandatory.** Without it the agent loses caller context mid-conversation.
 
 `cognigy_update` does an always-fresh GET + deep merge — `merge_config: true` ensures a safe patch:
@@ -450,13 +529,37 @@ cognigy_update {
 }
 ```
 
-> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch S1.1 Step 3 (`update_ai_agent`) if so.
+> **Warning:** if the agent suddenly stops responding mid-build, re-check `llmProviderReferenceId` — it can revert to the project's `isDefault` LLM when the project's LLM list is touched. Re-patch the `aiAgentJob` node's config (S1.1 Step 4 shape, via `cognigy_update` with `merge_config: true`) if so.
 
 > Verify by `cognigy_get` on the same node: confirm `memoryContextInjection` and `toolChoice` are set and hold your values, not defaults.
 
+### 1.2.5 Delete the platform's auto-scaffolded placeholder tool
+
+S1.1's `cognigy_create` call (see `explain("agent-job-node")`) triggers the same
+server-side behavior as any other `aiAgentJob` node creation: Cognigy auto-scaffolds a
+default placeholder `aiAgentJobTool` child node (observed example: `unlock_account`)
+that this plugin never created and never wants left in the build. See
+`explain("agent-tool-scaffold")`.
+
+Using the same `get_flow_chart` call from S1.2 (you already fetched the `aiAgentJob` node
+ID from it), find the `aiAgentJobTool` child under it — before S1.3 has created any real
+tools, it is the only one — and delete it:
+
+```
+cognigy_delete {
+  resource_type: "node",
+  resource_id: "<scaffoldToolNodeId>",
+  flow_id: "<flowId>"
+}
+```
+
+Do this before S1.3 runs. Do not edit the scaffold tool in place. If no
+`aiAgentJobTool` child is present, the platform didn't scaffold one this time — skip
+the delete and proceed to S1.3. If more than one is present, delete all of them.
+
 ### 1.3 Author tools as `.tool.json` files, then push (cognigy-vibe `push_agent_tool`)
 
-**Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `Demo Builds/<customer>-demo/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). The benefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (S6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)
+**Canonical path: file-first.** Author each tool definition as a `.tool.json` file under `$DEMO_DIR/tools/`, then push via `push_agent_tool` (plugin ≥ 1.4.2). The benefits: tools are version-controlled in the demo folder, re-runs are idempotent (CREATE with `job_node_id`; re-push the same file with `node_id` to UPDATE — additive PATCH on config), and the user can hand-edit a `.tool.json` between iterations without re-running the whole build. **`push_agent_tool` creates ONLY the `aiAgentJobTool` node** — the `aiAgentToolAnswer` terminal is an explicit final append (S6 Step 4), NOT auto-paired. (`push_agent_tool` serialises `parameters` to the string Cognigy needs, auto-derives `useParameters`, and sets `debugMessage: true` — so the file holds a real JSON object, see below.)
 
 **Sources for tool list:**
 - Use-case tools — from `{Customer}-agent-architecture.md` (the Specialist table — each tool listed under each specialist)
@@ -464,7 +567,7 @@ cognigy_update {
 - Transfer tools — **derived in this skill (see "Transfer-tool derivation" below)** from use cases. `transfer_to_care` + `transfer_to_general` always present.
 - End-call pair — always built (see S5).
 
-**`.tool.json` file shape** — `Demo Builds/<customer>-demo/tools/<tool_id>.tool.json` (per plugin `explain("agent-tool-json")`):
+**`.tool.json` file shape** — `$DEMO_DIR/tools/<tool_id>.tool.json` (per plugin `explain("agent-tool-json")`):
 
 ```json
 {
@@ -488,7 +591,7 @@ Top-level object — do NOT wrap in `config`, do NOT set `name`/`toolType`/`useP
 **Push each tool** (use ABSOLUTE paths — `tool_file` is resolved as given):
 ```
 push_agent_tool {
-  tool_file: "<ABS PATH>/Demo Builds/<customer>-demo/tools/<tool_id>.tool.json",
+  tool_file: "$DEMO_DIR/tools/<tool_id>.tool.json",
   flow_id:   "<flowId>",
   job_node_id: "<aiAgentJobNodeId>"      // CREATE; to UPDATE an existing tool node pass node_id: "<toolNodeId>" instead
 }
@@ -607,23 +710,43 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
 **Layout:**
 
 ```
-(somewhere in the main flow, after init chain, before AI Agent)
-  └─ [Code: "Reset xApp triggers"]   // context.xappTrigger = false at session start
-       └─ [if: context.xappTrigger === true]   // type "if", NOT "ifThenElse"
-            ├─ true branch
-            │    └─ [setHTMLAppState: "xApp — <scene_name>"]
-            │         └─ [Code: "Clear xApp trigger"]  // context.xappTrigger = false
-            └─ false branch (empty — fall through)
-                 └─ [continues to AI Agent]
+Once                                         ← the S1.5(a) Once node, by _id
+└─ [Code: "Reset xApp triggers"]              ← target: <onceNodeId> — NOT a branch marker
+     └─ [if: context.xappTrigger === true]    // type "if", NOT "ifThenElse"
+          ├─ true branch
+          │    └─ [setHTMLAppState: "xApp — <scene_name>"]
+          │         └─ [Code: "Clear xApp trigger"]  // context.xappTrigger = false
+          └─ false branch (empty — fall through)
+               └─ [continues to AI Agent]
 ```
+
+**Concrete append target — the Once node's own `_id`, not a branch marker.** Append the "Reset xApp triggers" Code node with `target: "<onceNodeId>"` (the same `_id` captured in S1.5(a), the Once node itself — never `onFirstExecutionId` or `afterwardsId`). Per `explain("node-positioning")`, `mode: "append"` inserts the new node into the *target's own next-chain*, not as a child of it — so targeting `<onceNodeId>` reroutes `Once.next` from AI Agent to this new node, splicing it in as `Once → Reset → IF → AI Agent`. That makes the Reset+IF chain a top-level sibling of `Once` and `AI Agent` in the main sequence — not nested inside `OnFirstTime` or `Afterwards`.
+
+**Why this target, and not `OnFirstTime` or `Afterwards`:** per S1.5, `OnFirstTime` drains and ends the turn right after "Say Welcome" — it never falls through to `Once.next` (see the S1.5(e) note: "Once routes to `Once.next` (= AI Agent) on subsequent turns automatically"). So `Once.next` — where this chain is spliced in — only ever executes from turn 2 onward, via the empty `Afterwards` branch falling through. That's fine: no tool call (and therefore no `context.xappTrigger = true`) can happen before turn 2 either, since AI Agent itself never runs on turn 1. Appending to the `Afterwards` marker instead (i.e. `target: "<afterwardsId>"`) is the mistake that produced the reported artefact — it works turn-wise but nests the gate one level inside the `Afterwards` branch in the flow chart instead of rendering it as a top-level node.
+
+**The Reset Code node must be idempotent, not an unconditional overwrite.** Because it lives in the every-turn `Once.next` chain (turns 2+) alongside the IF gate that reads the same flag, an unconditional `context.xappTrigger = false;` would always run immediately before the IF check and the gate would never see `true`. Write it as:
+```javascript
+if (context.xappTrigger === undefined) context.xappTrigger = false;
+```
+This only ever mutates state on its first execution (turn 2, before any tool has fired); on every later turn it's a no-op read, leaving whatever a tool branch set in the meantime intact for the IF gate to observe.
 
 **Per scene, build steps:**
 
-1. **Write the HTML body to disk** — `Demo Builds/<customer>-demo/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
+1. **Write the HTML body to disk** — `$DEMO_DIR/xapp/<scene_name>.html`. Each interfaces-doc scene specifies content type (adaptive card, carousel, payment form, confirmation, map), data payload field names + sources, and customer-action behaviour. Translate that into the HTML body the `setHTMLAppState` node will render. Use CognigyScript interpolation for dynamic data — `{{context.<field>}}` and `{{input.aiAgent.toolArgs.<param>}}` both work in the HTML body (per plugin `explain("cognigyScript")`).
 
-2. **Create the `if` + `setHTMLAppState` scaffold once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per `explain("node-positioning")`, use `mode: "append"` targeting the branch marker to insert inside a branch. If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — three calls (2a create IF node, 2b read its childIds, 2c create setHTMLAppState):
+2. **Create the Reset Code node, then the `if` + `setHTMLAppState` scaffold, once** (idempotent). To detect an existing scaffold: call `get_flow_chart { flow_id: "<flowId>", format: "raw" }` and look for an `if` node whose condition references `context.xappTrigger`. Per `explain("node-positioning")`, use `mode: "append"` targeting the branch marker to insert inside a branch. If the scaffold exists, append the new scene after the Then marker. If not, build from scratch — four calls (2a create Reset Code node targeting the Once node's `_id`, 2b create IF node, 2c read its childIds, 2d create setHTMLAppState):
    ```
-   // Step 2a — create the IF gate node
+   // Step 2a — create the Reset Code node, spliced into Once.next
+   push_code_node {
+     flow_id: "<flowId>",
+     mode: "append",
+     target: "<onceNodeId>",   // the Once node's own _id — NOT onFirstExecutionId or afterwardsId
+     label: "Reset xApp triggers"
+     // body: if (context.xappTrigger === undefined) context.xappTrigger = false;
+   }
+   → returns { _id: "<resetXappTriggersCodeNodeId>" }
+
+   // Step 2b — create the IF gate node
    cognigy_create {
      resource_type: "node",
      flow_id: "<flowId>",
@@ -637,11 +760,11 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
    }
    → returns { _id: "<ifNodeId>" }
 
-   // Step 2b — read the branch-marker IDs the IF node auto-created
+   // Step 2c — read the branch-marker IDs the IF node auto-created
    get_flow_chart { flow_id: "<flowId>", format: "raw" }
    // Find the node with _id === "<ifNodeId>"; read childIds[0] (Then branch marker)
 
-   // Step 2c — create the setHTMLAppState node inside the Then branch
+   // Step 2d — create the setHTMLAppState node inside the Then branch
    cognigy_create {
      resource_type: "node",
      flow_id: "<flowId>",
@@ -661,7 +784,7 @@ End-call (full spec in S5). The two end-call tools have **different** shapes. `e
    push_html_node {
      flow_id:   "<flowId>",
      node_id:   "<setHTMLAppStateNodeId>",
-     html_file: "Demo Builds/<customer>-demo/xapp/<scene_name>.html"
+     html_file: "$DEMO_DIR/xapp/<scene_name>.html"
    }
    ```
 
@@ -759,14 +882,14 @@ cognigy_create {
   body: { type: "once", mode: "append", target: "<startNodeId>", label: "Once", config: {} }
 }
 ```
-> `<startNodeId>` is NOT returned by S1.1 Steps 1–3. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
+> `<startNodeId>` is NOT returned by S1.1 Steps 1–4. Fetch it via `get_flow_chart { flow_id: "<flowId>" }` and find the node with `type: "start"` (it's the root of the chart). Capture its `_id` before this step.
 
 Auto-creates `onFirstExecution` + `afterwards` children. Get their IDs via `get_flow_chart` after this call.
 
 **(b) Initialize Session — Code node** inside On First Time. As of cognigy-vibe **v1.4.0**, `push_code_node` **creates and positions the Code node in one call** — omit `node_id` and pass `mode` + `target` + `label`. The old two-step (empty `cognigy_create` → `push_code_node`) is no longer needed:
 ```
 push_code_node {
-  script_file: "Demo Builds/<customer>-demo/code-nodes/<customer>_initialize_session.js",   // canonical CRM template, industry-shaped — S3
+  script_file: "$DEMO_DIR/code-nodes/<customer>_initialize_session.js",   // canonical CRM template, industry-shaped — S3
   flow_id: "<flowId>",
   mode: "append",
   target: "<onFirstExecutionId>",
@@ -790,10 +913,11 @@ cognigy_create {
     config: {
       ttsVendor: "<from buildConfig.tts.vendor>",
       ttsModel: "<from buildConfig.tts.model>",
-      ttsVoice: "<from buildConfig.tts.voice_id>",
+      ttsVoice: "<from buildConfig.tts.voiceId>",
       ttsLanguage: "<from buildConfig.tts.language>",
       ttsLabel: "<from buildConfig.tts.label>",
       sttVendor: "<from buildConfig.stt.vendor>",
+      sttModel: "<from buildConfig.stt.model>",
       sttLanguage: "<from buildConfig.stt.language>",
       sttLabel: "<from buildConfig.stt.label>",
       sttHints: ["<Customer brand name>", "<Persona name>", "<domain term 1>", "<domain term 2>", "<domain term 3>"],
@@ -812,14 +936,7 @@ cognigy_create {
 
 > **`sttHints` — populate, never ship the placeholder.** This array MUST contain the customer brand name (S0.6 brand research), the persona name (Q4), and **≥3 domain terms** drawn from the derived tool set (S1.3 — the transfer / use-case tool names and their key nouns, e.g. `roadside`, `claim`, `premium`). These bias the recogniser toward the words this agent actually hears. **S1.3 is the single source for the domain terms** — read them from the derived tool list, do not invent a parallel list here. S1.7 Phase A assert #7 verifies exactly this, so an empty or placeholder `sttHints` fails the structural smoke test (this is the loop the old `["", "<Customer>", "<Persona>"]` template used to trip).
 
-JSON form (what the node emits in the flow definition — for reference):
-```json
-{
-  "synthesizer": { "vendor": "<from buildConfig.tts.vendor>", "language": "<from buildConfig.tts.language>", "voice": "<from buildConfig.tts.voice_id>", "label": "<from buildConfig.tts.label>", "options": { "model_id": "<from buildConfig.tts.model>" } },
-  "recognizer": { "language": "<from buildConfig.stt.language>", "label": "<from buildConfig.stt.label>", "vendor": "<from buildConfig.stt.vendor>", "punctuation": true, "profanityOption": "raw", "vad": { "enable": false } },
-  "bargeIn": { "enable": false, "actionHook": "voice", "dtmfBargein": false }
-}
-```
+> **Vendor normalization — read before writing `ttsVendor`/`sttVendor`.** `setSessionConfig.config` is a flat object — there is no nested `synthesizer`/`recognizer`/`bargeIn` shape (see `explain("voice-gateway")` for the confirmed real shape, pulled from 8 live exemplar nodes across every supported vendor). `buildConfig.tts.vendor`/`buildConfig.stt.vendor` must already be the canonical lowercase slug at this point (per `build-config` schema + `init-cognigy-vibe` capture) — write them through as-is into `ttsVendor`/`sttVendor` without any case transformation of your own. If you ever see a `ttsVendor` value that isn't lowercase or isn't one of `aws`, `deepgram`, `elevenlabs`, `google`, `microsoft`, `nuance` — or an `sttVendor` value that isn't lowercase or isn't one of those six plus the STT-only `deepgramflux`, `speechmatics` — stop and flag it to the user before writing the node. An unrecognized or wrong-case value silently renders as `"custom"` in the Cognigy UI (issue #211), which is exactly the failure mode this note prevents.
 
 > **Voice silence / no-input fields** (`userNoInput*`) — the values above are the chosen demo defaults (10 s timeout, 5 retries, `event` mode). For what each field means and the `event`-mode reprompt-then-escalate pattern (re-enter on the `noUserInput` system intent, discriminate on `input.data.event === "USER_INPUT_TIMEOUT"`), see plugin `explain("voice-silence-timeout")` rather than re-deriving the semantics here.
 
@@ -862,11 +979,11 @@ cognigy_create {
 ```
 provision_webrtc_endpoint {
   project_id:        <projectId>
-  flow_id:           <flowId>
   flow_reference_id: <flowReferenceId>
   endpoint_name:     buildConfig.channel.voiceGateway.endpointName   // "Click-to-Call"
   connection_name:   buildConfig.voicePreview.connectionName          // "Test"
-  region:            buildConfig.voicePreview.region                  // e.g. "australiaeast"
+  connection_type:   buildConfig.voicePreview.connectionType          // "MicrosoftSpeechProvider"
+  connection_fields: buildConfig.voicePreview.connectionFields        // {"region": "australiaeast"}
 }
 ```
 
@@ -914,7 +1031,7 @@ After all build steps land:
    ```
    export_package {
      project_id: "<projectId>",
-     output_path: "Demo Builds/<customer>-demo/<customer>-package.zip"
+     output_path: "$DEMO_DIR/<customer>-package.zip"
    }
    ```
    The tool posts an async export job, polls until complete, and writes the zip locally. The as-built doc and baseline snapshot (steps 3–4) are the primary build record; the zip is the offline backup / handoff artifact.
@@ -941,7 +1058,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 - **S2.5 empathy library** verbatim in the patched Job Node's `instructions` field (sourced from `## Job Instructions` H2 in persona.md — layer d per S2 ladder) — all 7 trigger categories with templates, hard rules, and Lifeline 13 11 14 for suicide/self-harm
 - **Agent free-text fields ≤ 1000 chars** — agent `description` (Persona/1A) and agent `instructions` (Special Instructions/1B) are EACH ≤ 1000 chars (verify via `cognigy_get`; this is S1.7 Phase A assert #12). Over-length silently errors on save and injects mid-build rework — this is the hard cap, not a guideline.
 
-*Artifacts on disk in `Demo Builds/<customer>-demo/`:*
+*Artifacts on disk in `$DEMO_DIR/`:*
 - All SB design docs: demo plan, persona, architecture, context-schema, interfaces, contracts
 - All `tools/*.json` for every tool wired into the agent (file-first authoring per S1.3)
 - `brand-research.md` and `<customer>-empathy-library.md`
@@ -949,7 +1066,7 @@ The bar is **high-quality production demos that reflect the use cases** — not 
 **⚪ CONDITIONAL — only check if the precondition holds**
 
 - **`xapp/*.html` files exist** for every xApp scene named in `{Customer}-agent-interfaces.md` — only check if interfaces.md named scenes. Skip if no scenes.
-- **Knowledge wiring** — only if S0.5 returned `knowledgeRequested: true`. Knowledge store ID + topics ingested listed, wiring mechanism documented in S1.8 Step 3. Skip if S0.5 returned NO.
+- **Knowledge wiring** — only if S0.5 returned `knowledgeRequested: true`. Knowledge store ID + topics ingested listed, wiring mechanism documented in S1.8 Step 4. Skip if S0.5 returned NO.
 
 If any BLOCKING item is missing, the build is incomplete — go back and fix the flow before handing back. Do not soften the bar to ship faster; the cross-check exists because shipped-but-broken patterns are harder to debug than rework-before-handover. **S1.7 is the programmatic enforcer of this list — passing S1.6's paper check without S1.7's runtime check is how a prior build shipped missing `Once`, `Initialize Session`, `Set Session Config`, and `Say Welcome` despite S1.5 spelling them out. Do not skip S1.7.**
 
@@ -1094,11 +1211,26 @@ if (knowledgeRequested !== true) { skip S1.8 entirely; proceed to S1.9 }
 
 If S0.5 returned YES, the user gave a list of FAQ topic specs. **This section wires Cognigy's built-in Knowledge AI only** — author the FAQ bodies locally, then ingest them into a Cognigy knowledge store. There is no CXone Expert publishing step here: Expert publishing belongs in a future `knowledge@nice` skill and is out of scope for this orchestrator. Do not add an Expert escape hatch until that skill ships.
 
-**Output directory:** `Demo Builds/<customer>-demo/knowledge/`. Claude's cwd remains the session workspace root — paths below are relative to the workspace root. See `explain("session-workspace")`.
+**Output directory:** `$DEMO_DIR/knowledge/` (resolved in S0.0 Step 0). See `explain("session-workspace")` for the directory model.
 
-**Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `Demo Builds/<customer>-demo/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 2, and they stay version-controlled in the demo folder.
+**Step 1 — Author one markdown body per topic.** Write each FAQ topic from S0.5 to `$DEMO_DIR/knowledge/<topic-slug>.md`. Body shape: a short heading, then the FAQ content in plain markdown. These files are the source text ingested into the Cognigy knowledge store in Step 3, and they stay version-controlled in the demo folder.
 
-**Step 2 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
+**Step 2 — Activate the embedding model at the project level.** Check `buildConfig.llm.embedding`:
+
+- **Unset** → **hard stop:** *"Knowledge AI was requested, but no embedding model is configured (`llm.embedding` is unset in your build config). Re-run `cognigy-vibe:init-cognigy-vibe` to select one, or ask your Cognigy admin to configure an org-level embedding model."* Do not proceed with knowledge-store creation in this state — the later "verify the wiring landed" check would otherwise surface a confusing runtime failure instead of a clear setup gap.
+- **Set** → assign it to the project, then activate it for the `knowledgeSearch` use-case:
+  ```
+  assign_org_llm { project_id: "<projectId>", llm_id: "<buildConfig.llm.embedding.id>" }
+  // On already_assigned or assigned → proceed. On any error → surface to user and stop.
+
+  set_project_generative_ai_settings {
+    project_id: "<projectId>",
+    use_case_settings: { "knowledgeSearch": "<buildConfig.llm.embedding.id>" }
+  }
+  // On {"error": ...} → surface to user and stop.
+  ```
+
+**Step 3 — Wire Cognigy's built-in Knowledge AI on the agent.** First principles: the simplest, most robust knowledge integration is Cognigy's built-in retrieval (the Job Node natively queries the knowledge store between turns) — not a separate `search_*_faqs` tool with its own branch. Two MCP calls:
 
 a. **Create the knowledge store and ingest sources** via cognigy-vibe (per plugin `explain("knowledge-store")` — hierarchy Project → KnowledgeStore → Sources → Chunks):
 ```
@@ -1138,13 +1270,13 @@ A silent shape mismatch can return 200 OK without actually wiring anything — v
 
 **Why this approach (vs a separate `search_*_faqs` tool):** built-in Knowledge AI handles retrieval, ranking, and answer-grounding inside the Job Node's response path — no extra tool branch, no Code mock, no `input.result` wiring, no persona routing-tree edit. The LLM gets retrieved context injected automatically alongside its other inputs. Simpler, less to maintain, harder to break.
 
-**Step 3 — Append "Knowledge wired" to as-built.** Add to `[CUSTOMER]_FLOW_INSERTS.md` Section 9:
+**Step 4 — Append "Knowledge wired" to as-built.** Add to `[CUSTOMER]_FLOW_INSERTS.md` Section 9:
 
 ```markdown
 ## 9. Knowledge wiring
 
 - Knowledge AI enabled: <yes / no>
-- Knowledge store ID: <id from Step 2(a)>
+- Knowledge store ID: <id from Step 3(a)>
 - Topics ingested: <count> (sources in the Cognigy knowledge store)
 - Local body files: knowledge/<slug>.md × <count>
 - Wiring mechanism: <cognigy-vibe knowledge-store API | manual UI step>
@@ -1167,7 +1299,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 | Layer | persona.md H2 heading | Agent-level field | Job Node config field (after S1.2 patch) |
 |---|---|---|---|
 | (a) **Persona** — WHO the agent is (incl. brand voice) | `## Persona` | agent `description` | n/a — agent-level only |
-| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `update_ai_agent` S1.1 Step 3; **≤ 1000 chars**) | n/a — agent-level only |
+| (b) **Special Instructions** — HOW the agent behaves globally (speaking conventions, abuse, out-of-scope) | `## Special Instructions` | agent `instructions` — **its OWN field, NOT concatenated into `description`** (set via `cognigy_update(resource_type="aiagents", ...)` S1.1 Step 4; **≤ 1000 chars**) | n/a — agent-level only |
 | (c) **Job Description** — WHAT this job handles | `## Job Description` | n/a | `description` (= `jobDescription`) |
 | (d) **Job Instructions** — HOW this job procedurally runs | `## Job Instructions` | n/a | `instructions` (= `jobInstructions`) |
 
@@ -1175,7 +1307,7 @@ The persona content is structured in four layers that map to two Cognigy fields.
 
 **Extraction rule for S1.1 + S1.2:** parse `{Customer}-agent-persona.md` by H2 heading and map each block to its OWN field — they are **NOT** concatenated:
 - agent `description` = `## Persona` block only (1A — WHO, incl. brand voice).
-- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `update_ai_agent` S1.1 Step 3 — see S1.1).
+- agent `instructions` = `## Special Instructions` block (1B — global HOW; set at the **agent** level via `cognigy_update(resource_type="aiagents", ...)` S1.1 Step 4 — see S1.1).
 - `jobDescription` = `## Job Description` block (2A).
 - `jobInstructions` = `## Job Instructions` block (2B, S2.5 empathy library verbatim).
 
@@ -1346,7 +1478,7 @@ This library is the single source of truth for how the AI Agent handles sensitiv
 **For the user at build time:**
 
 - The skill emits this library verbatim into the persona's `## Job Instructions` H2 section (layer d — see S2 template). S1.2 patches that section into the Job Node's `instructions` field, so the runtime LLM has the library in context every turn.
-- The skill also writes `<customer>-empathy-library.md` to `Demo Builds/<customer>-demo/` as a **read-only reference export** of exactly what was baked in (handy for review / QA). **It is NOT wired to the live agent — editing it changes nothing at runtime.** To change runtime empathy behaviour, edit the `## Job Instructions` block of `{Customer}-agent-persona.md` (the per-build editable home) and re-run S1.2 to re-patch the Job Node. **SSOT chain:** S2.5 template → `{Customer}-agent-persona.md` `## Job Instructions` → S1.2 → live Job Node. The exported `.md` sits outside that chain.
+- The skill also writes `<customer>-empathy-library.md` to `$DEMO_DIR/` as a **read-only reference export** of exactly what was baked in (handy for review / QA). **It is NOT wired to the live agent — editing it changes nothing at runtime.** To change runtime empathy behaviour, edit the `## Job Instructions` block of `{Customer}-agent-persona.md` (the per-build editable home) and re-run S1.2 to re-patch the Job Node. **SSOT chain:** S2.5 template → `{Customer}-agent-persona.md` `## Job Instructions` → S1.2 → live Job Node. The exported `.md` sits outside that chain.
 - The recap shows the 7 trigger categories so the user can confirm coverage or add custom ones (e.g. "natural disaster — bushfire, flood — for an Aussie insurer in catastrophe season").
 
 ---
@@ -1370,7 +1502,7 @@ The Initialize Session Code is the **single source of truth** for the caller-pro
 | Health | `memberId` | `planLevel, lastClaim, providerNetwork, dependents` |
 | Other | `customerId` | Ask the user for 3–5 domain-appropriate fields |
 
-**Initialize Session Code** (write to `Demo Builds/<customer>-demo/code-nodes/<customer>_initialize_session.js`):
+**Initialize Session Code** (write to `$DEMO_DIR/code-nodes/<customer>_initialize_session.js`):
 
 ```javascript
 // Canonical CRM template — single source of truth for caller profile.
@@ -1510,7 +1642,7 @@ Repeat for every tool in S1.3. The tool node comes from `push_agent_tool` (S1.3)
 Author the `.tool.json` file in `tools/<tool_id>.tool.json` (see S1.3 for shape) and push:
 ```
 push_agent_tool {
-  tool_file: "<ABS PATH>/Demo Builds/<customer>-demo/tools/<tool_id>.tool.json",
+  tool_file: "$DEMO_DIR/tools/<tool_id>.tool.json",
   flow_id: "<flowId>",
   job_node_id: "<aiAgentJobNodeId>"
 }
@@ -1534,7 +1666,7 @@ cognigy_create {
 Transfer tool → `code` first (mark the transfer in context before the spoken hand-off). One `push_code_node` CREATE call (omit `node_id`) creates, positions, and pushes the body:
 ```
 push_code_node {
-  script_file: "Demo Builds/<customer>-demo/code-nodes/<tool_id>_mark_transfer.js",
+  script_file: "$DEMO_DIR/code-nodes/<tool_id>_mark_transfer.js",
   flow_id: "<flowId>",
   mode: "append",
   target: "<aiAgentJobToolNodeId>",
@@ -1551,7 +1683,7 @@ context.toolResponse = { transferred: true, team: "<team>", teamLabel: "<Custome
 Transactional → `code` mock (per SC.2 shapes). One `push_code_node` CREATE call (omit `node_id`):
 ```
 push_code_node {
-  script_file: "Demo Builds/<customer>-demo/code-nodes/<tool_id>_mock.js",
+  script_file: "$DEMO_DIR/code-nodes/<tool_id>_mock.js",
   flow_id: "<flowId>",
   mode: "append",
   target: "<fillerSayNodeId>",
@@ -1605,7 +1737,7 @@ After this, the chain is `aiAgentJobTool → [Step 2] → [Step 3] → aiAgentTo
 | cognigy-vibe | Code node convention | Read/write contract (tool args namespace, `context.toolResponse`, `api.log` vs `console.log`, no `fetch`) — see plugin `explain("code-node-patterns")`. Code nodes execute synchronously; write `context.toolResponse` and finish. Skill-specific shapes (success / no-match / disambiguation) live in SC.2. |
 | cognigy-vibe | `cognigy_update` | Does an **always-fresh GET + deep merge** when `merge_config: true` is set. Patch deltas only; sibling fields stay intact. |
 | cognigy-vibe | `cognigy_delete` | DELETE any resource including individual nodes. Used in S8 collision cleanup. |
-| cognigy-vibe | `cognigy_invoke` | Named ops: `move`, `clone`, `train`, `inject`, `search`. `clone` will power the S1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). S1.8 knowledge wiring uses the `cognigy_create` knowledge-store API path. |
+| cognigy-vibe | `cognigy_invoke` | Named ops: `clone`, `train`, `inject`, `search`. `clone` will power the S1.0 fork lane once that ships; `search` for asset discovery (cheaper than `list` + filter). S1.8 knowledge wiring uses the `cognigy_create` knowledge-store API path. There is no `node/move` op — reposition existing nodes via `cognigy_update` with `body={mode, target}`. |
 | cognigy-vibe | `push_code_node` | Reads `.js`/`.ts` → `config.code`. **Two modes** — CREATE (omit `node_id`; pass `flow_id`+`mode`+`target`+`label`) creates+positions+pushes in one call; UPDATE (pass `node_id`) pushes to an existing node with conflict detection. Required: `script_file`, `flow_id`. Preferred for ALL Code-node body population. |
 | cognigy-vibe | `push_html_node` | Reads `.html` file → `setHTMLAppState` node body. Params are snake_case, **all required**: `html_file`, `node_id`, `flow_id`. Required for S1.4b xApp scene authoring. |
 | cognigy-vibe | `push_agent_tool` | Reads a local `.tool.json` → create/update an `aiAgentJobTool` node. **Canonical tool-authoring path (S1.3).** CREATE: pass `job_node_id`; UPDATE: pass `node_id` (idempotent re-push, additive config PATCH). Creates the tool node only — append `aiAgentToolAnswer` (S6 Step 4). No `aiAgentId` param. |
@@ -1657,7 +1789,7 @@ Agent ID:     <id>  ([Persona] — referenceId <ref>)
 Flow ID:      <mongo id> (referenceId <ref>)
 Endpoint URL: https://cognigy-endpoint-au1.nicecxone.com/<token>
 
-Demo folder: Demo Builds/[customer]-demo/
+Demo folder: $DEMO_DIR/
   Scope + design artifacts:
     - [Customer]-[DemoType]-demo-plan.md          ← SA (scope-demo)
     - [Customer]-agent-persona.md                 ← SB (with S2.5 empathy library verbatim)

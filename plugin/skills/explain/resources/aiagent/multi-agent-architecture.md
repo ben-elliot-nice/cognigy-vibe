@@ -1,7 +1,6 @@
 ---
 topic: multi-agent-architecture
 description: Concierge + Specialists pattern, specialist job types, routing, context schema, stub agent
-group: aiagent
 ---
 
 ## multi-agent-architecture — Multi-Agent Architecture Patterns

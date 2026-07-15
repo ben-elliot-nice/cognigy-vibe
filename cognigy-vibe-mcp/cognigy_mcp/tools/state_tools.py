@@ -34,6 +34,14 @@ class AssignOrgLlmArgs(BaseModel):
     llm_id: str = Field(description="MongoDB _id of the org-level LLM (not referenceId)")
 
 
+class SetProjectGenerativeAISettingsArgs(BaseModel):
+    project_id: str = Field(description="Cognigy project _id to configure")
+    use_case_settings: dict[str, str] = Field(
+        description="Map of Generative AI use-case key (e.g. 'aiAgent', 'knowledgeSearch') "
+                     "to the target LLM's MongoDB _id"
+    )
+
+
 _RESOURCE_TYPE_ALIASES: dict[str, str] = {
     "project": "projects",
     "flow": "flows",
@@ -51,6 +59,13 @@ _RESOURCE_TYPE_ALIASES: dict[str, str] = {
     "snapshot": "snapshots",
     "playbook": "playbooks",
 }
+
+GENERATION_USE_CASES: list[str] = [
+    "aiAgent", "gptPromptNode", "aiEnhancedOutputs", "sentimentAnalysis",
+    "designTimeGeneration", "answerExtraction", "conversationAnalyzer",
+]
+KNOWLEDGE_USE_CASE = "knowledgeSearch"
+_KNOWN_USE_CASES = frozenset(GENERATION_USE_CASES) | {KNOWLEDGE_USE_CASE}
 
 
 def _normalise_rtype(rtype: str) -> str:
@@ -94,10 +109,24 @@ TOOLS: list[Tool] = [
         description=(
             "Append a project to an organisation-level LLM's assignedToProjects list. "
             "Safe and idempotent — if the project is already assigned, no write is made. "
-            "Use after create_ai_agent to ensure the new project can use an org-level LLM. "
+            "Use after creating the agent resource (cognigy_create(resource_type=\"aiagents\", ...)) to ensure the new project can use an org-level LLM. "
             "Errors if the LLM is project-scoped (use manage_packages instead) or not found."
         ),
         inputSchema=make_schema(AssignOrgLlmArgs),
+    ),
+    Tool(
+        name="set_project_generative_ai_settings",
+        description=(
+            "Set which LLM a project uses for each Cognigy Generative AI use-case via a "
+            "project-level settings PATCH. This is what actually activates a model for these "
+            "platform features — assigning an LLM to a project via assign_org_llm alone does not. "
+            "Partial PATCH is safe: only the use-cases passed in use_case_settings are touched, "
+            "others are left untouched. Allowed use_case_settings keys: "
+            f"{', '.join(sorted(_KNOWN_USE_CASES))} — an unrecognised key returns an "
+            "unknown_use_case error instead of being sent to the API. use_case_settings must be "
+            "non-empty."
+        ),
+        inputSchema=make_schema(SetProjectGenerativeAISettingsArgs),
     ),
 ]
 
@@ -156,8 +185,8 @@ def make_handlers(
         ext_map: dict[str, str] = {}
         try:
             exts_resp = client.get("/v2.0/extensions", projectId=project_id, limit=100)
-            for ext_summary in exts_resp.get("_embedded", {}).get("extensions", []):
-                ext_id = ext_summary["_links"]["self"]["href"].split("/")[-1]
+            for ext_summary in exts_resp.get("items", []):
+                ext_id = ext_summary["_id"]
                 ext_name = ext_summary["name"]
                 try:
                     ext_detail = client.get(f"/v2.0/extensions/{ext_id}")
@@ -168,6 +197,21 @@ def make_handlers(
         except Exception as exc:
             errors.append(f"extensions: {exc}")
         state.set("extension_map", value=ext_map)
+
+        if flows:
+            try:
+                # Descriptors are project-scoped, not flow-scoped: any flow ID in the project
+                # returns the identical catalog, so anchoring on flows[0] is safe. Verified
+                # byte-identical (order-normalized) across two different flowIds in the same
+                # AU1 project — see issue #261.
+                descriptors_resp = client.get(f"/v2.0/flows/{flows[0]['_id']}/chart/descriptors")
+                marker_types = {
+                    d["type"] for d in descriptors_resp.get("items", [])
+                    if d.get("type") and d.get("parentType")
+                }
+                state.set("branch_marker_types", value=sorted(marker_types))
+            except Exception as exc:
+                errors.append(f"chart_descriptors: {exc}")
 
         seen_agents: set = set()
         for flow in flows:
@@ -281,9 +325,46 @@ def make_handlers(
             return _ok({"error": "patch_failed", "detail": str(exc)})
         return _ok({"assigned": True, "llm_name": llm.get("name", ""), "project_id": m.project_id})
 
+    def _set_project_generative_ai_settings(args: dict) -> list[TextContent]:
+        m, err = validate(SetProjectGenerativeAISettingsArgs, args)
+        if err:
+            return err
+        if not m.use_case_settings:
+            return _ok({
+                "error": "empty_use_case_settings",
+                "hint": "use_case_settings must contain at least one use-case key",
+            })
+        unknown_keys = [k for k in m.use_case_settings if k not in _KNOWN_USE_CASES]
+        if unknown_keys:
+            return _ok({
+                "error": "unknown_use_case",
+                "unknown_keys": unknown_keys,
+                "allowed_keys": sorted(_KNOWN_USE_CASES),
+            })
+        body = {
+            "generativeAISettings": {
+                "useCasesSettings": {
+                    key: {"largeLanguageModelId": llm_id}
+                    for key, llm_id in m.use_case_settings.items()
+                }
+            }
+        }
+        try:
+            client.patch(f"/v2.0/projects/{m.project_id}/settings", body)
+        except ApiError as exc:
+            return _ok({"error": "patch_failed", "status": exc.status_code, "detail": str(exc)})
+        except Exception as exc:
+            return _ok({"error": "patch_failed", "detail": str(exc)})
+        return _ok({
+            "updated": True,
+            "project_id": m.project_id,
+            "use_cases": list(m.use_case_settings),
+        })
+
     return {
         "sync_remote_state": _sync_remote_state,
         "get_build_state": _get_build_state,
         "resolve_resource": _resolve_resource,
         "assign_org_llm": _assign_org_llm,
+        "set_project_generative_ai_settings": _set_project_generative_ai_settings,
     }
