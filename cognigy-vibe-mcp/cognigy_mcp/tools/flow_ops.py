@@ -285,6 +285,12 @@ def _invoke_path(resource_type: str, resource_id: str, operation: str, body: dic
     )
 
 
+# Branch marker node types auto-created by once/if/ifThenElse/lookup: their branch
+# content is attached via `next`, not `children` (see explain("node-positioning")),
+# so it must render nested one level deeper than the marker rather than flattened to it.
+_BRANCH_MARKER_TYPES = frozenset({"onFirstExecution", "afterwards", "then", "else", "default", "case"})
+
+
 def _build_hierarchy(chart: dict) -> str:
     nodes = {n["_id"]: n for n in chart.get("nodes", [])}
 
@@ -309,7 +315,8 @@ def _build_hierarchy(chart: dict) -> str:
             lines += render(child_id, indent + 1, visited)
         next_id = rel.get("next")
         if next_id:
-            lines += render(next_id, indent, visited)
+            bump = 1 if ntype in _BRANCH_MARKER_TYPES else 0
+            lines += render(next_id, indent + bump, visited)
         return lines
 
     # Root nodes: not referenced as next or child by any other relation
