@@ -6,6 +6,12 @@ Read `docs/architecture.md` at the start of every new session. **Note: architect
 
 Worktrees live at `.claude/worktrees/` (gitignored). This is the default Claude Code location — do not create worktrees under `.worktrees/`.
 
+**`EnterWorktree` defaults to branching from `main`, not `dev`.** With no `worktree.baseRef` override in `.claude/settings.json`, its `fresh` default branches from `origin/<default-branch>`, and this repo's default branch is `main` — even if you just ran `git fetch origin dev` first. This repo's workflow requires feature branches off `origin/dev` (see step 3 below), so `EnterWorktree` alone is **not** sufficient here. After creating a worktree this way, verify the base before doing any work:
+```bash
+git merge-base --is-ancestor origin/dev HEAD && echo "OK: based on dev" || echo "WRONG BASE — recreate from origin/dev"
+```
+If it's on the wrong base, don't try to salvage it — remove the worktree/branch and recreate explicitly from `origin/dev` (`git worktree add <path> -b <branch> origin/dev`, or rebase the branch onto `origin/dev` if work has already been committed to it).
+
 ## Development Workflow
 
 1. **Feature arrives** — if there is a GitHub issue, read it first: `gh issue view <number>`. Clarify scope if ambiguous before any code work.
