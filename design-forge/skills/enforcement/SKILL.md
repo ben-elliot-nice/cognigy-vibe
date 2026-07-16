@@ -165,7 +165,10 @@ stamp on Tier 1's output:
    required artefact contract**, using the hybrid-markdown rule
    (naming-and-artefacts.md section 4), scoped **only** to the yes-verdict
    capabilities — never to unflagged items or to flagged-but-no-verdict
-   items:
+   items. Every guard reference produced here is checked by
+   `design-forge/reference/structural-floor.md`'s check #5, which confirms
+   each `enforcement` guard's capability reference resolves to a
+   `capability_inventory` item whose `staging_confirmation` flag is set:
    - `## Guard Sub-flows` — prose plus a fenced YAML list, one entry per
      in-scope capability: the capability `id` it gates, the point in the
      flow where it intercepts the capability call (informed by `routing`
