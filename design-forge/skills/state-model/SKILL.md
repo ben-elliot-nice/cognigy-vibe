@@ -1,6 +1,6 @@
 ---
 name: state-model
-description: Define what data a Cognigy AI agent persists — per field, readers, writers, lifetime, and how it surfaces back to the reasoning core. Hard-depends on capability inventory and routing.
+description: "Define what data a Cognigy AI agent persists — per field: readers, writers, lifetime, and how it surfaces back to the reasoning core. Hard-depends on capability inventory and routing."
 ---
 
 # State Model (layer 3)
