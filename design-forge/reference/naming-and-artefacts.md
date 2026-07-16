@@ -108,7 +108,10 @@ read by everyone downstream. This resolves the apparent tension between
 `brand_research` being needed by both Presentation and Integration and it
 not appearing as an edge in the domain graph: it lives outside the
 domain-to-domain dependency graph entirely, in the same shared-artefact
-category as `hand_off_contract` and `interview_scoping`.
+category as `hand_off_contract` — the only two artefacts in this category.
+`interview_scoping` is not part of this category: it is an ordinary fixed
+`doc_identifier` (an input-gathering artefact, produced once and read, not
+incrementally appended to by multiple domains).
 
 ## 7. `mode` parameter
 
