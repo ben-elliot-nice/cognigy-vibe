@@ -11,7 +11,7 @@ changes here only, and every consumer picks up the change by reference.
 domains:
   identity:              { layer: root,  hard_deps: [],                                  soft_deps: [] }
   capability_inventory:  { layer: root,  hard_deps: [],                                  soft_deps: [] }
-  behavioural_policy:    { layer: 2,     hard_deps: [],  soft_deps: [identity] }   # hard on channel_choice (an input, not a domain)
+  behavioural_policy:    { layer: 2,     hard_deps: [],  soft_deps: [identity, state_model] }   # hard on channel_choice (an input, not a domain); state_model soft-dep is a deliberate FORWARD edge (L2->L3) — see notes
   routing:               { layer: 2,     hard_deps: [capability_inventory],             soft_deps: [behavioural_policy] }
   state_model:           { layer: 3,     hard_deps: [capability_inventory, routing],    soft_deps: [] }
   presentation:          { layer: 4,     hard_deps: [capability_inventory, state_model], soft_deps: [integration] }   # + shared brand_research (visual)
@@ -23,6 +23,7 @@ notes:
   - "brand_research is a shared upstream artefact (first-consumer-triggers), NOT a domain soft-dep."
   - "presentation<->integration is the ONE mutual edge; it is SOFT precisely so neither self-serves the other (termination)."
   - "self-serve recursion follows hard_deps ONLY."
+  - "behavioural_policy's soft_dep on state_model is a deliberate FORWARD soft edge (layer 2 -> layer 3), the only soft edge in the graph that points to a LATER layer rather than an earlier/same one. It is inert during an orchestrated top-down pass (state_model doesn't exist yet when behavioural_policy runs first) and only becomes active in standalone/re-run scenarios where state_model already exists on disk — at which point behavioural_policy uses it opportunistically (use-if-present) to scope which data types it references, exactly as it does with its identity soft-dep. Not a DAG-validity concern: the hard-edge DAG check (Task 4 script) only walks hard_deps, so a forward soft edge cannot create a hard-edge cycle."
 ```
 
 ## Key structural implications
