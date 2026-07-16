@@ -201,13 +201,17 @@ runs in:
    `{build_identifier}_presentation.md` (repo builds) or the
    caller-specified scratch path (smoke/test runs), and — if a hand-off was
    judged in scope — write or append to
-   `{build_identifier}_hand_off_contract.md` per step 6. Report back to the
-   caller: whether `capability_inventory` and `state_model` were each read
-   as-found or self-served; whether the visual slice was read as-found or
-   triggered via `brand-research`; whether a hand-off was judged in/out of
-   scope and, if in scope, whether Presentation's half was newly created or
-   appended onto an existing Integration-authored file; and explicit
-   confirmation that `integration` itself was never invoked or self-served.
+   `{build_identifier}_hand_off_contract.md` per step 6. Then,
+   **conversationally, in your response to the caller** (not as a section
+   in the artefact file), report: whether `capability_inventory` and
+   `state_model` were each read as-found or self-served; whether the
+   visual slice was read as-found or triggered via `brand-research`;
+   whether a hand-off was judged in/out of scope and, if in scope,
+   whether Presentation's half was newly created or appended onto an
+   existing Integration-authored file; and explicit confirmation that
+   `integration` itself was never invoked or self-served. Do not add this
+   as a section in the presentation artefact file — report it in your
+   response to the caller instead.
 
 ## Tools
 

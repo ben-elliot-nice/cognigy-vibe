@@ -17,8 +17,9 @@ domains:
   presentation:          { layer: 4,     hard_deps: [capability_inventory, state_model], soft_deps: [integration] }   # + shared brand_research (visual)
   integration:           { layer: 4,     hard_deps: [capability_inventory, state_model], soft_deps: [presentation] }
   enforcement:           { layer: cross, hard_deps: [capability_inventory, state_model], soft_deps: [routing], conditional: true }
-shared_artefacts: [brand_research, hand_off_contract, interview_scoping]
+shared_artefacts: [brand_research, hand_off_contract, interview_scoping]  # broader "non-domain artefact" set — NOT the same as naming-and-artefacts.md section 6's narrower append-pattern category (see notes)
 notes:
+  - "shared_artefacts above is the broader non-domain-artefact list, not the append-pattern category. Only brand_research and hand_off_contract follow the shared-artefact append pattern described in naming-and-artefacts.md section 6 (first-consumer-produces, later consumers read-and-append). interview_scoping is a produce-once input artefact — an ordinary fixed doc_identifier read by consumers, not incrementally appended to by multiple domains."
   - "channel_choice and use_case_list are INPUTS (interview thin-slices), not domains — never self-served, asked from the user."
   - "brand_research is a shared upstream artefact (first-consumer-triggers), NOT a domain soft-dep."
   - "presentation<->integration is the ONE mutual edge; it is SOFT precisely so neither self-serves the other (termination)."
