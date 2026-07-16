@@ -165,13 +165,18 @@ it actually runs in:
    `{build_identifier}_integration.md` (repo builds) or the
    caller-specified scratch path (smoke/test runs), and — if a hand-off
    was judged in scope — write or append to
-   `{build_identifier}_hand_off_contract.md` per step 5. Report back to
-   the caller: whether `capability_inventory` and `state_model` were each
-   read as-found or self-served; whether a hand-off was judged in/out of
-   scope and, if in scope, whether Integration's half was newly created
-   or appended onto an existing Presentation-authored file; and explicit
-   confirmation that `presentation` itself was never invoked or
-   self-served.
+   `{build_identifier}_hand_off_contract.md` per step 5. The integration
+   artefact file itself must contain only the two sections defined in
+   step 4 (`## Backend Writes` and `## Dashboard / Ticketing Updates`) —
+   nothing else. Then, **conversationally, in your response to the
+   caller** (not as a section in the artefact file), report the hand-off
+   resolution status: whether `capability_inventory` and `state_model`
+   were each read as-found or self-served; whether a hand-off was judged
+   in/out of scope and, if in scope, whether Integration's half was newly
+   created or appended onto an existing Presentation-authored file; and
+   explicit confirmation that `presentation` itself was never invoked or
+   self-served. Do not add this as a section in the integration artefact
+   file — report it in your response to the caller instead.
 
 ## Tools
 
