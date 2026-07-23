@@ -17,7 +17,7 @@ Run the setup wizard. It installs `uv` if needed, then installs and configures t
 
 **Mac / Linux:**
 ```bash
-bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-vibe/dev/plugin/bin/cognigy-setup.sh)
+bash <(curl -LsSf https://raw.githubusercontent.com/ben-elliot-nice/cognigy-vibe/main/plugin/bin/cognigy-setup.sh)
 ```
 
 **Windows (PowerShell):**
