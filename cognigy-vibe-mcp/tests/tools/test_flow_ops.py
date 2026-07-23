@@ -454,6 +454,34 @@ def test_aiagenttooltanswer_no_config_key_unchanged(mock_client, state, cache):
     assert "config" not in call_body
 
 
+def test_initappsession_extension_is_basic_nodes(mock_client, state, cache):
+    """initAppSession must map to @cognigy/basic-nodes, not cxone-utils."""
+    mock_client.post.return_value = {"_id": "app-1", "type": "initAppSession"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "initAppSession", "mode": "append", "target": "start-id",
+                 "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "@cognigy/basic-nodes"
+
+
+def test_sethtmlappstate_extension_is_basic_nodes(mock_client, state, cache):
+    """setHTMLAppState must map to @cognigy/basic-nodes, not cxone-utils."""
+    mock_client.post.return_value = {"_id": "app-2", "type": "setHTMLAppState"}
+    handlers = make_handlers(mock_client, state, cache)
+    handlers["cognigy_create"]({
+        "resource_type": "node",
+        "flow_id": "flow-1",
+        "body": {"type": "setHTMLAppState", "mode": "append", "target": "start-id",
+                 "config": {}},
+    })
+    call_body = mock_client.post.call_args[0][1]
+    assert call_body["extension"] == "@cognigy/basic-nodes"
+
+
 def test_inject_extension_uses_dynamic_map_as_fallback(mock_client, state, cache):
     """A node type unknown to the static map should get its extension from state['extension_map']."""
     state.set("extension_map", value={"myCustomNode": "my-custom-ext"})
