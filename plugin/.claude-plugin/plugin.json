@@ -1,7 +1,7 @@
 {
   "name": "cognigy-vibe",
   "description": "Cognigy AI agent development skills for Claude Code",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "author": {
     "name": "Ben Elliot",
     "email": "ben.elliot@nice.com"
@@ -13,7 +13,7 @@
   "mcpServers": {
     "cognigy-vibe": {
       "command": "uvx",
-      "args": ["--from", "cognigy-vibe-mcp==1.7.2", "cognigy-vibe-launch"]
+      "args": ["--from", "cognigy-vibe-mcp==1.7.3", "cognigy-vibe-launch"]
     }
   }
 }

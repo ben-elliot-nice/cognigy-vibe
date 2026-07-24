@@ -210,8 +210,8 @@ _NODE_EXTENSION_MAP: dict[str, str] = {
     "aiAgentJobTool": "@cognigy/basic-nodes",
     "aiAgentToolAnswer": "@cognigy/basic-nodes",
     # xApp nodes
-    "initAppSession": "cxone-utils",
-    "setHTMLAppState": "cxone-utils",
+    "initAppSession": "@cognigy/basic-nodes",
+    "setHTMLAppState": "@cognigy/basic-nodes",
     # Basic nodes (explicit for completeness)
     "say": "@cognigy/basic-nodes",
     "code": "@cognigy/basic-nodes",
