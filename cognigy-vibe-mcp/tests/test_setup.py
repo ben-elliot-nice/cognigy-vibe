@@ -8,6 +8,28 @@ from unittest.mock import patch
 import pytest
 
 
+def test_validate_base_url_accepts_trial_tenant():
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://api-trial.cognigy.ai") is None
+
+
+def test_validate_base_url_accepts_trial_us_tenant():
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://api-trial-us.cognigy.ai") is None
+
+
+def test_validate_base_url_accepts_valid_nicecxone_host():
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://cognigy-api-au1.nicecxone.com") is None
+
+
+def test_validate_base_url_warns_on_nicecxone_host_missing_api_segment():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://cognigy-au1.nicecxone.com")
+    assert warning is not None
+    assert "cognigy-api-" in warning
+
+
 def test_get_desktop_config_path_macos():
     with patch.object(sys, "platform", "darwin"):
         from importlib import reload

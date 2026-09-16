@@ -143,6 +143,16 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     return value or default
 
 
+def _validate_base_url(base_url: str) -> str | None:
+    """Return a warning message if base_url looks malformed for a known Cognigy tier, else None."""
+    if "nicecxone.com" in base_url and "cognigy-api-" not in base_url:
+        return (
+            f"'{base_url}' looks like a NiCE CXone host but is missing the required '-api-' segment. "
+            "Expected pattern: https://cognigy-api-<region>.nicecxone.com"
+        )
+    return None
+
+
 _BARE_FLAGS_IMPLYING_INSTALL = {"--install-only", "--client", "--scope", "--verbose"}
 
 
@@ -285,11 +295,23 @@ def _run_install(args) -> None:
     if mode == "configure":
         print_section(4, "Credentials")
         print("Credentials (project ID can be set later via the sync_remote_state tool)")
-        base_url = _prompt("COGNIGY_BASE_URL (e.g. https://cognigy-api-au1.nicecxone.com)")
+        print("  COGNIGY_BASE_URL examples:")
+        print("    NiCE CXone:    https://cognigy-api-<region>.nicecxone.com  (au1|na1|jp1|eu1|uk1|ca1|in1)")
+        print("    Cognigy Trial: https://api-trial.cognigy.ai  (or api-trial-us)")
+        print("    Cognigy SaaS:  see your tenant's app URL for the matching API host")
+        base_url = _prompt("COGNIGY_BASE_URL")
         while not base_url:
             print("  Base URL is required.")
             base_url = _prompt("COGNIGY_BASE_URL")
         base_url = base_url.rstrip("/")
+        warning = _validate_base_url(base_url)
+        while warning:
+            print(f"  Warning: {warning}")
+            proceed = _prompt("  Use this value anyway?", default="n")
+            if proceed.lower() in ("y", "yes"):
+                break
+            base_url = _prompt("COGNIGY_BASE_URL").rstrip("/")
+            warning = _validate_base_url(base_url)
         api_key = _prompt("COGNIGY_API_KEY", secret=True)
         while not api_key:
             print("  API key is required.")

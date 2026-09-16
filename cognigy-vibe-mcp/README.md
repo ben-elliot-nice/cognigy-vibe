@@ -65,7 +65,7 @@ Credentials are read from a `.env` file in the project root (see Environment var
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `COGNIGY_BASE_URL` | Yes | — | Cognigy API base URL (e.g. `https://cognigy-api-au1.nicecxone.com`) |
+| `COGNIGY_BASE_URL` | Yes | — | Cognigy API base URL. NiCE CXone: `https://cognigy-api-<region>.nicecxone.com` (au1\|na1\|jp1\|eu1\|uk1\|ca1\|in1). Cognigy Trial: `https://api-trial.cognigy.ai` (or `api-trial-us`). Cognigy SaaS: see your tenant's app URL for the matching API host. |
 | `COGNIGY_API_KEY` | Yes | — | API key from Cognigy UI → My Profile → API Keys |
 | `COGNIGY_PROJECT_ID` | No | — | Default project; can be set later via `sync_remote_state` |
 | `COGNIGY_VIBE_RESYNC_HOURS` | No | `4` | Hours of idle before auto-resync |
