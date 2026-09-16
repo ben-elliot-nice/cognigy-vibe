@@ -1,0 +1,13 @@
+{
+  "name": "design-forge",
+  "description": "Modular design-artefact authoring for Cognigy AI agents — one skill per design domain",
+  "version": "0.1.0",
+  "author": {
+    "name": "Ben Elliot",
+    "email": "ben.elliot@nice.com"
+  },
+  "homepage": "https://github.com/ben-elliot-nice/cognigy-vibe",
+  "repository": "https://github.com/ben-elliot-nice/cognigy-vibe",
+  "license": "MIT",
+  "keywords": ["cognigy", "ai-agents", "design", "skills", "nice"]
+}
