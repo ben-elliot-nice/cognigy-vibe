@@ -13,7 +13,11 @@ class TalkToAgentArgs(BaseModel):
     user_id: str = Field(description="User ID — new value starts fresh session")
     message: str = Field("", description="User text. Use empty string for data-only turns (xApp submit emulation).")
     endpoint_token: str | None = Field(None, description="URL token from endpoint config")
-    flow_id: str | None = Field(None, description="Looks up token from state if endpoint_token not provided")
+    flow_id: str | None = Field(
+        None,
+        description="Flow's referenceId (not its Mongo _id) — looks up the matching endpoint's "
+                    "token from state if endpoint_token not provided",
+    )
     data: dict | None = Field(
         None,
         description="Optional data payload forwarded as input.data in the flow.",

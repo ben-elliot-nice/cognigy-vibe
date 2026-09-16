@@ -45,11 +45,11 @@ class CognigyClient:
     @property
     def endpoint_base_url(self) -> str:
         # cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
+        # Trial-tier and other non-production tenants (e.g. api-trial.cognigy.ai) don't
+        # split admin and endpoint traffic across separate hosts, so fall back to the
+        # admin base_url unchanged rather than failing outright.
         if "cognigy-api-" not in self._base:
-            raise ValueError(
-                f"Cannot derive endpoint URL from base_url '{self._base}'. "
-                "Expected a URL containing 'cognigy-api-' (e.g. cognigy-api-au1.nicecxone.com)"
-            )
+            return self._base
         return self._base.replace("cognigy-api-", "cognigy-endpoint-")
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
