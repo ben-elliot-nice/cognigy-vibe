@@ -303,6 +303,29 @@ def test_endpoint_base_url_falls_back_to_base_for_saas_host():
     assert c.endpoint_base_url == "https://app.cognigy.ai"
 
 
+def test_endpoint_base_url_derivation_is_case_insensitive():
+    # The matched "cognigy-api-" segment is normalized to lowercase in the replacement;
+    # the rest of the host's original casing is preserved.
+    c = CognigyClient(base_url="https://COGNIGY-API-au1.NICECXONE.COM", api_key="key")
+    assert c.endpoint_base_url == "https://cognigy-endpoint-au1.NICECXONE.COM"
+
+
+def test_endpoint_base_url_raises_for_uppercase_nicecxone_host_missing_api_segment():
+    c = CognigyClient(base_url="https://COGNIGY-au1.NICECXONE.COM", api_key="key")
+    with pytest.raises(ValueError, match="cognigy-api-"):
+        _ = c.endpoint_base_url
+
+
+def test_endpoint_base_url_is_unverified_fallback_true_for_trial():
+    c = CognigyClient(base_url="https://api-trial.cognigy.ai", api_key="key")
+    assert c.endpoint_base_url_is_unverified_fallback is True
+
+
+def test_endpoint_base_url_is_unverified_fallback_false_for_cxone():
+    c = CognigyClient(base_url="https://cognigy-api-au1.nicecxone.com", api_key="key")
+    assert c.endpoint_base_url_is_unverified_fallback is False
+
+
 def test_download_url_success(client):
     """download_url() returns raw bytes from a pre-signed absolute URL."""
     zip_bytes = b"PK\x03\x04fake-zip-content"

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import httpx
 import tenacity
 from tenacity import retry, retry_if_exception_type, stop_after_attempt
@@ -45,9 +46,10 @@ class CognigyClient:
     @property
     def endpoint_base_url(self) -> str:
         # cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
-        if "cognigy-api-" in self._base:
-            return self._base.replace("cognigy-api-", "cognigy-endpoint-")
-        if "nicecxone.com" in self._base:
+        # Matched case-insensitively since hostnames are case-insensitive.
+        if re.search("cognigy-api-", self._base, re.IGNORECASE):
+            return re.sub("cognigy-api-", "cognigy-endpoint-", self._base, flags=re.IGNORECASE)
+        if re.search("nicecxone.com", self._base, re.IGNORECASE):
             # Looks like a NiCE CXone host but missing the required '-api-' segment — most
             # likely a typo (e.g. a pasted app/UI URL), not a different tenant tier. Fail
             # fast here rather than silently building a request against the wrong host.
@@ -64,6 +66,13 @@ class CognigyClient:
         # provision_webrtc_endpoint demo_url) won't — a wrong guess there only surfaces
         # when a human follows the link.
         return self._base
+
+    @property
+    def endpoint_base_url_is_unverified_fallback(self) -> bool:
+        """True when endpoint_base_url used the assumed same-host fallback (Trial/SaaS)
+        rather than a documented derivation. Lets callers that only build a URL string
+        (no HTTP request to surface a failure) warn the caller explicitly."""
+        return not re.search("cognigy-api-", self._base, re.IGNORECASE)
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
         if resp.status_code < 400:

@@ -32,6 +32,7 @@ def _args(mock_client, connection_result=None, endpoint_result=None, patch_setti
         patch_widget_result if patch_widget_result is not None else {},
     ]
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
 
 
 def test_tool_exported():
@@ -201,6 +202,7 @@ def test_locales_fetched_and_primary_locale_used(mock_client, state, cache, monk
     ]
     mock_client.patch.side_effect = [{}, {}]
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
 
     handlers = make_handlers(mock_client, state, cache)
     handlers["provision_webrtc_endpoint"]({
@@ -231,6 +233,7 @@ def test_locale_fallback_without_primary_surfaces_warning(mock_client, state, ca
     ]
     mock_client.patch.side_effect = [{}, {}]
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
 
     handlers = make_handlers(mock_client, state, cache)
     result = handlers["provision_webrtc_endpoint"]({
@@ -263,6 +266,27 @@ def test_locales_fetched_and_primary_locale_used_has_no_warning(mock_client, sta
     })
     data = json.loads(result[0].text)
     assert "warnings" not in data
+
+
+def test_endpoint_base_url_unverified_fallback_surfaces_warning(mock_client, state, cache, monkeypatch):
+    """When endpoint_base_url used the assumed same-host fallback (Trial/SaaS), the
+    demo_url's reliability is surfaced in warnings — this caller never makes an HTTP
+    request against it, so a wrong guess would otherwise be silent."""
+    monkeypatch.delenv("COGNIGY_VOICE_PREVIEW_API_KEY", raising=False)
+    _args(mock_client)
+    mock_client.endpoint_base_url = "https://api-trial.cognigy.ai"
+    mock_client.endpoint_base_url_is_unverified_fallback = True
+
+    handlers = make_handlers(mock_client, state, cache)
+    result = handlers["provision_webrtc_endpoint"]({
+        "project_id": "proj-1",
+        "flow_reference_id": "flow-uuid",
+        "endpoint_name": "Click-to-Call",
+        "connection_name": "Test",
+    })
+    data = json.loads(result[0].text)
+    assert "warnings" in data
+    assert any("unverified guess" in w for w in data["warnings"])
 
 
 def test_endpoint_post_body(mock_client, state, cache, monkeypatch):
@@ -355,6 +379,7 @@ def test_locale_fetch_failure_cleans_up_connection(mock_client, state, cache, mo
     api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
     mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
     mock_client.patch.side_effect = [{}]
     mock_client.get.side_effect = ApiError(500, "locales fetch failed")
@@ -376,6 +401,7 @@ def test_audio_preview_settings_patch_failure_cleans_up_connection(mock_client, 
     structured api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
     mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
     mock_client.patch.side_effect = ApiError(400, "unsupported provider slug")
 
@@ -397,6 +423,7 @@ def test_endpoint_post_failure_cleans_up_connection(mock_client, state, cache, m
     structured api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
     mock_client.get.return_value = LOCALES_RESPONSE
     mock_client.patch.side_effect = [{}]
     mock_client.post.side_effect = [
@@ -422,6 +449,7 @@ def test_widget_patch_failure_cleans_up_connection_and_endpoint(mock_client, sta
     api_error response is returned instead of propagating the raw exception."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
     mock_client.get.return_value = LOCALES_RESPONSE
     mock_client.post.side_effect = [
         {"_id": "conn-real", "referenceId": "conn-ref-real"},
@@ -449,6 +477,7 @@ def test_connection_reference_id_missing_cleans_up_connection(mock_client, state
     cleanup and is returned as a structured unexpected_error response."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
     mock_client.post.side_effect = [{"_id": "conn-real"}]
 
     handlers = make_handlers(mock_client, state, cache)
@@ -469,6 +498,7 @@ def test_locale_list_empty_raises_and_cleans_up_connection(mock_client, state, c
     and the connection is still cleaned up."""
     monkeypatch.setenv("COGNIGY_VOICE_PREVIEW_API_KEY", "real-key")
     mock_client.endpoint_base_url = "https://cognigy-endpoint-au1.nicecxone.com"
+    mock_client.endpoint_base_url_is_unverified_fallback = False
     mock_client.post.side_effect = [{"_id": "conn-real", "referenceId": "conn-ref-real"}]
     mock_client.patch.side_effect = [{}]
     mock_client.get.return_value = {"items": []}

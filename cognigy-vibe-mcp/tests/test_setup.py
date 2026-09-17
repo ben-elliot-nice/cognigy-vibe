@@ -44,6 +44,23 @@ def test_validate_base_url_warns_on_trial_us_host_missing_api_prefix():
     assert "api-trial" in warning
 
 
+def test_validate_base_url_warns_on_trial_host_without_scheme():
+    # Regression: urlparse("trial.cognigy.ai") with no "https://" puts the value in
+    # .path, not .netloc, so a naive `urlparse(base_url).netloc` check silently no-ops
+    # on exactly the input this validator exists to catch.
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("trial.cognigy.ai")
+    assert warning is not None
+    assert "api-trial" in warning
+
+
+def test_validate_base_url_warns_on_uppercase_nicecxone_host_missing_api_segment():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://COGNIGY-au1.NICECXONE.COM")
+    assert warning is not None
+    assert "cognigy-api-" in warning
+
+
 def test_validate_base_url_does_not_false_positive_on_saas_tenant_named_trial():
     # A legitimate Cognigy SaaS tenant whose name happens to contain "trial" must not
     # be mistaken for the Trial-tier host typo — the check is anchored on the exact

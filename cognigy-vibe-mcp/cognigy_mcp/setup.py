@@ -150,14 +150,21 @@ _TRIAL_HOST_TYPOS = {"trial.cognigy.ai", "trial-us.cognigy.ai"}
 def _validate_base_url(base_url: str) -> str | None:
     """Return a warning if base_url is missing a required segment for a NiCE CXone or Cognigy
     Trial host. Cognigy SaaS hosts have no fixed pattern to check against and are not validated."""
-    if "nicecxone.com" in base_url and "cognigy-api-" not in base_url:
+    lowered = base_url.lower()
+    if "nicecxone.com" in lowered and "cognigy-api-" not in lowered:
         return (
             f"'{base_url}' looks like a NiCE CXone host but is missing the required '-api-' segment. "
-            "Expected pattern: https://cognigy-api-<region>.nicecxone.com"
+            "Expected pattern: https://cognigy-api-<region>.nicecxone.com. "
+            "Note: unlike other warnings here, using this value anyway will not just risk a wrong "
+            "guess — talk_to_agent and provision_webrtc_endpoint will hard-fail with a ValueError "
+            "on this exact host until it's corrected."
         )
     # Anchored on the exact known-malformed hostnames (not a substring match) so a
     # legitimate SaaS tenant whose name happens to contain "trial" isn't false-flagged.
-    if urlparse(base_url).netloc in _TRIAL_HOST_TYPOS:
+    # "//" is prepended when absent so urlparse extracts a netloc even without a
+    # scheme (e.g. a user pasting "trial.cognigy.ai" with no "https://").
+    host = urlparse(lowered if "//" in lowered else f"//{lowered}").netloc
+    if host in _TRIAL_HOST_TYPOS:
         return (
             f"'{base_url}' looks like a Cognigy Trial host but is missing the required 'api-' prefix. "
             "Expected pattern: https://api-trial.cognigy.ai (or https://api-trial-us.cognigy.ai)"
