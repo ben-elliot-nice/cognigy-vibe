@@ -296,6 +296,13 @@ def test_endpoint_base_url_raises_for_nicecxone_host_missing_api_segment():
         _ = c.endpoint_base_url
 
 
+def test_endpoint_base_url_falls_back_to_base_for_saas_host():
+    # Cognigy SaaS hosts (app.cognigy.ai and region variants) have no documented,
+    # derivable endpoint host either — same fallback as Trial.
+    c = CognigyClient(base_url="https://app.cognigy.ai", api_key="key")
+    assert c.endpoint_base_url == "https://app.cognigy.ai"
+
+
 def test_download_url_success(client):
     """download_url() returns raw bytes from a pre-signed absolute URL."""
     zip_bytes = b"PK\x03\x04fake-zip-content"

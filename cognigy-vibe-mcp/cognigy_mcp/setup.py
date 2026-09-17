@@ -7,6 +7,7 @@ import stat
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from urllib.parse import urlparse
 from cognigy_mcp.config import USER_ENV_PATH
 from cognigy_mcp.wizard_ui import (
     run_subprocess,
@@ -143,6 +144,9 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     return value or default
 
 
+_TRIAL_HOST_TYPOS = {"trial.cognigy.ai", "trial-us.cognigy.ai"}
+
+
 def _validate_base_url(base_url: str) -> str | None:
     """Return a warning if base_url is missing a required segment for a NiCE CXone or Cognigy
     Trial host. Cognigy SaaS hosts have no fixed pattern to check against and are not validated."""
@@ -151,7 +155,9 @@ def _validate_base_url(base_url: str) -> str | None:
             f"'{base_url}' looks like a NiCE CXone host but is missing the required '-api-' segment. "
             "Expected pattern: https://cognigy-api-<region>.nicecxone.com"
         )
-    if "cognigy.ai" in base_url and "trial" in base_url and "api-trial" not in base_url:
+    # Anchored on the exact known-malformed hostnames (not a substring match) so a
+    # legitimate SaaS tenant whose name happens to contain "trial" isn't false-flagged.
+    if urlparse(base_url).netloc in _TRIAL_HOST_TYPOS:
         return (
             f"'{base_url}' looks like a Cognigy Trial host but is missing the required 'api-' prefix. "
             "Expected pattern: https://api-trial.cognigy.ai (or https://api-trial-us.cognigy.ai)"

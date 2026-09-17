@@ -37,6 +37,21 @@ def test_validate_base_url_warns_on_trial_host_missing_api_prefix():
     assert "api-trial" in warning
 
 
+def test_validate_base_url_warns_on_trial_us_host_missing_api_prefix():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://trial-us.cognigy.ai")
+    assert warning is not None
+    assert "api-trial" in warning
+
+
+def test_validate_base_url_does_not_false_positive_on_saas_tenant_named_trial():
+    # A legitimate Cognigy SaaS tenant whose name happens to contain "trial" must not
+    # be mistaken for the Trial-tier host typo — the check is anchored on the exact
+    # known-malformed hostnames, not a loose substring match.
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://trial-corp.cognigy.ai") is None
+
+
 def test_prompt_base_url_returns_valid_input_immediately(monkeypatch):
     import cognigy_mcp.setup as setup_mod
     responses = iter(["https://cognigy-api-au1.nicecxone.com"])

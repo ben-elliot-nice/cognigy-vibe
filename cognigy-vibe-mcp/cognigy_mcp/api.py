@@ -58,8 +58,11 @@ class CognigyClient:
         # Non-CXone tenants (Trial, Cognigy SaaS) don't publish a documented, derivable
         # endpoint host separate from their admin base_url (see #290) — assume the two
         # coincide rather than blocking every call outright. Unverified against a live
-        # Trial tenant; if this is wrong for your tenant, the HTTP call below will fail
-        # with a clear connection/404 error rather than succeeding silently.
+        # Trial tenant. Callers that make an HTTP request against the result (e.g.
+        # talk_to_agent) will surface a clear error if this assumption is wrong for a
+        # given tenant; callers that only construct a URL string (e.g. the
+        # provision_webrtc_endpoint demo_url) won't — a wrong guess there only surfaces
+        # when a human follows the link.
         return self._base
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
