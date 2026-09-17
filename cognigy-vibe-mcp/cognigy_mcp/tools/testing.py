@@ -64,13 +64,21 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 hint = f" Known endpoints: {known}" if known else " No endpoints in state — run sync_remote_state first."
                 return _ok({"error": f"No endpoint found for flow_id={m.flow_id}.{hint}"})
 
-        endpoint_url = f"{client.endpoint_base_url}/{token}"
+        endpoint_base = client.endpoint_base_url
+        endpoint_url = f"{endpoint_base}/{token}"
         payload = {
             "userId": m.user_id,
             "sessionId": m.session_id,
             "text": m.message,
             "data": m.data or {},
         }
+        fallback_hint = (
+            f" This tenant's base_url doesn't match a known endpoint-host derivation "
+            f"pattern, so '{endpoint_base}' was assumed to double as the endpoint host — "
+            f"that assumption may be wrong for this tenant."
+            if client.endpoint_base_url_is_unverified_fallback
+            else ""
+        )
 
         try:
             resp = httpx.post(endpoint_url, json=payload, timeout=30.0)
@@ -85,8 +93,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _ok({"outputText": text, "sessionId": m.session_id})
             return _ok(data)
         except httpx.HTTPStatusError as e:
-            return _ok({"error": f"HTTP {e.response.status_code}: {e.response.text}"})
+            return _ok({"error": f"HTTP {e.response.status_code}: {e.response.text}{fallback_hint}"})
         except Exception as e:
-            return _ok({"error": str(e)})
+            return _ok({"error": f"{e}{fallback_hint}"})
 
     return {"talk_to_agent": _talk_to_agent}

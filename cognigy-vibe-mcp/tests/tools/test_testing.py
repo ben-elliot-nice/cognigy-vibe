@@ -16,6 +16,14 @@ def real_client():
     )
 
 
+@pytest.fixture
+def trial_client():
+    return CognigyClient(
+        base_url="https://api-trial.cognigy.ai",
+        api_key="test-key",
+    )
+
+
 def test_tool_exported():
     assert any(t.name == "talk_to_agent" for t in TOOLS)
 
@@ -36,6 +44,44 @@ def test_talk_to_agent_uses_endpoint_base(real_client, state, cache):
         })
     data = json.loads(result[0].text)
     assert data["text"] == "Hello!"
+
+
+def test_talk_to_agent_posts_to_trial_tenant_base_url(trial_client, state, cache):
+    """Regression test for #290: a Trial-tier tenant (base_url with no cognigy-api-
+    segment) must actually reach an HTTP endpoint, not fail before ever making a
+    request."""
+    handlers = make_handlers(trial_client, state, cache)
+    with respx.mock:
+        respx.post("https://api-trial.cognigy.ai/tok123").mock(
+            return_value=httpx.Response(200, json={"text": "Hello from trial!", "data": {}})
+        )
+        result = handlers["talk_to_agent"]({
+            "message": "Hi",
+            "endpoint_token": "tok123",
+            "session_id": "sess-1",
+            "user_id": "user-1",
+        })
+    data = json.loads(result[0].text)
+    assert data["text"] == "Hello from trial!"
+
+
+def test_talk_to_agent_trial_tenant_failure_hints_at_unverified_fallback(trial_client, state, cache):
+    """If the same-host guess for a Trial tenant is wrong, the resulting connection
+    error should say so rather than presenting an unexplained low-level error."""
+    handlers = make_handlers(trial_client, state, cache)
+    with respx.mock:
+        respx.post("https://api-trial.cognigy.ai/tok123").mock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
+        result = handlers["talk_to_agent"]({
+            "message": "Hi",
+            "endpoint_token": "tok123",
+            "session_id": "sess-1",
+            "user_id": "user-1",
+        })
+    data = json.loads(result[0].text)
+    assert "error" in data
+    assert "unverified" in data["error"] or "assumed" in data["error"]
 
 
 def test_talk_to_agent_missing_token_and_flow_id(real_client, state, cache):

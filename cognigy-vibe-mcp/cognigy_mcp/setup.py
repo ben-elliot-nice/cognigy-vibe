@@ -163,7 +163,9 @@ def _validate_base_url(base_url: str) -> str | None:
     # legitimate SaaS tenant whose name happens to contain "trial" isn't false-flagged.
     # "//" is prepended when absent so urlparse extracts a netloc even without a
     # scheme (e.g. a user pasting "trial.cognigy.ai" with no "https://").
-    host = urlparse(lowered if "//" in lowered else f"//{lowered}").netloc
+    # Strip an explicit port (e.g. ":443") — the malformed hostnames are compared as
+    # bare host, not host:port.
+    host = urlparse(lowered if "//" in lowered else f"//{lowered}").netloc.split(":")[0]
     if host in _TRIAL_HOST_TYPOS:
         return (
             f"'{base_url}' looks like a Cognigy Trial host but is missing the required 'api-' prefix. "

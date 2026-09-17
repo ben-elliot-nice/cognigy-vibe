@@ -303,6 +303,15 @@ def test_endpoint_base_url_falls_back_to_base_for_saas_host():
     assert c.endpoint_base_url == "https://app.cognigy.ai"
 
 
+def test_endpoint_base_url_falls_back_for_unrecognized_host():
+    # Documents a real behavior change vs. the pre-#290 fix: a host that isn't
+    # recognized as any known tier (previously a pinned ValueError case) now falls
+    # into the same "assume same host" branch as Trial/SaaS, rather than raising.
+    c = CognigyClient(base_url="https://localhost:8080", api_key="key")
+    assert c.endpoint_base_url == "https://localhost:8080"
+    assert c.endpoint_base_url_is_unverified_fallback is True
+
+
 def test_endpoint_base_url_derivation_is_case_insensitive():
     # The matched "cognigy-api-" segment is normalized to lowercase in the replacement;
     # the rest of the host's original casing is preserved.
