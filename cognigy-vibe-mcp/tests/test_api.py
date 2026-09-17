@@ -279,12 +279,21 @@ def test_download_url_retries_on_5xx_and_succeeds(mock_sleep, client):
     assert mock_sleep.call_count == 1
 
 
-def test_endpoint_base_url_falls_back_to_base_for_non_matching_url():
-    # Trial-tier tenants (api-trial.cognigy.ai) and other non-production hosts don't
-    # follow the cognigy-api-<region> naming convention; the endpoint host is the
-    # same as the admin API host in those cases.
+def test_endpoint_base_url_falls_back_to_base_for_non_cxone_host():
+    # Trial-tier tenants (api-trial.cognigy.ai) don't follow the cognigy-api-<region>
+    # nicecxone.com naming convention, and have no other documented endpoint host (#290) —
+    # the endpoint host is assumed to be the same as the admin API host.
     c = CognigyClient(base_url="https://api-trial.cognigy.ai", api_key="key")
     assert c.endpoint_base_url == "https://api-trial.cognigy.ai"
+
+
+def test_endpoint_base_url_raises_for_nicecxone_host_missing_api_segment():
+    # A nicecxone.com host is a strong signal this is a CXone tenant with a genuine
+    # typo (missing '-api-'), not a different tenant tier — fail fast rather than
+    # silently building a request against the wrong host.
+    c = CognigyClient(base_url="https://cognigy-au1.nicecxone.com", api_key="key")
+    with pytest.raises(ValueError, match="cognigy-api-"):
+        _ = c.endpoint_base_url
 
 
 def test_download_url_success(client):

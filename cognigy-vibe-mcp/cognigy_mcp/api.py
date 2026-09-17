@@ -45,12 +45,22 @@ class CognigyClient:
     @property
     def endpoint_base_url(self) -> str:
         # cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
-        # Trial-tier and other non-production tenants (e.g. api-trial.cognigy.ai) don't
-        # split admin and endpoint traffic across separate hosts, so fall back to the
-        # admin base_url unchanged rather than failing outright.
-        if "cognigy-api-" not in self._base:
-            return self._base
-        return self._base.replace("cognigy-api-", "cognigy-endpoint-")
+        if "cognigy-api-" in self._base:
+            return self._base.replace("cognigy-api-", "cognigy-endpoint-")
+        if "nicecxone.com" in self._base:
+            # Looks like a NiCE CXone host but missing the required '-api-' segment — most
+            # likely a typo (e.g. a pasted app/UI URL), not a different tenant tier. Fail
+            # fast here rather than silently building a request against the wrong host.
+            raise ValueError(
+                f"Cannot derive endpoint URL from base_url '{self._base}'. "
+                "Expected a URL containing 'cognigy-api-' (e.g. cognigy-api-au1.nicecxone.com)"
+            )
+        # Non-CXone tenants (Trial, Cognigy SaaS) don't publish a documented, derivable
+        # endpoint host separate from their admin base_url (see #290) — assume the two
+        # coincide rather than blocking every call outright. Unverified against a live
+        # Trial tenant; if this is wrong for your tenant, the HTTP call below will fail
+        # with a clear connection/404 error rather than succeeding silently.
+        return self._base
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
         if resp.status_code < 400:

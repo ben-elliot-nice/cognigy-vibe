@@ -30,6 +30,48 @@ def test_validate_base_url_warns_on_nicecxone_host_missing_api_segment():
     assert "cognigy-api-" in warning
 
 
+def test_validate_base_url_warns_on_trial_host_missing_api_prefix():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://trial.cognigy.ai")
+    assert warning is not None
+    assert "api-trial" in warning
+
+
+def test_prompt_base_url_returns_valid_input_immediately(monkeypatch):
+    import cognigy_mcp.setup as setup_mod
+    responses = iter(["https://cognigy-api-au1.nicecxone.com"])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://cognigy-api-au1.nicecxone.com"
+
+
+def test_prompt_base_url_reprompts_on_empty_input(monkeypatch):
+    import cognigy_mcp.setup as setup_mod
+    responses = iter(["", "https://api-trial.cognigy.ai"])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://api-trial.cognigy.ai"
+
+
+def test_prompt_base_url_reprompts_on_empty_input_after_declining_warning(monkeypatch):
+    # Regression test: entering a malformed host, declining the "use anyway" override,
+    # then pressing Enter (empty) at the re-prompt must NOT silently return "".
+    import cognigy_mcp.setup as setup_mod
+    responses = iter([
+        "https://cognigy-au1.nicecxone.com",  # malformed — triggers warning
+        "n",                                   # decline override
+        "",                                     # empty re-prompt — must be rejected
+        "https://cognigy-api-au1.nicecxone.com",  # valid final entry
+    ])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://cognigy-api-au1.nicecxone.com"
+
+
+def test_prompt_base_url_accepts_warning_override(monkeypatch):
+    import cognigy_mcp.setup as setup_mod
+    responses = iter(["https://cognigy-au1.nicecxone.com", "y"])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://cognigy-au1.nicecxone.com"
+
+
 def test_get_desktop_config_path_macos():
     with patch.object(sys, "platform", "darwin"):
         from importlib import reload
