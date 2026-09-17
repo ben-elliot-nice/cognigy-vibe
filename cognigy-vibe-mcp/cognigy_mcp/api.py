@@ -1,7 +1,11 @@
 from __future__ import annotations
+import re
 import httpx
 import tenacity
 from tenacity import retry, retry_if_exception_type, stop_after_attempt
+
+_CXONE_API_PATTERN = re.compile("cognigy-api-", re.IGNORECASE)
+_NICECXONE_PATTERN = re.compile(r"nicecxone\.com", re.IGNORECASE)
 
 
 class ApiError(Exception):
@@ -45,12 +49,35 @@ class CognigyClient:
     @property
     def endpoint_base_url(self) -> str:
         # cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
-        if "cognigy-api-" not in self._base:
+        # Matched case-insensitively since hostnames are case-insensitive.
+        if _CXONE_API_PATTERN.search(self._base):
+            return _CXONE_API_PATTERN.sub("cognigy-endpoint-", self._base)
+        if _NICECXONE_PATTERN.search(self._base):
+            # Looks like a NiCE CXone host but missing the required '-api-' segment — most
+            # likely a typo (e.g. a pasted app/UI URL), not a different tenant tier. Fail
+            # fast here rather than silently building a request against the wrong host.
             raise ValueError(
                 f"Cannot derive endpoint URL from base_url '{self._base}'. "
                 "Expected a URL containing 'cognigy-api-' (e.g. cognigy-api-au1.nicecxone.com)"
             )
-        return self._base.replace("cognigy-api-", "cognigy-endpoint-")
+        # Non-CXone tenants (Trial, Cognigy SaaS) don't publish a documented, derivable
+        # endpoint host separate from their admin base_url (see #290) — assume the two
+        # coincide rather than blocking every call outright. Unverified against a live
+        # Trial tenant. Callers that make an HTTP request against the result (e.g.
+        # talk_to_agent) will surface a clear error if this assumption is wrong for a
+        # given tenant; callers that only construct a URL string (e.g. the
+        # provision_webrtc_endpoint demo_url) won't — a wrong guess there only surfaces
+        # when a human follows the link.
+        return self._base
+
+    @property
+    def endpoint_base_url_is_unverified_fallback(self) -> bool:
+        """True only when endpoint_base_url takes the assumed same-host fallback branch
+        (Trial/SaaS). Mirrors that property's exact branching (via the same compiled
+        patterns) so it can't disagree with it — in particular, a malformed
+        nicecxone.com host correctly reports False here too, since endpoint_base_url
+        raises for that input rather than falling back."""
+        return not _CXONE_API_PATTERN.search(self._base) and not _NICECXONE_PATTERN.search(self._base)
 
     def _raise_for_status(self, resp: httpx.Response) -> None:
         if resp.status_code < 400:

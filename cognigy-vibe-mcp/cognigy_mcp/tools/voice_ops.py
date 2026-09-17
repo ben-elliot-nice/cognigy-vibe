@@ -84,6 +84,14 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
         if err:
             return err
         endpoint_base = client.endpoint_base_url
+        endpoint_base_warning = (
+            f"demo_url host ('{endpoint_base}') is an unverified guess — this tenant's "
+            "base_url doesn't match a known endpoint-host derivation pattern, so the "
+            "admin host was assumed to double as the endpoint host. If the demo link "
+            "doesn't work, this tenant may need a different endpoint host."
+            if client.endpoint_base_url_is_unverified_fallback
+            else None
+        )
         api_key = os.environ.get("COGNIGY_VOICE_PREVIEW_API_KEY")
         is_dummy = not bool(api_key)
         effective_key = api_key if api_key else "dummy"
@@ -211,8 +219,9 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
             "connection_id": connection_id,
             "path": "dummy" if is_dummy else "real",
         }
-        if locale_warning:
-            response["warnings"] = [locale_warning]
+        warnings = [w for w in (locale_warning, endpoint_base_warning) if w]
+        if warnings:
+            response["warnings"] = warnings
         return _ok(response)
 
     return {"provision_webrtc_endpoint": _provision_webrtc_endpoint}

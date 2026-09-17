@@ -8,6 +8,102 @@ from unittest.mock import patch
 import pytest
 
 
+def test_validate_base_url_accepts_trial_tenant():
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://api-trial.cognigy.ai") is None
+
+
+def test_validate_base_url_accepts_trial_us_tenant():
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://api-trial-us.cognigy.ai") is None
+
+
+def test_validate_base_url_accepts_valid_nicecxone_host():
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://cognigy-api-au1.nicecxone.com") is None
+
+
+def test_validate_base_url_warns_on_nicecxone_host_missing_api_segment():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://cognigy-au1.nicecxone.com")
+    assert warning is not None
+    assert "cognigy-api-" in warning
+
+
+def test_validate_base_url_warns_on_trial_host_missing_api_prefix():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://trial.cognigy.ai")
+    assert warning is not None
+    assert "api-trial" in warning
+
+
+def test_validate_base_url_warns_on_trial_us_host_missing_api_prefix():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://trial-us.cognigy.ai")
+    assert warning is not None
+    assert "api-trial" in warning
+
+
+def test_validate_base_url_warns_on_trial_host_without_scheme():
+    # Regression: urlparse("trial.cognigy.ai") with no "https://" puts the value in
+    # .path, not .netloc, so a naive `urlparse(base_url).netloc` check silently no-ops
+    # on exactly the input this validator exists to catch.
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("trial.cognigy.ai")
+    assert warning is not None
+    assert "api-trial" in warning
+
+
+def test_validate_base_url_warns_on_uppercase_nicecxone_host_missing_api_segment():
+    import cognigy_mcp.setup as setup_mod
+    warning = setup_mod._validate_base_url("https://COGNIGY-au1.NICECXONE.COM")
+    assert warning is not None
+    assert "cognigy-api-" in warning
+
+
+def test_validate_base_url_does_not_false_positive_on_saas_tenant_named_trial():
+    # A legitimate Cognigy SaaS tenant whose name happens to contain "trial" must not
+    # be mistaken for the Trial-tier host typo — the check is anchored on the exact
+    # known-malformed hostnames, not a loose substring match.
+    import cognigy_mcp.setup as setup_mod
+    assert setup_mod._validate_base_url("https://trial-corp.cognigy.ai") is None
+
+
+def test_prompt_base_url_returns_valid_input_immediately(monkeypatch):
+    import cognigy_mcp.setup as setup_mod
+    responses = iter(["https://cognigy-api-au1.nicecxone.com"])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://cognigy-api-au1.nicecxone.com"
+
+
+def test_prompt_base_url_reprompts_on_empty_input(monkeypatch):
+    import cognigy_mcp.setup as setup_mod
+    responses = iter(["", "https://api-trial.cognigy.ai"])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://api-trial.cognigy.ai"
+
+
+def test_prompt_base_url_reprompts_on_empty_input_after_declining_warning(monkeypatch):
+    # Regression test: entering a malformed host, declining the "use anyway" override,
+    # then pressing Enter (empty) at the re-prompt must NOT silently return "".
+    import cognigy_mcp.setup as setup_mod
+    responses = iter([
+        "https://cognigy-au1.nicecxone.com",  # malformed — triggers warning
+        "n",                                   # decline override
+        "",                                     # empty re-prompt — must be rejected
+        "https://cognigy-api-au1.nicecxone.com",  # valid final entry
+    ])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://cognigy-api-au1.nicecxone.com"
+
+
+def test_prompt_base_url_accepts_warning_override(monkeypatch):
+    import cognigy_mcp.setup as setup_mod
+    responses = iter(["https://cognigy-au1.nicecxone.com", "y"])
+    monkeypatch.setattr(setup_mod, "_prompt", lambda *a, **k: next(responses))
+    assert setup_mod._prompt_base_url() == "https://cognigy-au1.nicecxone.com"
+
+
 def test_get_desktop_config_path_macos():
     with patch.object(sys, "platform", "darwin"):
         from importlib import reload

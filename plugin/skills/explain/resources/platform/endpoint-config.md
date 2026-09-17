@@ -52,10 +52,17 @@ This allows talk_to_agent to find the token without an API call.
 
 ### Endpoint URL format
   {COGNIGY_ENDPOINT_BASE}/{urlToken}
-  where COGNIGY_ENDPOINT_BASE = COGNIGY_BASE_URL with cognigy-api- → cognigy-endpoint-
+  where COGNIGY_ENDPOINT_BASE is derived from COGNIGY_BASE_URL (CognigyClient.endpoint_base_url):
+    - NiCE CXone (nicecxone.com host): cognigy-api- → cognigy-endpoint- substitution
+    - A nicecxone.com host missing that segment raises — likely a typo, not a real tenant
+    - Any other host (Trial, Cognigy SaaS): assumed to equal COGNIGY_BASE_URL unchanged —
+      unverified against a live Trial tenant (#290); no separate endpoint host is documented
 
 ### AU1 domain derivation
   cognigy-api-au1.nicecxone.com → cognigy-endpoint-au1.nicecxone.com
+
+### Trial-tier domain (unverified fallback, see #290)
+  api-trial.cognigy.ai → api-trial.cognigy.ai (same host assumed for both admin and endpoint)
 
 ### VoiceGateway webRTC endpoint — full provisioning sequence
 

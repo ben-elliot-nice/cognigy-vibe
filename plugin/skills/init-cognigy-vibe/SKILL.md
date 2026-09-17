@@ -66,6 +66,8 @@ Collect the schema. Group into ≤3 batches:
 
 If the user's region is not one of the above (e.g. a self-hosted or EU tenant), **do not fabricate a URL** — ask the user to paste both `baseUrl` and `endpointBase` directly as plaintext. Never invent a domain (e.g. `*.cognigy.cloud` is a real but unrelated self-hosted Cognigy domain pattern — do not use it for NICE CXone tenants unless the user explicitly confirms that's their deployment).
 
+Note: this table's `endpointBase` column is specifically for the VoiceGateway connection config above, where Cognigy documents no fixed Trial-tier value. It's a separate config surface from `CognigyClient.endpoint_base_url` (used by `talk_to_agent`/REST endpoint testing), which assumes the Trial admin `base_url` and endpoint host coincide as a pragmatic, unverified fallback (#290) — don't treat that assumption as a documented value for this table.
+
 #### Live LLM discovery (runs before the LLM group question)
 
 1. `cognigy_list { resource_type: "largelanguagemodels", full_objects: true, fields: ["_id", "name", "referenceId", "resourceLevel", "modelType", "provider"] }`

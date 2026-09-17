@@ -13,7 +13,11 @@ class TalkToAgentArgs(BaseModel):
     user_id: str = Field(description="User ID — new value starts fresh session")
     message: str = Field("", description="User text. Use empty string for data-only turns (xApp submit emulation).")
     endpoint_token: str | None = Field(None, description="URL token from endpoint config")
-    flow_id: str | None = Field(None, description="Looks up token from state if endpoint_token not provided")
+    flow_id: str | None = Field(
+        None,
+        description="Flow's referenceId (not its Mongo _id) — looks up the matching endpoint's "
+                    "token from state if endpoint_token not provided",
+    )
     data: dict | None = Field(
         None,
         description="Optional data payload forwarded as input.data in the flow.",
@@ -60,13 +64,21 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 hint = f" Known endpoints: {known}" if known else " No endpoints in state — run sync_remote_state first."
                 return _ok({"error": f"No endpoint found for flow_id={m.flow_id}.{hint}"})
 
-        endpoint_url = f"{client.endpoint_base_url}/{token}"
+        endpoint_base = client.endpoint_base_url
+        endpoint_url = f"{endpoint_base}/{token}"
         payload = {
             "userId": m.user_id,
             "sessionId": m.session_id,
             "text": m.message,
             "data": m.data or {},
         }
+        fallback_hint = (
+            f" This tenant's base_url doesn't match a known endpoint-host derivation "
+            f"pattern, so '{endpoint_base}' was assumed to double as the endpoint host — "
+            f"that assumption may be wrong for this tenant."
+            if client.endpoint_base_url_is_unverified_fallback
+            else ""
+        )
 
         try:
             resp = httpx.post(endpoint_url, json=payload, timeout=30.0)
@@ -81,8 +93,8 @@ def make_handlers(client: CognigyClient, state: ProjectState, cache: Cache) -> d
                 return _ok({"outputText": text, "sessionId": m.session_id})
             return _ok(data)
         except httpx.HTTPStatusError as e:
-            return _ok({"error": f"HTTP {e.response.status_code}: {e.response.text}"})
+            return _ok({"error": f"HTTP {e.response.status_code}: {e.response.text}{fallback_hint}"})
         except Exception as e:
-            return _ok({"error": str(e)})
+            return _ok({"error": f"{e}{fallback_hint}"})
 
     return {"talk_to_agent": _talk_to_agent}

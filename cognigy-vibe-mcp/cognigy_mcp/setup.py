@@ -7,6 +7,7 @@ import stat
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from urllib.parse import urlparse
 from cognigy_mcp.config import USER_ENV_PATH
 from cognigy_mcp.wizard_ui import (
     run_subprocess,
@@ -141,6 +142,54 @@ def _prompt(msg: str, default: str = "", secret: bool = False) -> str:
     else:
         value = input(display).strip()
     return value or default
+
+
+_TRIAL_HOST_TYPOS = {"trial.cognigy.ai", "trial-us.cognigy.ai"}
+
+
+def _validate_base_url(base_url: str) -> str | None:
+    """Return a warning if base_url is missing a required segment for a NiCE CXone or Cognigy
+    Trial host. Cognigy SaaS hosts have no fixed pattern to check against and are not validated."""
+    lowered = base_url.lower()
+    if "nicecxone.com" in lowered and "cognigy-api-" not in lowered:
+        return (
+            f"'{base_url}' looks like a NiCE CXone host but is missing the required '-api-' segment. "
+            "Expected pattern: https://cognigy-api-<region>.nicecxone.com. "
+            "Note: unlike other warnings here, using this value anyway will not just risk a wrong "
+            "guess — talk_to_agent and provision_webrtc_endpoint will hard-fail with a ValueError "
+            "on this exact host until it's corrected."
+        )
+    # Anchored on the exact known-malformed hostnames (not a substring match) so a
+    # legitimate SaaS tenant whose name happens to contain "trial" isn't false-flagged.
+    # "//" is prepended when absent so urlparse extracts a netloc even without a
+    # scheme (e.g. a user pasting "trial.cognigy.ai" with no "https://").
+    # Strip an explicit port (e.g. ":443") — the malformed hostnames are compared as
+    # bare host, not host:port.
+    host = urlparse(lowered if "//" in lowered else f"//{lowered}").netloc.split(":")[0]
+    if host in _TRIAL_HOST_TYPOS:
+        return (
+            f"'{base_url}' looks like a Cognigy Trial host but is missing the required 'api-' prefix. "
+            "Expected pattern: https://api-trial.cognigy.ai (or https://api-trial-us.cognigy.ai)"
+        )
+    return None
+
+
+def _prompt_base_url() -> str:
+    print("  COGNIGY_BASE_URL examples:")
+    print("    NiCE CXone:    https://cognigy-api-<region>.nicecxone.com  (au1|na1|jp1|eu1|uk1|ca1|in1)")
+    print("    Cognigy Trial: https://api-trial.cognigy.ai  (or api-trial-us)")
+    print("    Cognigy SaaS:  see your tenant's app URL for the matching API host")
+    while True:
+        base_url = _prompt("COGNIGY_BASE_URL").rstrip("/")
+        if not base_url:
+            print("  Base URL is required.")
+            continue
+        warning = _validate_base_url(base_url)
+        if not warning:
+            return base_url
+        print(f"  Warning: {warning}")
+        if _prompt("  Use this value anyway?", default="n").lower() in ("y", "yes"):
+            return base_url
 
 
 _BARE_FLAGS_IMPLYING_INSTALL = {"--install-only", "--client", "--scope", "--verbose"}
@@ -285,11 +334,7 @@ def _run_install(args) -> None:
     if mode == "configure":
         print_section(4, "Credentials")
         print("Credentials (project ID can be set later via the sync_remote_state tool)")
-        base_url = _prompt("COGNIGY_BASE_URL (e.g. https://cognigy-api-au1.nicecxone.com)")
-        while not base_url:
-            print("  Base URL is required.")
-            base_url = _prompt("COGNIGY_BASE_URL")
-        base_url = base_url.rstrip("/")
+        base_url = _prompt_base_url()
         api_key = _prompt("COGNIGY_API_KEY", secret=True)
         while not api_key:
             print("  API key is required.")
