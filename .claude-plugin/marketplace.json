@@ -9,6 +9,11 @@
       "name": "cognigy-vibe",
       "source": "./plugin",
       "description": "Cognigy AI agent development skills for Claude Code"
+    },
+    {
+      "name": "design-forge",
+      "source": "./design-forge",
+      "description": "Modular design-artefact authoring for Cognigy AI agents"
     }
   ]
 }
